@@ -1,0 +1,15 @@
+{
+    "name": "CapsNetwork",
+    "references": [
+        "ResManager",
+        "Unity.Collections.Concurrent"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": []
+}
