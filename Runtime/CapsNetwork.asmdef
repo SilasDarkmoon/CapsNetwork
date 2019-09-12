@@ -2,7 +2,8 @@
     "name": "CapsNetwork",
     "references": [
         "ResManager",
-        "Unity.Collections.Concurrent"
+        "Unity.Collections.Concurrent",
+        "JsonObject"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
