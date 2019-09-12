@@ -1,0 +1,19 @@
+{
+
+    "name": "cn.capstones.network",
+
+    "displayName": "Capstone Network Framework",
+
+    "version": "0.0.1",
+
+    "unity": "2018.3",
+
+    "description": "Capstone Network Framework",
+
+    "keywords": [
+        "unity"
+    ],
+
+    "category": "Unity"
+
+}
