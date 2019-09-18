@@ -110,19 +110,40 @@ namespace Capstones.Net
             }
         }
 
+        private volatile static System.Reflection.FieldInfo _hostField;
+        private volatile static System.Reflection.FieldInfo _hostFieldLock;
         public void RequestWork(object state)
         {
             try
             {
+                var uri = new Uri(_Url);
 #if NETFX_CORE
-                System.Net.HttpWebRequest req = System.Net.HttpWebRequest.CreateHttp(new Uri(_Url));
+                System.Net.HttpWebRequest req = System.Net.HttpWebRequest.CreateHttp(uri);
 #else
-#if (UNITY_5 || UNITY_5_3_OR_NEWER)
-                System.Net.HttpWebRequest req = System.Net.HttpWebRequest.Create(new Uri(_Url)) as System.Net.HttpWebRequest;
+#if (UNITY_5 || UNITY_5_3_OR_NEWER) && UNITY_EDITOR
+                System.Net.HttpWebRequest req = System.Net.HttpWebRequest.Create(uri) as System.Net.HttpWebRequest;
 #else
-                System.Net.HttpWebRequest req = new System.Net.HttpWebRequest(new Uri(_Url));
+                System.Net.HttpWebRequest req = new System.Net.HttpWebRequest(uri);
 #endif
                 req.KeepAlive = false;
+
+                try
+                {
+                    // https://stackoverflow.com/questions/15643223/dns-refresh-timeout-with-mono
+                    // Clear out the cached host entry
+                    if (_hostField == null || _hostFieldLock == null)
+                    {
+                        _hostField = typeof(System.Net.ServicePoint).GetField("host", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        _hostFieldLock = typeof(System.Net.ServicePoint).GetField("hostE", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    }
+                    var hostLock = _hostFieldLock.GetValue(req.ServicePoint);
+                    lock (hostLock)
+                        _hostField.SetValue(req.ServicePoint, null);
+                }
+                catch (Exception re)
+                {
+                    PlatDependant.LogError(re);
+                }
 #endif
 
                 try
@@ -156,8 +177,8 @@ namespace Capstones.Net
                     }
 #endif
 #endif
-                    var reqdata = PrepareRequestData();
 
+                    var data = PrepareRequestData();
                     if (_Headers != null)
                     {
                         foreach (var kvp in _Headers.Data)
@@ -193,7 +214,7 @@ namespace Capstones.Net
                                     }
                                     catch (Exception e)
                                     {
-                                        if (GLog.IsLogErrorEnabled) GLog.LogException(e);
+                                        PlatDependant.LogError(e);
                                     }
                                 }
                             }
@@ -211,7 +232,7 @@ namespace Capstones.Net
                                 }
                                 catch (Exception e)
                                 {
-                                    if (GLog.IsLogErrorEnabled) GLog.LogException(e);
+                                    PlatDependant.LogError(e);
                                 }
                             }
                         }
@@ -231,15 +252,9 @@ namespace Capstones.Net
                             _RangeEnabled = false;
                         }
                     }
-                    if (_Data != null && reqdata != null && reqdata.Length > 0)
+                    if (_Data != null && data != null)
                     {
                         req.Method = "POST";
-                        //if (data == null)
-                        //{
-                        //    req.ContentType = _Data.ContentType;
-                        //    data = _Data.Encode();
-                        //}
-                        //else
                         if (_Data.ContentType != null)
                         {
                             req.ContentType = _Data.ContentType;
@@ -260,7 +275,7 @@ namespace Capstones.Net
                         }
                         var stream = tstream.Result;
 #else
-                        req.ContentLength = reqdata.Length;
+                        req.ContentLength = data.Length;
                         var stream = req.GetRequestStream();
 #endif
 
@@ -294,7 +309,7 @@ namespace Capstones.Net
 
                             try
                             {
-                                stream.Write(reqdata, 0, reqdata.Length);
+                                stream.Write(data, 0, data.Length);
                                 stream.Flush();
                             }
                             finally
@@ -417,7 +432,7 @@ namespace Capstones.Net
                                 Stream streamd = null;
                                 try
                                 {
-                                    byte[] buffer = new byte[1024 * 1024];
+                                    byte[] buffer = new byte[64 * 1024];
                                     ulong totalcnt = 0;
                                     int readcnt = 0;
 
@@ -486,7 +501,7 @@ namespace Capstones.Net
                                         try
                                         {
                                             readcnt = 0;
-                                            readcnt = stream.Read(buffer, 0, 1024 * 1024);
+                                            readcnt = stream.Read(buffer, 0, buffer.Length);
                                             if (readcnt <= 0)
                                             {
                                                 stream.ReadByte(); // when it is closed, we need read to raise exception.
@@ -498,14 +513,14 @@ namespace Capstones.Net
                                         }
                                         catch (TimeoutException te)
                                         {
-                                            if (GLog.IsLogErrorEnabled) GLog.LogException(te);
+                                            PlatDependant.LogError(te);
                                             _Error = "timedout";
                                         }
                                         catch (System.Net.WebException we)
                                         {
-                                            if (GLog.IsLogErrorEnabled) GLog.LogException(we);
+                                            PlatDependant.LogError(we);
 #if NETFX_CORE
-                                                if (we.Status.ToString() == "Timeout")
+                                            if (we.Status.ToString() == "Timeout")
 #else
                                             if (we.Status == System.Net.WebExceptionStatus.Timeout)
 #endif
@@ -519,7 +534,7 @@ namespace Capstones.Net
                                         }
                                         catch (Exception e)
                                         {
-                                            if (GLog.IsLogErrorEnabled) GLog.LogException(e);
+                                            PlatDependant.LogError(e);
                                             _Error = "Request Error (Exception):\n" + e.ToString();
                                         }
                                         lock (_CloseLock)
@@ -572,14 +587,14 @@ namespace Capstones.Net
                 }
                 catch (TimeoutException te)
                 {
-                    if (GLog.IsLogErrorEnabled) GLog.LogException(te);
+                    PlatDependant.LogError(te);
                     _Error = "timedout";
                 }
                 catch (System.Net.WebException we)
                 {
-                    if (GLog.IsLogErrorEnabled) GLog.LogException(we);
+                    PlatDependant.LogError(we);
 #if NETFX_CORE
-                        if (we.Status.ToString() == "Timeout")
+                    if (we.Status.ToString() == "Timeout")
 #else
                     if (we.Status == System.Net.WebExceptionStatus.Timeout)
 #endif
@@ -600,7 +615,7 @@ namespace Capstones.Net
                 }
                 catch (Exception e)
                 {
-                    if (GLog.IsLogErrorEnabled) GLog.LogException(e);
+                    PlatDependant.LogError(e);
                     _Error = "Request Error (Exception):\n" + e.ToString();
                 }
                 finally
@@ -621,14 +636,14 @@ namespace Capstones.Net
             }
             catch (TimeoutException te)
             {
-                if (GLog.IsLogErrorEnabled) GLog.LogException(te);
+                PlatDependant.LogError(te);
                 _Error = "timedout";
             }
             catch (System.Net.WebException we)
             {
-                if (GLog.IsLogErrorEnabled) GLog.LogException(we);
+                PlatDependant.LogError(we);
 #if NETFX_CORE
-                    if (we.Status.ToString() == "Timeout")
+                if (we.Status.ToString() == "Timeout")
 #else
                 if (we.Status == System.Net.WebExceptionStatus.Timeout)
 #endif
@@ -642,7 +657,7 @@ namespace Capstones.Net
             }
             catch (Exception e)
             {
-                if (GLog.IsLogErrorEnabled) GLog.LogException(e);
+                PlatDependant.LogError(e);
                 _Error = "Request Error (Exception):\n" + e.ToString();
             }
             finally
@@ -659,96 +674,5 @@ namespace Capstones.Net
                 }
             }
         }
-
-        //public string ParseResponse(string token, ulong seq)
-        //{
-        //    if (!IsDone)
-        //    {
-        //        return "Request undone.";
-        //    }
-        //    else
-        //    {
-        //        if (!string.IsNullOrEmpty(Error))
-        //        {
-        //            return Error;
-        //        }
-        //        else
-        //        {
-        //            string enc = "";
-        //            bool encrypted = false;
-        //            string txt = "";
-        //            if (_RespHeaders != null)
-        //            {
-        //                foreach (var kvp in _RespHeaders.Data)
-        //                {
-        //                    var lkey = kvp.Key.ToLower();
-        //                    if (lkey == "content-encoding")
-        //                    {
-        //                        enc = kvp.Value.ToString().ToLower();
-        //                    }
-        //                    else if (lkey == "encrypted")
-        //                    {
-        //                        var val = kvp.Value.ToString();
-        //                        if (val != null) val = val.ToLower();
-        //                        encrypted = !string.IsNullOrEmpty(val) && val != "n" && val != "0" && val != "f" &&
-        //                                    val != "no" && val != "false";
-        //                    }
-        //                }
-        //            }
-
-        //            bool zipHandledBySystem = false;
-        //            if (enc != "gzip" || zipHandledBySystem)
-        //            {
-        //                try
-        //                {
-        //                    txt = System.Text.Encoding.UTF8.GetString(_Resp, 0, _Resp.Length);
-        //                    if (encrypted)
-        //                    {
-        //                        var data = Convert.FromBase64String(txt);
-        //                        var decrypted = PlatExt.PlatDependant.DecryptPostData(data, token, seq);
-        //                        if (decrypted != null)
-        //                        {
-        //                            txt = System.Text.Encoding.UTF8.GetString(decrypted, 0, decrypted.Length);
-        //                        }
-        //                    }
-        //                }
-        //                catch
-        //                {
-        //                }
-        //            }
-        //            else
-        //            {
-        //                try
-        //                {
-        //                    using (System.IO.MemoryStream ms = new System.IO.MemoryStream(_Resp, false))
-        //                    {
-        //                        using (Unity.IO.Compression.GZipStream gs =
-        //                            new Unity.IO.Compression.GZipStream(ms,
-        //                                Unity.IO.Compression.CompressionMode.Decompress))
-        //                        {
-        //                            using (var sr = new System.IO.StreamReader(gs))
-        //                            {
-        //                                txt = sr.ReadToEnd();
-        //                            }
-        //                            if (encrypted)
-        //                            {
-        //                                var data = Convert.FromBase64String(txt);
-        //                                var decrypted = PlatExt.PlatDependant.DecryptPostData(data, token, seq);
-        //                                if (decrypted != null)
-        //                                {
-        //                                    txt = System.Text.Encoding.UTF8.GetString(decrypted, 0, decrypted.Length);
-        //                                }
-        //                            }
-        //                        }
-        //                    }
-        //                }
-        //                catch
-        //                {
-        //                }
-        //            }
-        //            return txt;
-        //        }
-        //    }
-        //}
     }
 }

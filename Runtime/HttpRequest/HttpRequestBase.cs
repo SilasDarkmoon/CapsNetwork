@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.Text;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -8,7 +10,6 @@ using System.Threading;
 using UnityEngine;
 using Unity.Collections.Concurrent;
 using Capstones.UnityEngineEx;
-using System.IO;
 
 namespace Capstones.Net
 {
@@ -238,26 +239,21 @@ namespace Capstones.Net
         public static string PreferredEncryptMethod;
         public static string PreferredPrepareMethod;
 
-        static HttpRequestBase()
+        public void AddHeader(string key, string value)
         {
-            PreferredPrepareMethod = "default";
-            RequestDataPrepareFuncs["default"] = (form, token, seq, headers) =>
+            if (_Status == HttpRequestStatus.NotStarted)
             {
-                if (form.Encoded != null)
+                if (_Headers == null)
                 {
-                    if (form.ContentType == null)
-                    {
-                        form.ContentType = "application/octet-stream";
-                    }
-                    return;
+                    _Headers = new HttpRequestData();
                 }
-                else
-                {
-
-                }
-            };
+                _Headers.Add(key, value);
+            }
+            else
+            {
+                throw new InvalidOperationException("Cannot change request parameters after it is started.");
+            }
         }
-
         public string Token
         {
             get
@@ -659,9 +655,13 @@ namespace Capstones.Net
                     PlatDependant.LogError("no encryptor for " + encryptMethod);
                 }
             }
-            if (data == null)
+            if (data != null)
             {
-                return null;
+                AddHeader("Encrypted", encryptMethod);
+            }
+            else
+            {
+                data = _Data.Encoded;
             }
             var compressMethod = _Data.CompressMethod;
             if (!string.IsNullOrEmpty(compressMethod))
@@ -680,10 +680,136 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    PlatDependant.LogError("no compressor for " + encryptMethod);
+                    PlatDependant.LogError("no compressor for " + compressMethod);
                 }
             }
+            if (data != null)
+            {
+                AddHeader("Content-Encoding", compressMethod);
+                AddHeader("Accept-Encoding", compressMethod);
+            }
+            else
+            {
+                data = _Data.Encoded;
+            }
             return data;
+        }
+
+        public static class PrepareFuncHelper
+        {
+            public static JSONObject EncodeJson(Dictionary<string, object> data)
+            {
+                JSONObject obj = new JSONObject();
+                foreach (var kvp in data)
+                {
+                    if (kvp.Value is bool)
+                    {
+                        obj.AddField(kvp.Key, (bool)kvp.Value);
+                    }
+                    else if (kvp.Value is int)
+                    {
+                        obj.AddField(kvp.Key, (int)kvp.Value);
+                    }
+                    else if (kvp.Value is float)
+                    {
+                        obj.AddField(kvp.Key, (float)kvp.Value);
+                    }
+                    else if (kvp.Value is double)
+                    {
+                        obj.AddField(kvp.Key, (double)kvp.Value);
+                    }
+                    else if (kvp.Value is string)
+                    {
+                        obj.AddField(kvp.Key, (string)kvp.Value);
+                    }
+                    else if (kvp.Value is Dictionary<string, object>)
+                    {
+                        obj.AddField(kvp.Key, EncodeJson(kvp.Value as Dictionary<string, object>));
+                    }
+                    else if (kvp.Value is Array)
+                    {
+                    }
+                    //else if (kvp.Value == null)
+                    //{
+                    //    obj.AddField(kvp.Key, null);
+                    //}
+                }
+                return obj;
+            }
+            public static void Prepare_Default(HttpRequestData form, string token, ulong seq, HttpRequestData headers)
+            {
+                if (form.Encoded != null)
+                {
+                    if (form.ContentType == null)
+                    {
+                        form.ContentType = "application/octet-stream";
+                    }
+                    return;
+                }
+                else
+                {
+                    List<byte> buffer = new List<byte>();
+                    bool first = true;
+                    foreach (var kvp in form.Data)
+                    {
+                        if (first)
+                        {
+                            first = false;
+                        }
+                        else
+                        {
+                            buffer.AddRange(Encoding.UTF8.GetBytes("&"));
+                        }
+                        buffer.AddRange(Encoding.UTF8.GetBytes(Uri.EscapeDataString(kvp.Key)));
+                        buffer.AddRange(Encoding.UTF8.GetBytes("="));
+                        if (kvp.Value != null)
+                        {
+                            buffer.AddRange(Encoding.UTF8.GetBytes(Uri.EscapeDataString(kvp.Value.ToString())));
+                        }
+                    }
+                    var arr = buffer.ToArray();
+                    form.Encoded = arr;
+                    form.ContentType = "application/x-www-form-urlencoded";
+                }
+            }
+            public static void Prepare_Json(HttpRequestData form, string token, ulong seq, HttpRequestData headers)
+            {
+                object jobj;
+                if (form.Data.TryGetValue("", out jobj))
+                {
+                    string jstr = null;
+                    if (jobj is string)
+                    {
+                        jstr = jobj as string;
+                    }
+                    else if (jobj is JSONObject)
+                    {
+                        jstr = ((JSONObject)jobj).ToString();
+                    }
+                    if (jstr != null)
+                    {
+                        form.Encoded = Encoding.UTF8.GetBytes(jstr);
+                        form.ContentType = "application/json";
+                    }
+                }
+            }
+            public static void Prepare_Form2Json(HttpRequestData form, string token, ulong seq, HttpRequestData headers)
+            {
+                var jobj = EncodeJson(form.Data);
+                if (jobj != null)
+                {
+                    form.Encoded = Encoding.UTF8.GetBytes(jobj.ToString());
+                    form.ContentType = "application/json";
+                }
+            }
+        }
+
+        static HttpRequestBase()
+        {
+            PreferredPrepareMethod = "default";
+            RequestDataPrepareFuncs["default"] = PrepareFuncHelper.Prepare_Default;
+            RequestDataPrepareFuncs["json"] = PrepareFuncHelper.Prepare_Json;
+            RequestDataPrepareFuncs["form2json"] = PrepareFuncHelper.Prepare_Form2Json;
         }
     }
 }
