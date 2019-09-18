@@ -120,11 +120,7 @@ namespace Capstones.Net
 #if NETFX_CORE
                 System.Net.HttpWebRequest req = System.Net.HttpWebRequest.CreateHttp(uri);
 #else
-#if (UNITY_5 || UNITY_5_3_OR_NEWER) && UNITY_EDITOR
                 System.Net.HttpWebRequest req = System.Net.HttpWebRequest.Create(uri) as System.Net.HttpWebRequest;
-#else
-                System.Net.HttpWebRequest req = new System.Net.HttpWebRequest(uri);
-#endif
                 req.KeepAlive = false;
 
                 try
