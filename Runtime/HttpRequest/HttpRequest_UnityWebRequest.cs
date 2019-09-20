@@ -86,7 +86,7 @@ namespace Capstones.Net
                 _InnerReq = new UnityWebRequest(_Url);
                 if (_Timeout > 0)
                 {
-                    _InnerReq.timeout = _Timeout;
+                    _InnerReq.timeout = _Timeout / 1000;
                 }
 
                 var data = PrepareRequestData();
