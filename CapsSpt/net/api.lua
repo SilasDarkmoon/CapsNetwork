@@ -1,4 +1,4 @@
-local api = {}
+api = {}
 
 local UnityEngine = clr.UnityEngine
 local Object = UnityEngine.Object
@@ -369,4 +369,4 @@ function api.msg(request)
     return request.msg
 end
 
-exports.api = api
+return api
