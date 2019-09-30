@@ -106,7 +106,7 @@ local function createRequest(uri, data, seq, timeOut)
         coroutine.yield()
         local error, done
         while not done do
-            if type(www) == 'userdata' then
+            if clr.isobj(www) then
                 local isMyTimedout = nil
                 local startTime = UnityEngine.Time.realtimeSinceStartup
                 while true do
@@ -222,7 +222,7 @@ function api.waitany(...)
 
     local tab = cache.totable(...)
     for k, v in pairs(tab) do
-        if type(v) == 'userdata' or type(v) == 'table' and type(getmetatable(v).__index) == 'userdata' then
+        if clr.isobj(v) or type(v) == 'table' and getmetatable(v) and clr.isobj(getmetatable(v).__index) then
             if type(v.doneFuncs) ~= 'table' then
                 v.doneFuncs = {}
             end
@@ -242,7 +242,7 @@ function api.waitall(...)
     local done = {}
     local tab = cache.totable(...)
     for k, v in pairs(tab) do
-        if type(v) == 'userdata' or type(v) == 'table' and type(getmetatable(v).__index) == 'userdata' then
+        if clr.isobj(v) or type(v) == 'table' and getmetatable(v) and clr.isobj(getmetatable(v).__index) then
             undone[k] = v
             if type(v.doneFuncs) ~= 'table' then
                 v.doneFuncs = {}
@@ -360,7 +360,7 @@ function api.failed(...)
 end
 
 function api.msg(request)
-    if not (type(request) == 'table' and request.www and type(request.www) == 'userdata') then
+    if not (type(request) == 'table' and request.www and clr.isobj(request.www)) then
         return lang.trans('invalid request obj')
     end
     if not request.done then

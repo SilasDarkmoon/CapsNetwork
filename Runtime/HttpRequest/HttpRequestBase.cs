@@ -239,15 +239,19 @@ namespace Capstones.Net
         public static string PreferredEncryptMethod;
         public static string PreferredPrepareMethod;
 
+        protected void AddHeaderRaw(string key, string value)
+        {
+            if (_Headers == null)
+            {
+                _Headers = new HttpRequestData();
+            }
+            _Headers.Add(key, value);
+        }
         public void AddHeader(string key, string value)
         {
             if (_Status == HttpRequestStatus.NotStarted)
             {
-                if (_Headers == null)
-                {
-                    _Headers = new HttpRequestData();
-                }
-                _Headers.Add(key, value);
+                AddHeaderRaw(key, value);
             }
             else
             {
@@ -657,7 +661,7 @@ namespace Capstones.Net
             }
             if (data != null)
             {
-                AddHeader("Encrypted", encryptMethod);
+                AddHeaderRaw("Encrypted", encryptMethod);
             }
             else
             {
@@ -685,8 +689,8 @@ namespace Capstones.Net
             }
             if (data != null)
             {
-                AddHeader("Content-Encoding", compressMethod);
-                AddHeader("Accept-Encoding", compressMethod);
+                AddHeaderRaw("Content-Encoding", compressMethod);
+                AddHeaderRaw("Accept-Encoding", compressMethod);
             }
             else
             {

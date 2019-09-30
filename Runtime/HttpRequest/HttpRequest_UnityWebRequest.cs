@@ -170,7 +170,7 @@ namespace Capstones.Net
                     {
                         _InnerReq.SetRequestHeader("Content-Type", _Data.ContentType);
                     }
-                    _InnerReq.SetRequestHeader("Content-Length", data.Length.ToString());
+                    //_InnerReq.SetRequestHeader("Content-Length", data.Length.ToString());
                     _InnerReq.uploadHandler = new UploadHandlerRaw(data);
                 }
 
