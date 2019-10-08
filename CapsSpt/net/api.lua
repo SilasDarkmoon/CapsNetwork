@@ -34,9 +34,9 @@ local function createRequest(uri, data, seq, timeOut)
     local www
     local request
     -- TODO:扩展创建请求时候设置超时
-    local wwwTimeout = api.timeout * 1000
+    local wwwTimeout = api.timeout
     if timeOut ~= nil and type(timeOut) == "number" and timeOut > 0 then
-        wwwTimeout = timeOut * 1000
+        wwwTimeout = timeOut
     end
 
     if datamt and datamt.rawpost then
@@ -45,7 +45,7 @@ local function createRequest(uri, data, seq, timeOut)
         local form = clr.Capstones.Net.HttpRequestData()
         local headers = clr.Capstones.Net.HttpRequestData()
         www = clr.Capstones.Net.HttpRequest(uri, headers, form, nil)
-        www.Timeout = wwwTimeout
+        www.Timeout = wwwTimeout * 1000
         -----------------------------------
         form.PrepareMethod = "json"
         form:Add("", json.encode(data))
@@ -89,7 +89,7 @@ local function createRequest(uri, data, seq, timeOut)
         form.PrepareMethod = "json"
         form:Add("", json.encode(fulldata))
 
-        www.Timeout = wwwTimeout
+        www.Timeout = wwwTimeout * 1000
 
         www:StartRequest()
         request = {}
