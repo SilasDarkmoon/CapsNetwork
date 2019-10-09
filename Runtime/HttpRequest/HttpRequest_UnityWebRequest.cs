@@ -64,10 +64,10 @@ namespace Capstones.Net
                 }
                 return true;
             }
-            protected override void CompleteContent()
-            {
-                CoroutineRunner.StartCoroutine(_Req.WaitForDone());
-            }
+            //protected override void CompleteContent()
+            //{
+            //    CoroutineRunner.StartCoroutine(_Req.WaitForDone());
+            //}
         }
 
         protected System.IO.Stream _FinalDestStream;
@@ -220,6 +220,8 @@ namespace Capstones.Net
                     System.Threading.ThreadPool.QueueUserWorkItem(BackgroundIOWork);
 #endif
                 }
+
+                CoroutineRunner.StartCoroutine(WaitForDone());
             }
         }
 
