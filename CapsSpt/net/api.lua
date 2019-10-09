@@ -174,9 +174,9 @@ function repostReq(request) -- local
             Object.Destroy(block)
         end)
     end
-    -- if not quiet then
-    --     request2.blockdlg = res.ShowDialog('Assets/CapstonesRes/Game/UI/Common/Template/Loading/WaitForPost2.prefab', "overlay", false)
-    -- end
+    if not quiet then
+        request2.blockdlg = res.ShowDialog('Game/UI/Common/Template/Loading/WaitForPost2.prefab', "overlay", false)
+    end
 
     return request2
 end
@@ -189,9 +189,9 @@ function api.post(uri, data, quiet, timeOut)
     local request = createRequest(uri, data, nil, timeOut)
     request.quiet = quiet
 
-    -- if not quiet then
-    --     request.blockdlg = res.ShowDialog('Assets/CapstonesRes/Game/UI/Common/Template/Loading/WaitForPost2.prefab', "overlay", false)
-    -- end
+    if not quiet then
+        request.blockdlg = res.ShowDialog('Game/UI/Common/Template/Loading/WaitForPost2.prefab', "overlay", false)
+    end
 
     return request
 end
@@ -279,28 +279,28 @@ function api.result(request,isMyTimedout)
             if error == 'timedout' or isMyTimedout == true then
                 failed = 'timedout'
                 event = "none"
-                msg = lang.trans('timedOut')
+                msg = clr.trans('timedOut')
             elseif api.bool(error) then
                 failed = 'network'
                 event = "none"
-                msg = lang.trans('networkError')
+                msg = clr.trans('networkError')
             else
                 msg = request.www:ParseResponseText(request.token, request.seq)
                 local tab = json.decode(msg)
                 if type(tab) ~= 'table' then
                     failed = true
                     event = "none"
-                    msg = lang.trans(msg)
+                    msg = clr.trans(msg)
                 else
                     dump(tab)
                     local datamt = getmetatable(request.pdata)
                     if datamt and datamt.rawpost then
                         request.val = tab
-                        msg = tab and lang.trans(tab) or lang.trans('server refuse', failed)
+                        msg = tab and clr.trans(tab) or clr.trans('server_refuse', failed)
                     else
                         if api.bool(tab.r) then
                             failed = tab.r
-                            msg = tab.d and lang.trans(tab.d) or lang.trans('server refuse', failed)
+                            msg = tab.d and clr.trans(tab.d) or clr.trans('server_refuse', failed)
                         end
                         request.val = tab.d
                         request.event = tab.e
@@ -361,10 +361,10 @@ end
 
 function api.msg(request)
     if not (type(request) == 'table' and request.www and clr.isobj(request.www)) then
-        return lang.trans('invalid request obj')
+        return clr.trans('invalid_request_obj')
     end
     if not request.done then
-        return lang.trans('request not completed')
+        return clr.trans('request_not_completed')
     end
     return request.msg
 end
