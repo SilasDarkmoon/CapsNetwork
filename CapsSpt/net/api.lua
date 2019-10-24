@@ -69,8 +69,10 @@ local function createRequest(uri, data, seq, timeOut)
         nextRealSeq = nextRealSeq + 1
 
         local rawdata = data
-        local fulldata = { d = data }
-        data = json.encode(data)
+        -- local fulldata = { d = data }
+        -- local fulldata = { data }
+        local fulldata = data
+        -- data = json.encode(data)
         local form = clr.Capstones.Net.HttpRequestData()
         local headers = clr.Capstones.Net.HttpRequestData()
         www = clr.Capstones.Net.HttpRequest(uri, headers, form, nil)
@@ -80,11 +82,13 @@ local function createRequest(uri, data, seq, timeOut)
             www.Token = fulldata.t
         end
 
-        fulldata.seq = tostring(seq)
-        www.Seq = fulldata.seq
+        -- fulldata.seq = tostring(seq)
+        -- www.Seq = fulldata.seq
+        www.Seq = tostring(seq)
 
-        fulldata.rseq = tostring(rseq)
-        www.RSeq = fulldata.rseq
+        -- fulldata.rseq = tostring(rseq)
+        -- www.RSeq = fulldata.rseq
+        www.RSeq = tostring(rseq)
 
         form.PrepareMethod = "json"
         form:Add("", json.encode(fulldata))
@@ -275,7 +279,6 @@ function api.result(request,isMyTimedout)
             request.done = true
             local failed, msg, event = false, nil, nil
             local error = request.www.Error
-
             if error == 'timedout' or isMyTimedout == true then
                 failed = 'timedout'
                 event = "none"
@@ -298,9 +301,9 @@ function api.result(request,isMyTimedout)
                         request.val = tab
                         msg = tab and clr.trans(tab) or clr.trans('server_refuse', failed)
                     else
-                        if api.bool(tab.r) then
-                            failed = tab.r
-                            msg = tab.d and clr.trans(tab.d) or clr.trans('server_refuse', failed)
+                        if tab.type == 0 then
+                            failed = true
+                            msg = tab.tips and clr.trans(tab.tips) or clr.trans('server_refuse', failed)
                         end
                         request.val = tab.d
                         request.event = tab.e
