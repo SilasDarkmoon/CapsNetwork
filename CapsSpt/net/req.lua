@@ -73,12 +73,12 @@ function req.defaultOnFailed(request)
     local resDlg, dlgccomp
     local failedWait = { }
     if request.failed == "network" or request.failed == "timedout" then
-        resDlg = require("ui.control.manager.DialogManager").ShowRetryPop(clr.trans("tips"), request.msg, function()
+        resDlg = require("ui.common.manager.DialogManager").ShowRetryPop(clr.trans("tips"), request.msg, function()
             failedWait.done = true
             failedWait.retry = true
         end)
     else
-        resDlg = require("ui.control.manager.DialogManager").ShowAlertPop(clr.trans("tips"), request.msg, function()
+        resDlg = require("ui.common.manager.DialogManager").ShowAlertPop(clr.trans("tips"), request.msg, function()
             failedWait.done = true
         end)
     end
@@ -226,7 +226,7 @@ end
 --     local waitHandle = { }
 --     if data then
 --         local msg  = type(data) == "string" and data or lang.trans("loginExpire")
---         require("ui.control.manager.DialogManager").ShowAlertPop(lang.trans("tips"), msg, function()
+--         require("ui.common.manager.DialogManager").ShowAlertPop(lang.trans("tips"), msg, function()
 --             waitHandle.done = true
 --             unity.restart()
 --         end, nil, nil, 10000)
@@ -238,7 +238,7 @@ end
 --     local waitHandle = { }
 --     if data then
 --         local msg  = type(data) == "string" and data or lang.trans("loginExpire")
---         require("ui.control.manager.DialogManager").ShowAlertPop(lang.trans("tips"), msg, function()
+--         require("ui.common.manager.DialogManager").ShowAlertPop(lang.trans("tips"), msg, function()
 --             waitHandle.done = true
 --             luaevt.trig("player_authExpire")
 --         end, nil, nil, 10000)

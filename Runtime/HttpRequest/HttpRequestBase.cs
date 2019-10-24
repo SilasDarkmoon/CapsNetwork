@@ -296,16 +296,17 @@ namespace Capstones.Net
             {
                 if (_Status == HttpRequestStatus.NotStarted)
                 {
-                    if (_Data == null)
-                    {
-                        _Data = new HttpRequestData();
-                    }
-                    _Data.Add("t", value);
+                    //if (_Data == null)
+                    //{
+                    //    _Data = new HttpRequestData();
+                    //}
+                    //_Data.Add("t", value);
                     if (_Headers == null)
                     {
                         _Headers = new HttpRequestData();
                     }
-                    _Headers.Add("UserToken", value);
+                    //_Headers.Add("UserToken", value);
+                    _Headers.Add("t", value);
                 }
                 else
                 {
