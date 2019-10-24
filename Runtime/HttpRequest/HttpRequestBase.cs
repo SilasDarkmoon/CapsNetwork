@@ -268,7 +268,7 @@ namespace Capstones.Net
                     foreach (var kvp in _RespHeaders.Data)
                     {
                         var lkey = kvp.Key.ToLower();
-                        if (lkey == "usertoken")
+                        if (lkey == "t")
                         {
                             token = kvp.Value.ToString();
                             break;
@@ -282,7 +282,7 @@ namespace Capstones.Net
                         foreach (var kvp in _Headers.Data)
                         {
                             var lkey = kvp.Key.ToLower();
-                            if (lkey == "usertoken")
+                            if (lkey == "t")
                             {
                                 token = kvp.Value.ToString();
                                 break;
@@ -355,15 +355,16 @@ namespace Capstones.Net
             {
                 if (_Status == HttpRequestStatus.NotStarted)
                 {
-                    if (_Data == null)
-                    {
-                        _Data = new HttpRequestData();
-                    }
-                    _Data.Add("seq", value.ToString());
+                    //if (_Data == null)
+                    //{
+                    //    _Data = new HttpRequestData();
+                    //}
+                    //_Data.Add("seq", value.ToString());
                     if (_Headers == null)
                     {
                         _Headers = new HttpRequestData();
                     }
+
                     _Headers.Add("Seq", value.ToString());
                 }
                 else
@@ -413,11 +414,11 @@ namespace Capstones.Net
             {
                 if (_Status == HttpRequestStatus.NotStarted)
                 {
-                    if (_Data == null)
-                    {
-                        _Data = new HttpRequestData();
-                    }
-                    _Data.Add("rseq", value.ToString());
+                    //if (_Data == null)
+                    //{
+                    //    _Data = new HttpRequestData();
+                    //}
+                    //_Data.Add("rseq", value.ToString());
                     if (_Headers == null)
                     {
                         _Headers = new HttpRequestData();
@@ -443,7 +444,7 @@ namespace Capstones.Net
                     {
                         ulong.TryParse(kvp.Value.ToString(), out seq);
                     }
-                    else if (lkey == "usertoken")
+                    else if (lkey == "t")
                     {
                         token = kvp.Value.ToString();
                     }
@@ -456,7 +457,7 @@ namespace Capstones.Net
                     foreach (var kvp in _Headers.Data)
                     {
                         var lkey = kvp.Key.ToLower();
-                        if (lkey == "usertoken")
+                        if (lkey == "t")
                         {
                             token = kvp.Value.ToString();
                             break;
