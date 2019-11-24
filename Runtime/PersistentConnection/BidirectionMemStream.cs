@@ -5,10 +5,14 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
-using UnityEngine;
-using Unity.Collections.Concurrent;
 using Capstones.UnityEngineEx;
 using System.IO;
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+using UnityEngine;
+using Unity.Collections.Concurrent;
+#else
+using System.Collections.Concurrent;
+#endif
 
 namespace Capstones.Net
 {

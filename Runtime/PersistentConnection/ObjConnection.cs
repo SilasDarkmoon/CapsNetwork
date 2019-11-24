@@ -5,10 +5,14 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
-using UnityEngine;
-using Unity.Collections.Concurrent;
 using Capstones.UnityEngineEx;
 using System.IO;
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+using UnityEngine;
+using Unity.Collections.Concurrent;
+#else
+using System.Collections.Concurrent;
+#endif
 
 using PlatDependant = Capstones.UnityEngineEx.PlatDependant;
 using TaskProgress = Capstones.UnityEngineEx.TaskProgress;
@@ -294,7 +298,7 @@ namespace Capstones.Net
             }
         }
 
-        #region IDisposable Support
+#region IDisposable Support
         private bool disposedValue = false;
         protected virtual void Dispose(bool disposing)
         {
@@ -325,7 +329,7 @@ namespace Capstones.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-        #endregion
+#endregion
     }
 
     public class ObjServer : IDisposable
@@ -353,7 +357,7 @@ namespace Capstones.Net
             return new ObjClient(null, CreateServerConnection, _SerConfig) { _IsServer = true };
         }
 
-        #region IDisposable Support
+#region IDisposable Support
         private bool disposedValue = false;
         protected virtual void Dispose(bool disposing)
         {
@@ -377,7 +381,7 @@ namespace Capstones.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-        #endregion
+#endregion
     }
 
     public struct PersistentConnectionResponseData
@@ -573,7 +577,7 @@ namespace Capstones.Net
                 }
             }
         }
-        #region RTT Timing
+#region RTT Timing
         protected int _RTT = 0;
         public int RTT { get { return _RTT; } }
         protected const int _TimedRequestCount = 4;
@@ -603,7 +607,7 @@ namespace Capstones.Net
                 _RTT = 0;
             }
         }
-        #endregion
+#endregion
 
         protected abstract object Read(out uint seq, out uint sseq, out uint type);
         protected abstract int PushMessageCount { get; }

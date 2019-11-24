@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using Capstones.UnityEngineEx;
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
 using Unity.Collections.Concurrent;
+#else
+using System.Collections.Concurrent;
+#endif
 
 namespace Capstones.Net.FrameSync
 {
@@ -138,7 +142,7 @@ namespace Capstones.Net.FrameSync
             return InputMessage(raw);
         }
 
-        #region In Main Thread
+#region In Main Thread
         public static Action<float> DefaultOnTimeScaleChanged;
         public Action<float> OnTimeScaleChanged;
         private float _TimeScale = -1.0f;

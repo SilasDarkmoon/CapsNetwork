@@ -5,8 +5,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
 using UnityEngine;
 using Unity.Collections.Concurrent;
+#endif
 using Capstones.UnityEngineEx;
 using System.IO;
 
@@ -31,7 +33,7 @@ namespace Capstones.Net
             OnReceiveBlock(buffer, size, type, flags, seq, sseq);
         }
 
-        #region IDisposable Support
+#region IDisposable Support
         protected virtual void Dispose(bool disposing)
         {
         }
@@ -40,7 +42,7 @@ namespace Capstones.Net
         {
             Dispose(true);
         }
-        #endregion
+#endregion
     }
 
     /// <summary>
