@@ -9,7 +9,11 @@ using Capstones.UnityEngineEx;
 using System.IO;
 #if UNITY_ENGINE || UNITY_5_3_OR_NEWER
 using UnityEngine;
+#if !NET_4_6 && !NET_STANDARD_2_0
 using Unity.Collections.Concurrent;
+#else
+using System.Collections.Concurrent;
+#endif
 #else
 using System.Collections.Concurrent;
 #endif

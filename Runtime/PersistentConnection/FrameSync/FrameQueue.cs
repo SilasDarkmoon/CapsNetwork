@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Capstones.UnityEngineEx;
-#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+#if (UNITY_ENGINE || UNITY_5_3_OR_NEWER) && !NET_4_6 && !NET_STANDARD_2_0
 using Unity.Collections.Concurrent;
 #else
 using System.Collections.Concurrent;
