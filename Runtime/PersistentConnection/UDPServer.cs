@@ -78,30 +78,38 @@ namespace Capstones.Net
             public void BeginReceive()
             {
                 ReceiveCount = 0;
-                ReceiveResult = LocalSocket.BeginReceiveFrom(ReceiveData, 0, CONST.MTU, SocketFlags.None, ref RemoteEP, ar =>
+                ReceiveResult = null;
+                try
                 {
-                    try
+                    ReceiveResult = LocalSocket.BeginReceiveFrom(ReceiveData, 0, CONST.MTU, SocketFlags.None, ref RemoteEP, ar =>
                     {
-                        ReceiveCount = LocalSocket.EndReceiveFrom(ar, ref RemoteEP);
-                    }
-                    catch (Exception e)
-                    {
-                        if (ParentServer.IsConnectionAlive)
+                        try
                         {
-                            if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                            ReceiveCount = LocalSocket.EndReceiveFrom(ar, ref RemoteEP);
+                        }
+                        catch (Exception e)
+                        {
+                            if (ParentServer.IsConnectionAlive)
                             {
+                                if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                                {
                                 // the remote closed.
                             }
-                            else
-                            {
+                                else
+                                {
                                 //ParentServer._ConnectWorkCanceled = true;
                                 PlatDependant.LogError(e);
+                                }
                             }
+                            return;
                         }
-                        return;
-                    }
-                    ParentServer._HaveDataToSend.Set();
-                }, null);
+                        ParentServer._HaveDataToSend.Set();
+                    }, null);
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
             }
         }
         protected List<BroadcastSocketReceiveInfo> _SocketsBroadcast;
@@ -287,7 +295,7 @@ namespace Capstones.Net
                         for (int i = 0; i < _SocketsBroadcast.Count; ++i)
                         {
                             var bsinfo = _SocketsBroadcast[i];
-                            if (bsinfo.ReceiveResult.IsCompleted)
+                            if (bsinfo.ReceiveResult == null || bsinfo.ReceiveResult.IsCompleted)
                             {
                                 bsinfo.BeginReceive();
                             }
@@ -315,57 +323,73 @@ namespace Capstones.Net
 
                     Action BeginReceive4 = () =>
                     {
-                        readar4 = _Socket.BeginReceiveFrom(data4, 0, CONST.MTU, SocketFlags.None, ref sender4, ar =>
+                        try
                         {
-                            try
+                            readar4 = null;
+                            readar4 = _Socket.BeginReceiveFrom(data4, 0, CONST.MTU, SocketFlags.None, ref sender4, ar =>
                             {
-                                dcnt4 = _Socket.EndReceiveFrom(ar, ref sender4);
-                            }
-                            catch (Exception e)
-                            {
-                                if (IsConnectionAlive)
+                                try
                                 {
-                                    if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                                    dcnt4 = _Socket.EndReceiveFrom(ar, ref sender4);
+                                }
+                                catch (Exception e)
+                                {
+                                    if (IsConnectionAlive)
                                     {
+                                        if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                                        {
                                         // the remote closed.
                                     }
-                                    else
-                                    {
+                                        else
+                                        {
                                         //_ConnectWorkCanceled = true;
                                         PlatDependant.LogError(e);
+                                        }
                                     }
+                                    return;
                                 }
-                                return;
-                            }
-                            _HaveDataToSend.Set();
-                        }, null);
+                                _HaveDataToSend.Set();
+                            }, null);
+                        }
+                        catch (Exception e)
+                        {
+                            PlatDependant.LogError(e);
+                        }
                     };
                     Action BeginReceive6 = () =>
                     {
-                        readar6 = _Socket6.BeginReceiveFrom(data6, 0, CONST.MTU, SocketFlags.None, ref sender6, ar =>
+                        try
                         {
-                            try
+                            readar6 = null;
+                            readar6 = _Socket6.BeginReceiveFrom(data6, 0, CONST.MTU, SocketFlags.None, ref sender6, ar =>
                             {
-                                dcnt6 = _Socket6.EndReceiveFrom(ar, ref sender6);
-                            }
-                            catch (Exception e)
-                            {
-                                if (IsConnectionAlive)
+                                try
                                 {
-                                    if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                                    dcnt6 = _Socket6.EndReceiveFrom(ar, ref sender6);
+                                }
+                                catch (Exception e)
+                                {
+                                    if (IsConnectionAlive)
                                     {
+                                        if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                                        {
                                         // the remote closed.
                                     }
-                                    else
-                                    {
+                                        else
+                                        {
                                         //_ConnectWorkCanceled = true;
                                         PlatDependant.LogError(e);
+                                        }
                                     }
+                                    return;
                                 }
-                                return;
-                            }
-                            _HaveDataToSend.Set();
-                        }, null);
+                                _HaveDataToSend.Set();
+                            }, null);
+                        }
+                        catch (Exception e)
+                        {
+                            PlatDependant.LogError(e);
+                        }
                     };
                     BeginReceive4();
                     BeginReceive6();
@@ -384,11 +408,11 @@ namespace Capstones.Net
                                 dcnt6 = 0;
                             }
                         }
-                        if (readar4.IsCompleted)
+                        if (readar4 == null || readar4.IsCompleted)
                         {
                             BeginReceive4();
                         }
-                        if (readar6.IsCompleted)
+                        if (readar6 == null || readar6.IsCompleted)
                         {
                             BeginReceive6();
                         }

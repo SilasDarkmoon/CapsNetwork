@@ -465,43 +465,50 @@ namespace Capstones.Net
                     }
                     Action BeginReceive = () =>
                     {
-                        if (_BroadcastEP != null)
+                        try
                         {
-                            _Socket.BeginReceiveFrom(receivebuffer, 0, CONST.MTU, SocketFlags.None, ref broadcastRespEP, ar =>
+                            if (_BroadcastEP != null)
                             {
-                                try
+                                _Socket.BeginReceiveFrom(receivebuffer, 0, CONST.MTU, SocketFlags.None, ref broadcastRespEP, ar =>
                                 {
-                                    receivecnt = _Socket.EndReceiveFrom(ar, ref broadcastRespEP);
-                                }
-                                catch (Exception e)
-                                {
-                                    if (IsConnectionAlive)
+                                    try
                                     {
-                                        _ConnectWorkCanceled = true;
-                                        PlatDependant.LogError(e);
+                                        receivecnt = _Socket.EndReceiveFrom(ar, ref broadcastRespEP);
                                     }
-                                }
-                                _HaveDataToSend.Set();
-                            }, null);
+                                    catch (Exception e)
+                                    {
+                                        if (IsConnectionAlive)
+                                        {
+                                            _ConnectWorkCanceled = true;
+                                            PlatDependant.LogError(e);
+                                        }
+                                    }
+                                    _HaveDataToSend.Set();
+                                }, null);
+                            }
+                            else
+                            {
+                                _Socket.BeginReceive(receivebuffer, 0, CONST.MTU, SocketFlags.None, ar =>
+                                {
+                                    try
+                                    {
+                                        receivecnt = _Socket.EndReceive(ar);
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        if (IsConnectionAlive)
+                                        {
+                                            _ConnectWorkCanceled = true;
+                                            PlatDependant.LogError(e);
+                                        }
+                                    }
+                                    _HaveDataToSend.Set();
+                                }, null);
+                            }
                         }
-                        else
+                        catch (Exception e)
                         {
-                            _Socket.BeginReceive(receivebuffer, 0, CONST.MTU, SocketFlags.None, ar =>
-                            {
-                                try
-                                {
-                                    receivecnt = _Socket.EndReceive(ar);
-                                }
-                                catch (Exception e)
-                                {
-                                    if (IsConnectionAlive)
-                                    {
-                                        _ConnectWorkCanceled = true;
-                                        PlatDependant.LogError(e);
-                                    }
-                                }
-                                _HaveDataToSend.Set();
-                            }, null);
+                            PlatDependant.LogError(e);
                         }
                     };
                     if (_OnReceive != null)

@@ -267,41 +267,48 @@ namespace Capstones.Net
                     int receivecnt = 0;
                     Action BeginReceive = () =>
                     {
-                        _Socket.BeginReceive(receivebuffer, 0, 1, SocketFlags.None, ar =>
+                        try
                         {
-                            try
+                            _Socket.BeginReceive(receivebuffer, 0, 1, SocketFlags.None, ar =>
                             {
-                                receivecnt = _Socket.EndReceive(ar);
-                                if (receivecnt > 0)
+                                try
                                 {
-                                    var bytesRemaining = _Socket.Available;
-                                    if (bytesRemaining > 0)
+                                    receivecnt = _Socket.EndReceive(ar);
+                                    if (receivecnt > 0)
                                     {
-                                        if (bytesRemaining > CONST.MTU - 1)
+                                        var bytesRemaining = _Socket.Available;
+                                        if (bytesRemaining > 0)
                                         {
-                                            bytesRemaining = CONST.MTU - 1;
+                                            if (bytesRemaining > CONST.MTU - 1)
+                                            {
+                                                bytesRemaining = CONST.MTU - 1;
+                                            }
+                                            receivecnt += _Socket.Receive(receivebuffer, 1, bytesRemaining, SocketFlags.None);
                                         }
-                                        receivecnt += _Socket.Receive(receivebuffer, 1, bytesRemaining, SocketFlags.None);
+                                    }
+                                    else
+                                    {
+                                        if (_ConnectWorkRunning)
+                                        {
+                                            _ConnectWorkCanceled = true;
+                                        }
                                     }
                                 }
-                                else
+                                catch (Exception e)
                                 {
-                                    if (_ConnectWorkRunning)
+                                    if (IsConnectionAlive)
                                     {
                                         _ConnectWorkCanceled = true;
+                                        PlatDependant.LogError(e);
                                     }
                                 }
-                            }
-                            catch (Exception e)
-                            {
-                                if (IsConnectionAlive)
-                                {
-                                    _ConnectWorkCanceled = true;
-                                    PlatDependant.LogError(e);
-                                }
-                            }
-                            _HaveDataToSend.Set();
-                        }, null);
+                                _HaveDataToSend.Set();
+                            }, null);
+                        }
+                        catch (Exception e)
+                        {
+                            PlatDependant.LogError(e);
+                        }
                     };
                     BeginReceive();
                     while (!_ConnectWorkCanceled)
