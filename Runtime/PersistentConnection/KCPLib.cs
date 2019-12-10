@@ -67,5 +67,12 @@ namespace Capstones.Net
         public static extern int kcp_nodelay(this Connection kcp, int nodelay, int interval, int resend, int nc);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
         public static extern void kcp_memmove(IntPtr dst, IntPtr src, int cnt);
+
+#if !UNITY_ENGINE && !UNITY_5_3_OR_NEWER
+        static KCPLib()
+        {
+            UnityEngineEx.PluginManager.LoadLib(LIB_PATH);
+        }
+#endif
     }
 }
