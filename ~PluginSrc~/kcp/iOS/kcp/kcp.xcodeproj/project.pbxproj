@@ -21,8 +21,8 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
-		1EA459EA23AA05F000A97399 /* kcp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1EA459E723AA05F000A97399 /* kcp.cpp */; };
-		1EA459EB23AA05F000A97399 /* ikcp.c in Sources */ = {isa = PBXBuildFile; fileRef = 1EA459E923AA05F000A97399 /* ikcp.c */; };
+		1EA45A0023AA0B9200A97399 /* ikcp.c in Sources */ = {isa = PBXBuildFile; fileRef = 1EA459FB23AA0B9100A97399 /* ikcp.c */; };
+		1EA45A0123AA0B9200A97399 /* kcp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1EA459FC23AA0B9100A97399 /* kcp.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -39,11 +39,11 @@
 
 /* Begin PBXFileReference section */
 		1EA459D923AA04E900A97399 /* libkcp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libkcp.a; sourceTree = BUILT_PRODUCTS_DIR; };
-		1EA459E523AA05F000A97399 /* ikcp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ikcp.h; path = ../../Editor/Mac/kcp/src/ikcp.h; sourceTree = "<group>"; };
-		1EA459E623AA05F000A97399 /* IUnityInterface.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = IUnityInterface.h; path = ../../Editor/Mac/kcp/src/IUnityInterface.h; sourceTree = "<group>"; };
-		1EA459E723AA05F000A97399 /* kcp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = kcp.cpp; path = ../../Editor/Mac/kcp/src/kcp.cpp; sourceTree = "<group>"; };
-		1EA459E823AA05F000A97399 /* kcp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = kcp.h; path = ../../Editor/Mac/kcp/src/kcp.h; sourceTree = "<group>"; };
-		1EA459E923AA05F000A97399 /* ikcp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ikcp.c; path = ../../Editor/Mac/kcp/src/ikcp.c; sourceTree = "<group>"; };
+		1EA459FB23AA0B9100A97399 /* ikcp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ikcp.c; path = ../../src/ikcp.c; sourceTree = "<group>"; };
+		1EA459FC23AA0B9100A97399 /* kcp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = kcp.cpp; path = ../../src/kcp.cpp; sourceTree = "<group>"; };
+		1EA459FD23AA0B9100A97399 /* ikcp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ikcp.h; path = ../../src/ikcp.h; sourceTree = "<group>"; };
+		1EA459FE23AA0B9200A97399 /* kcp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = kcp.h; path = ../../src/kcp.h; sourceTree = "<group>"; };
+		1EA459FF23AA0B9200A97399 /* IUnityInterface.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = IUnityInterface.h; path = ../../src/IUnityInterface.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,11 +60,11 @@
 		1EA459D023AA04E900A97399 = {
 			isa = PBXGroup;
 			children = (
-				1EA459E923AA05F000A97399 /* ikcp.c */,
-				1EA459E523AA05F000A97399 /* ikcp.h */,
-				1EA459E623AA05F000A97399 /* IUnityInterface.h */,
-				1EA459E723AA05F000A97399 /* kcp.cpp */,
-				1EA459E823AA05F000A97399 /* kcp.h */,
+				1EA459FB23AA0B9100A97399 /* ikcp.c */,
+				1EA459FD23AA0B9100A97399 /* ikcp.h */,
+				1EA459FF23AA0B9200A97399 /* IUnityInterface.h */,
+				1EA459FC23AA0B9100A97399 /* kcp.cpp */,
+				1EA459FE23AA0B9200A97399 /* kcp.h */,
 				1EA459DA23AA04E900A97399 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -158,8 +158,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1EA459EB23AA05F000A97399 /* ikcp.c in Sources */,
-				1EA459EA23AA05F000A97399 /* kcp.cpp in Sources */,
+				1EA45A0123AA0B9200A97399 /* kcp.cpp in Sources */,
+				1EA45A0023AA0B9200A97399 /* ikcp.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
