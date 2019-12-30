@@ -18,6 +18,10 @@ using System.Collections.Concurrent;
 
 namespace Capstones.UnityEngineEx
 {
+    /// <summary>
+    /// 一个环形数组实现的队列。如果已满则入队会失败。
+    /// 优点是避免了GC分配，适用于各种缓存池。
+    /// </summary>
     public class ConcurrentQueueFixedSize<T> : IProducerConsumerCollection<T>
         , IEnumerable<T>, IEnumerable, ICollection, IReadOnlyCollection<T>
     {
