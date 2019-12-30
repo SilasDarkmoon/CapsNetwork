@@ -84,7 +84,7 @@ namespace Capstones.Net
         private const int _LARGE_POOL_SLOT_CNT_PER_LEVEL = 4;
         private const int _BufferDefaultSize = CONST.MTU;
 
-        private static ConcurrentQueue<byte[]> _DefaultPool = new ConcurrentQueue<byte[]>();
+        private static ConcurrentQueueFixedSize<byte[]> _DefaultPool = new ConcurrentQueueFixedSize<byte[]>();
         private static int[] _LargePoolCounting = new int[_LARGE_POOL_LEVEL_CNT];
         private static byte[][] _LargePool = new byte[_LARGE_POOL_LEVEL_CNT * _LARGE_POOL_SLOT_CNT_PER_LEVEL][];
 
@@ -196,7 +196,7 @@ namespace Capstones.Net
             return new byte[minsize];
         }
 
-        private static ConcurrentQueue<PooledBuffer> _WrapperPool = new ConcurrentQueue<PooledBuffer>();
+        private static ConcurrentQueueFixedSize<PooledBuffer> _WrapperPool = new ConcurrentQueueFixedSize<PooledBuffer>();
         private static PooledBuffer GetWrapperFromPool()
         {
             PooledBuffer wrapper;
@@ -276,7 +276,7 @@ namespace Capstones.Net
         public override long Seek(long offset, SeekOrigin origin) { return -1; }
         public override void SetLength(long value) { }
 
-        private ConcurrentQueue<BufferInfo> _Buffer = new ConcurrentQueue<BufferInfo>();
+        private ConcurrentQueue<BufferInfo> _Buffer = new ConcurrentQueue<BufferInfo>(); // TODO: ConcurrentQueueGrowOnly
         private int _BufferOffset = 0;
         private AutoResetEvent _DataReady = new AutoResetEvent(false);
         private volatile bool _Closed = false;

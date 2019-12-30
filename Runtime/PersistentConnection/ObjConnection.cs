@@ -674,14 +674,14 @@ namespace Capstones.Net
     }
     public class PersistentConnectionRequestFactory : PersistentConnectionRequestFactoryBase
     {
-        protected readonly ConcurrentQueue<PersistentConnectionResponseData> _PushMessages = new ConcurrentQueue<PersistentConnectionResponseData>();
+        protected readonly ConcurrentQueue<PersistentConnectionResponseData> _PushMessages = new ConcurrentQueue<PersistentConnectionResponseData>(); // TODO: ConcurrentQueueGrowOnly
         protected struct PendingSendData
         {
             public PersistentConnectionRequest _Req;
             public object _Raw;
             public uint _SeqPingBack;
         }
-        protected readonly ConcurrentQueue<PendingSendData> _PendingSend = new ConcurrentQueue<PendingSendData>();
+        protected readonly ConcurrentQueue<PendingSendData> _PendingSend = new ConcurrentQueue<PendingSendData>(); // TODO: ConcurrentQueueGrowOnly
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         protected volatile bool _WriteDone = false;
 

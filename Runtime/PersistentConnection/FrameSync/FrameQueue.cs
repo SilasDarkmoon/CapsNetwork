@@ -27,7 +27,7 @@ namespace Capstones.Net.FrameSync
     public delegate void FrameOpHandler(object op, float frameTime, float curTime);
     public delegate bool TypedFrameOpHandler<T>(T op, float frameTime, float curTime);
     
-    public sealed class FrameQueue : ConcurrentQueue<Frame>, IDisposable
+    public sealed class FrameQueue : ConcurrentQueue<Frame>, IDisposable // TODO: ConcurrentQueueGrowOnly
     {
         private const int _DefaultInterval = 100;
         private Frame _LastFrame;

@@ -279,7 +279,7 @@ namespace Capstones.Net
 
         public bool HoldSending = false;
         protected int _LastSendTick = int.MinValue;
-        protected ConcurrentQueue<BufferInfo> _PendingSendMessages = new ConcurrentQueue<BufferInfo>();
+        protected ConcurrentQueue<BufferInfo> _PendingSendMessages = new ConcurrentQueue<BufferInfo>(); // TODO: ConcurrentQueueGrowOnly
         //public static readonly byte[] EmptyBuffer = new byte[0];
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>
@@ -338,7 +338,7 @@ namespace Capstones.Net
                 ReturnSendAsyncInfoToPool(this);
             }
         }
-        private static ConcurrentQueue<SendAsyncInfo> _SendAsyncInfo = new ConcurrentQueue<SendAsyncInfo>();
+        private static ConcurrentQueueFixedSize<SendAsyncInfo> _SendAsyncInfo = new ConcurrentQueueFixedSize<SendAsyncInfo>();
         public static SendAsyncInfo GetSendAsyncInfoFromPool()
         {
             SendAsyncInfo info;

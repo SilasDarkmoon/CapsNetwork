@@ -300,7 +300,7 @@ namespace Capstones.Net
             //    }
             //}
 
-            protected ConcurrentQueue<BufferInfo> _PendingSendMessages = new ConcurrentQueue<BufferInfo>();
+            protected ConcurrentQueue<BufferInfo> _PendingSendMessages = new ConcurrentQueue<BufferInfo>(); // TODO: ConcurrentQueueGrowOnly
             public virtual bool TrySend(BufferInfo binfo)
             {
                 _PendingSendMessages.Enqueue(binfo);
