@@ -170,18 +170,15 @@ namespace Capstones.Net
                 // set handlers to null.
                 _OnReceive = null;
                 _OnSend = null;
-                _OnSendComplete = null;
+                //_OnSendComplete = null;
                 _PreDispose = null;
             }
         }
-        public override void Send(byte[] data, int cnt)
+        public override bool TrySend(BufferInfo binfo)
         {
             _HaveDataToSend.Set();
             StartConnect();
-            if (_OnSendComplete != null)
-            {
-                _OnSendComplete(data, false);
-            }
+            return false;
         }
 
         public void StartListening()

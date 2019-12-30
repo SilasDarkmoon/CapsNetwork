@@ -93,7 +93,7 @@ namespace Capstones.Net
 
                     // set handlers to null.
                     _OnReceive = null;
-                    _OnSendComplete = null;
+                    //_OnSendComplete = null;
                 }
                 if (!inFinalizer)
                 {
@@ -127,9 +127,12 @@ namespace Capstones.Net
                     var info = gchandle.Target as KCPServerConnectionInfo;
                     if (info != null && info.EP != null)
                     {
-                        var buffer = BufferPool.GetBufferFromPool(len);
-                        Marshal.Copy(buf, buffer, 0, len);
-                        info.Server._Connection.SendRaw(buffer, len, info.EP, success => BufferPool.ReturnBufferToPool(buffer));
+                        var binfo = BufferPool.GetBufferFromPool(len);
+                        Marshal.Copy(buf, binfo.Buffer, 0, len);
+                        info.Server._Connection.SendRaw(binfo, len, info.EP
+                            //, success => BufferPool.ReturnRawBufferToPool(buffer)
+                            );
+                        binfo.Release();
                     }
                 }
                 catch (Exception e)
@@ -153,33 +156,45 @@ namespace Capstones.Net
                     while (_PendingSendMessages.TryDequeue(out binfo))
                     {
                         var message = binfo.Buffer;
-                        if (binfo.Count > CONST.MTU)
+                        int cnt = binfo.Count;
+                        if (message == null)
                         {
-                            int cnt = binfo.Count;
-                            int offset = 0;
-                            var buffer = BufferPool.GetBufferFromPool();
-                            while (cnt > CONST.MTU)
+                            if (binfo.Serializer != null)
                             {
-                                Buffer.BlockCopy(message, offset, buffer, 0, CONST.MTU);
-                                _KCP.kcp_send(buffer, CONST.MTU);
-                                cnt -= CONST.MTU;
-                                offset += CONST.MTU;
+                                message = binfo.Serializer(binfo.Raw, out cnt);
                             }
-                            if (cnt > 0)
+                        }
+                        if (message != null)
+                        {
+                            if (binfo.Count > CONST.MTU)
                             {
-                                Buffer.BlockCopy(message, offset, buffer, 0, cnt);
-                                _KCP.kcp_send(buffer, cnt);
+                                int offset = 0;
+                                var pinfo = BufferPool.GetBufferFromPool();
+                                var buffer = pinfo.Buffer;
+                                while (cnt > CONST.MTU)
+                                {
+                                    Buffer.BlockCopy(message.Buffer, offset, buffer, 0, CONST.MTU);
+                                    _KCP.kcp_send(buffer, CONST.MTU);
+                                    cnt -= CONST.MTU;
+                                    offset += CONST.MTU;
+                                }
+                                if (cnt > 0)
+                                {
+                                    Buffer.BlockCopy(message.Buffer, offset, buffer, 0, cnt);
+                                    _KCP.kcp_send(buffer, cnt);
+                                }
+                                pinfo.Release();
                             }
-                            BufferPool.ReturnBufferToPool(buffer);
+                            else
+                            {
+                                _KCP.kcp_send(message.Buffer, binfo.Count);
+                            }
+                            message.Release();
                         }
-                        else
-                        {
-                            _KCP.kcp_send(message, binfo.Count);
-                        }
-                        if (_OnSendComplete != null)
-                        {
-                            _OnSendComplete(message, true);
-                        }
+                        //if (_OnSendComplete != null)
+                        //{
+                        //    _OnSendComplete(message, true);
+                        //}
                     }
                 }
                 // 2, real update.
@@ -262,34 +277,47 @@ namespace Capstones.Net
                     }
                 }
             }
-            protected SendCompleteHandler _OnSendComplete;
-            /// <summary>
-            /// This will be called in undetermined thread.
-            /// </summary>
-            public SendCompleteHandler OnSendComplete
-            {
-                get { return _OnSendComplete; }
-                set
-                {
-                    if (value != _OnSendComplete)
-                    {
-                        if (IsConnectionAlive)
-                        {
-                            PlatDependant.LogError("Cannot change OnSendComplete when connection started");
-                        }
-                        else
-                        {
-                            _OnSendComplete = value;
-                        }
-                    }
-                }
-            }
+            //protected SendCompleteHandler _OnSendComplete;
+            ///// <summary>
+            ///// This will be called in undetermined thread.
+            ///// </summary>
+            //public SendCompleteHandler OnSendComplete
+            //{
+            //    get { return _OnSendComplete; }
+            //    set
+            //    {
+            //        if (value != _OnSendComplete)
+            //        {
+            //            if (IsConnectionAlive)
+            //            {
+            //                PlatDependant.LogError("Cannot change OnSendComplete when connection started");
+            //            }
+            //            else
+            //            {
+            //                _OnSendComplete = value;
+            //            }
+            //        }
+            //    }
+            //}
 
             protected ConcurrentQueue<BufferInfo> _PendingSendMessages = new ConcurrentQueue<BufferInfo>();
-            public virtual void Send(byte[] data, int cnt)
+            public virtual bool TrySend(BufferInfo binfo)
             {
-                _PendingSendMessages.Enqueue(new BufferInfo(data, cnt));
-                Server._Connection.Send(data, cnt);
+                _PendingSendMessages.Enqueue(binfo);
+                return Server._Connection.TrySend(new BufferInfo());
+            }
+            public void Send(IPooledBuffer data, int cnt)
+            {
+                data.AddRef();
+                TrySend(new BufferInfo(data, cnt));
+            }
+            public void Send(object raw, SendSerializer serializer)
+            {
+                TrySend(new BufferInfo(raw, serializer));
+            }
+            public void Send(byte[] data, int cnt)
+            {
+                Send(new UnpooledBuffer(data), cnt);
             }
             public void Send(byte[] data)
             {

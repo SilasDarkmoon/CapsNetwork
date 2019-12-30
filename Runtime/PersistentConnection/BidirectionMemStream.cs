@@ -27,16 +27,57 @@ namespace Capstones.Net
 
     public struct BufferInfo
     {
-        public BufferInfo(byte[] buffer, int cnt)
+        public BufferInfo(IPooledBuffer buffer, int cnt)
         {
             Buffer = buffer;
             Count = cnt;
+            Raw = null;
+            Serializer = null;
+        }
+        public BufferInfo(object raw, SendSerializer serializer)
+        {
+            Buffer = null;
+            Count = 0;
+            Raw = raw;
+            Serializer = serializer;
         }
 
-        public byte[] Buffer;
+        public IPooledBuffer Buffer;
         public int Count;
+        public object Raw;
+        public SendSerializer Serializer;
     }
 
+    public interface IPooledBuffer
+    {
+        byte[] Buffer { get; }
+        void AddRef();
+        void Release();
+    }
+    public class UnpooledBuffer : IPooledBuffer
+    {
+        public byte[] Buffer { get; set; }
+        public void AddRef()
+        {
+        }
+        public void Release()
+        {
+        }
+
+        public UnpooledBuffer(byte[] raw)
+        {
+            Buffer = raw;
+        }
+
+        //public static implicit operator byte[](UnpooledBuffer thiz)
+        //{
+        //    return thiz.Buffer;
+        //}
+        //public static implicit operator UnpooledBuffer(byte[] raw)
+        //{
+        //    return new UnpooledBuffer(raw);
+        //}
+    }
     public static class BufferPool
     {
         private const int _LARGE_POOL_LEVEL_CNT = 10;
@@ -51,7 +92,7 @@ namespace Capstones.Net
         private static HashSet<byte[]> _DebugPool = new HashSet<byte[]>();
 #endif
 
-        public static void ReturnBufferToPool(byte[] buffer)
+        private static void ReturnRawBufferToPool(byte[] buffer)
         {
             if (buffer != null)
             {
@@ -97,11 +138,11 @@ namespace Capstones.Net
                 }
             }
         }
-        public static byte[] GetBufferFromPool()
+        private static byte[] GetRawBufferFromPool()
         {
-            return GetBufferFromPool(0);
+            return GetRawBufferFromPool(0);
         }
-        public static byte[] GetBufferFromPool(int minsize)
+        private static byte[] GetRawBufferFromPool(int minsize)
         {
             if (minsize < _BufferDefaultSize)
             {
@@ -153,6 +194,74 @@ namespace Capstones.Net
                 }
             }
             return new byte[minsize];
+        }
+
+        private static ConcurrentQueue<PooledBuffer> _WrapperPool = new ConcurrentQueue<PooledBuffer>();
+        private static PooledBuffer GetWrapperFromPool()
+        {
+            PooledBuffer wrapper;
+            if (!_WrapperPool.TryDequeue(out wrapper))
+            {
+                wrapper = new PooledBuffer();
+            }
+            Interlocked.Exchange(ref wrapper.RefCount, 1);
+            wrapper.Buffer = null;
+            return wrapper;
+        }
+        private static void ReturnWrapperToPool(PooledBuffer wrapper)
+        {
+            if (wrapper != null)
+            {
+                Interlocked.Exchange(ref wrapper.RefCount, 0);
+                wrapper.Buffer = null;
+                _WrapperPool.Enqueue(wrapper);
+            }
+        }
+        private class PooledBuffer : IPooledBuffer
+        {
+            public int RefCount = 0;
+
+            public byte[] Buffer { get; set; }
+
+            public void AddRef()
+            {
+                var refcnt = Interlocked.Increment(ref RefCount);
+#if DEBUG_PERSIST_CONNECT_BUFFER_POOL
+                if (refcnt <= 1)
+                {
+                    PlatDependant.LogError("Try AddRef a buffer, when it is already dead.");
+                }
+#endif
+            }
+
+            public void Release()
+            {
+                var refcnt = Interlocked.Decrement(ref RefCount);
+                if (refcnt == 0)
+                {
+                    ReturnRawBufferToPool(Buffer);
+                    ReturnWrapperToPool(this);
+                }
+#if DEBUG_PERSIST_CONNECT_BUFFER_POOL
+                else if (refcnt < 0)
+                {
+                    PlatDependant.LogError("Try release a buffer, when it is already dead.");
+                }
+#endif
+            }
+        }
+
+        public static IPooledBuffer GetBufferFromPool()
+        {
+            var wrapper = GetWrapperFromPool();
+            wrapper.Buffer = GetRawBufferFromPool();
+            return wrapper;
+        }
+        public static IPooledBuffer GetBufferFromPool(int minsize)
+        {
+            var wrapper = GetWrapperFromPool();
+            wrapper.Buffer = GetRawBufferFromPool(minsize);
+            return wrapper;
         }
     }
 
@@ -211,7 +320,7 @@ namespace Capstones.Net
                         {
                             prcnt = count - rcnt;
                         }
-                        Buffer.BlockCopy(binfo.Buffer, _BufferOffset, buffer, offset + rcnt, prcnt);
+                        Buffer.BlockCopy(binfo.Buffer.Buffer, _BufferOffset, buffer, offset + rcnt, prcnt);
                         if (readlessthanbuffer)
                         {
                             _BufferOffset += prcnt;
@@ -219,7 +328,7 @@ namespace Capstones.Net
                         else
                         {
                             _Buffer.TryDequeue(out binfo);
-                            BufferPool.ReturnBufferToPool(binfo.Buffer);
+                            binfo.Buffer.Release();
                             binfoHaveData = false;
                             _BufferOffset = 0;
                         }
@@ -247,7 +356,8 @@ namespace Capstones.Net
             int cntwrote = 0;
             while (cntwrote < count)
             {
-                var sbuffer = BufferPool.GetBufferFromPool();
+                var pbuffer = BufferPool.GetBufferFromPool();
+                var sbuffer = pbuffer.Buffer;
                 int scnt = count - cntwrote;
                 if (sbuffer.Length < scnt)
                 {
@@ -255,7 +365,7 @@ namespace Capstones.Net
                 }
                 Buffer.BlockCopy(buffer, offset + cntwrote, sbuffer, 0, scnt);
 
-                _Buffer.Enqueue(new BufferInfo(sbuffer, scnt));
+                _Buffer.Enqueue(new BufferInfo(pbuffer, scnt));
 
                 cntwrote += scnt;
             }

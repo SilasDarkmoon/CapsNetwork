@@ -176,7 +176,7 @@ namespace Capstones.Net
                     _Socket.Bind(new IPEndPoint(address4, _Port));
                 }
 
-#if NET_STANDARD_2_0 || NET_4_6
+#if NET_STANDARD_2_0 || NET_4_6 || !UNITY_ENGINE && !UNITY_5_3_OR_NEWER
                 // Notice: it is a pitty that unity does not support ipv6 multicast. (Unity 5.6)
                 if (_ListenBroadcast)
                 {
@@ -467,23 +467,21 @@ namespace Capstones.Net
                 // set handlers to null.
                 _OnReceive = null;
                 _OnSend = null;
-                _OnSendComplete = null;
+                //_OnSendComplete = null;
                 _OnUpdate = null;
                 _PreDispose = null;
             }
         }
-        public override void Send(byte[] data, int cnt)
+        public override bool TrySend(BufferInfo binfo)
         {
             _HaveDataToSend.Set();
             StartConnect();
-            if (_OnSendComplete != null)
-            {
-                _OnSendComplete(data, false);
-            }
+            return false;
         }
 
-        public void SendRaw(byte[] data, int cnt, IPEndPoint ep, Action<bool> onComplete)
+        public void SendRaw(IPooledBuffer data, int cnt, IPEndPoint ep, Action<bool> onComplete)
         {
+            data.AddRef();
             if (_ListenBroadcast)
             {
                 int curVer = 0;
@@ -515,23 +513,11 @@ namespace Capstones.Net
                 {
                     try
                     {
-                        knowSocket.BeginSendTo(data, 0, cnt, SocketFlags.None, ep, ar =>
-                        {
-                            bool success = false;
-                            try
-                            {
-                                knowSocket.EndSendTo(ar);
-                                success = true;
-                            }
-                            catch (Exception e)
-                            {
-                                PlatDependant.LogError(e);
-                            }
-                            if (onComplete != null)
-                            {
-                                onComplete(success);
-                            }
-                        }, null);
+                        var info = GetSendAsyncInfoFromPool();
+                        info.Data = data;
+                        info.Socket = knowSocket;
+                        info.OnComplete = onComplete;
+                        knowSocket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
                         return;
                     }
                     catch (Exception e)
@@ -548,23 +534,11 @@ namespace Capstones.Net
                     {
                         try
                         {
-                            _Socket6.BeginSendTo(data, 0, cnt, SocketFlags.None, ep, ar =>
-                            {
-                                bool success = false;
-                                try
-                                {
-                                    _Socket6.EndSendTo(ar);
-                                    success = true;
-                                }
-                                catch (Exception e)
-                                {
-                                    PlatDependant.LogError(e);
-                                }
-                                if (onComplete != null)
-                                {
-                                    onComplete(success);
-                                }
-                            }, null);
+                            var info = GetSendAsyncInfoFromPool();
+                            info.Data = data;
+                            info.Socket = _Socket6;
+                            info.OnComplete = onComplete;
+                            _Socket6.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
                             return;
                         }
                         catch (Exception e)
@@ -579,23 +553,11 @@ namespace Capstones.Net
                     {
                         try
                         {
-                            _Socket.BeginSendTo(data, 0, cnt, SocketFlags.None, ep, ar =>
-                            {
-                                bool success = false;
-                                try
-                                {
-                                    _Socket.EndSendTo(ar);
-                                    success = true;
-                                }
-                                catch (Exception e)
-                                {
-                                    PlatDependant.LogError(e);
-                                }
-                                if (onComplete != null)
-                                {
-                                    onComplete(success);
-                                }
-                            }, null);
+                            var info = GetSendAsyncInfoFromPool();
+                            info.Data = data;
+                            info.Socket = _Socket;
+                            info.OnComplete = onComplete;
+                            _Socket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
                             return;
                         }
                         catch (Exception e)
@@ -609,14 +571,27 @@ namespace Capstones.Net
             {
                 onComplete(false);
             }
+            data.Release();
         }
-        public void SendRaw(byte[] data, int cnt, IPEndPoint ep, Action onComplete)
+        //public void SendRaw(byte[] data, int cnt, IPEndPoint ep, Action onComplete)
+        //{
+        //    SendRaw(data, cnt, ep, onComplete == null ? null : (Action<bool>)(success => onComplete()));
+        //}
+        public void SendRaw(IPooledBuffer data, int cnt, IPEndPoint ep)
         {
-            SendRaw(data, cnt, ep, onComplete == null ? null : (Action<bool>)(success => onComplete()));
+            SendRaw(data, cnt, ep, null);
+        }
+        public void SendRaw(IPooledBuffer data, IPEndPoint ep)
+        {
+            SendRaw(data, data.Buffer.Length, ep, null);
+        }
+        public void SendRaw(byte[] data, int cnt, IPEndPoint ep, Action<bool> onComplete)
+        {
+            SendRaw(new UnpooledBuffer(data), cnt, ep, onComplete);
         }
         public void SendRaw(byte[] data, int cnt, IPEndPoint ep)
         {
-            SendRaw(data, cnt, ep, (Action<bool>)null);
+            SendRaw(data, cnt, ep, null);
         }
         public void SendRaw(byte[] data, IPEndPoint ep)
         {

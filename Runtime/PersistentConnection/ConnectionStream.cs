@@ -21,7 +21,7 @@ namespace Capstones.Net
             {
                 _Con = con;
                 con.OnReceive = (data, cnt, sender) => Receive(data, 0, cnt);
-                con.OnSendComplete = (buffer, success) => BufferPool.ReturnBufferToPool(buffer);
+                //con.OnSendComplete = (buffer, success) => { if (buffer != null) BufferPool.ReturnRawBufferToPool(buffer); };
             }
             _LeaveOpen = leaveOpen;
         }
@@ -34,7 +34,8 @@ namespace Capstones.Net
                 int cntwrote = 0;
                 while (cntwrote < count)
                 {
-                    var sbuffer = BufferPool.GetBufferFromPool();
+                    var pbuffer = BufferPool.GetBufferFromPool();
+                    var sbuffer = pbuffer.Buffer;
                     int scnt = count - cntwrote;
                     if (sbuffer.Length < scnt)
                     {
@@ -42,7 +43,8 @@ namespace Capstones.Net
                     }
                     Buffer.BlockCopy(buffer, offset + cntwrote, sbuffer, 0, scnt);
 
-                    _Con.Send(sbuffer, scnt);
+                    _Con.Send(pbuffer, scnt);
+                    pbuffer.Release();
 
                     cntwrote += scnt;
                 }
@@ -55,7 +57,8 @@ namespace Capstones.Net
                 int cntwrote = 0;
                 while (cntwrote < count)
                 {
-                    var sbuffer = BufferPool.GetBufferFromPool();
+                    var pbuffer = BufferPool.GetBufferFromPool();
+                    var sbuffer = pbuffer.Buffer;
                     int scnt = count - cntwrote;
                     if (sbuffer.Length < scnt)
                     {
@@ -65,7 +68,9 @@ namespace Capstones.Net
                     {
                         sbuffer[i] = buffer[offset + cntwrote + i];
                     }
-                    _Con.Send(sbuffer, scnt);
+
+                    _Con.Send(pbuffer, scnt);
+                    pbuffer.Release();
 
                     cntwrote += scnt;
                 }
@@ -79,14 +84,17 @@ namespace Capstones.Net
                 int cntwrote = 0;
                 while (cntwrote < count)
                 {
-                    var sbuffer = BufferPool.GetBufferFromPool();
+                    var pbuffer = BufferPool.GetBufferFromPool();
+                    var sbuffer = pbuffer.Buffer;
                     int scnt = count - cntwrote;
                     if (sbuffer.Length < scnt)
                     {
                         scnt = sbuffer.Length;
                     }
                     buffer.Read(sbuffer, 0, scnt);
-                    _Con.Send(sbuffer, scnt);
+
+                    _Con.Send(pbuffer, scnt);
+                    pbuffer.Release();
 
                     cntwrote += scnt;
                 }

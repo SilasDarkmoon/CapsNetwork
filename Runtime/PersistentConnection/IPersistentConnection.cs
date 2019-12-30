@@ -11,8 +11,9 @@ namespace Capstones.Net
 {
     public delegate void CommonHandler(IPersistentConnection thiz);
     public delegate void ReceiveHandler(byte[] buffer, int cnt, EndPoint sender);
-    public delegate void SendCompleteHandler(byte[] buffer, bool success);
-    public delegate bool SendHandler(byte[] buffer, int cnt);
+    //public delegate void SendCompleteHandler(bool success);
+    public delegate bool SendHandler(IPooledBuffer buffer, int cnt);
+    public delegate IPooledBuffer SendSerializer(object obj, out int cnt);
 
     public interface IPersistentConnection
     {
@@ -20,8 +21,9 @@ namespace Capstones.Net
         bool IsConnectionAlive { get; }
         EndPoint RemoteEndPoint { get; }
         ReceiveHandler OnReceive { get; set; }
-        void Send(byte[] data, int cnt);
-        SendCompleteHandler OnSendComplete { get; set; }
+        void Send(IPooledBuffer data, int cnt);
+        void Send(object data, SendSerializer serializer);
+        //SendCompleteHandler OnSendComplete { get; set; }
     }
     public interface IServerConnection : IPersistentConnection
     {

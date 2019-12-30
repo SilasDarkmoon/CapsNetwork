@@ -60,7 +60,8 @@ namespace Capstones.Net
                                     _PendingGUID = guid;
                                     EP = ep;
                                     // send the pending conv-id to client.
-                                    byte[] buffer = BufferPool.GetBufferFromPool();
+                                    var pinfo = BufferPool.GetBufferFromPool();
+                                    byte[] buffer = pinfo.Buffer;
                                     if (BitConverter.IsLittleEndian)
                                     {
                                         var pconv = _PendingConv;
@@ -78,7 +79,7 @@ namespace Capstones.Net
                                         }
                                     }
                                     _KCP.kcp_send(buffer, 4);
-                                    BufferPool.ReturnBufferToPool(buffer);
+                                    pinfo.Release();
                                     _Connected = true;
                                     return true;
                                 }

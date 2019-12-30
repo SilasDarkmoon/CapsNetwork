@@ -28,7 +28,7 @@ namespace Capstones.Net
         protected ReceiveHandler _OnReceive;
         protected int _UpdateInterval = -1;
         protected int _EaseUpdateRatio = 8;
-        protected SendCompleteHandler _OnSendComplete;
+        //protected SendCompleteHandler _OnSendComplete;
         protected CommonHandler _PreDispose;
         protected CommonHandler _OnUpdate;
         protected SendHandler _OnSend;
@@ -124,27 +124,27 @@ namespace Capstones.Net
                 }
             }
         }
-        /// <summary>
-        /// This will be called in undetermined thread.
-        /// </summary>
-        public SendCompleteHandler OnSendComplete
-        {
-            get { return _OnSendComplete; }
-            set
-            {
-                if (value != _OnSendComplete)
-                {
-                    if (IsConnectionAlive)
-                    {
-                        PlatDependant.LogError("Cannot change OnSendComplete when connection started");
-                    }
-                    else
-                    {
-                        _OnSendComplete = value;
-                    }
-                }
-            }
-        }
+        ///// <summary>
+        ///// This will be called in undetermined thread.
+        ///// </summary>
+        //public SendCompleteHandler OnSendComplete
+        //{
+        //    get { return _OnSendComplete; }
+        //    set
+        //    {
+        //        if (value != _OnSendComplete)
+        //        {
+        //            if (IsConnectionAlive)
+        //            {
+        //                PlatDependant.LogError("Cannot change OnSendComplete when connection started");
+        //            }
+        //            else
+        //            {
+        //                _OnSendComplete = value;
+        //            }
+        //        }
+        //    }
+        //}
         /// <summary>
         /// This will be called in connection thread.
         /// </summary>
@@ -280,26 +280,83 @@ namespace Capstones.Net
         public bool HoldSending = false;
         protected int _LastSendTick = int.MinValue;
         protected ConcurrentQueue<BufferInfo> _PendingSendMessages = new ConcurrentQueue<BufferInfo>();
+        //public static readonly byte[] EmptyBuffer = new byte[0];
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>
         /// Schedule sending the data. Handle OnSendComplete to recyle the data buffer.
         /// </summary>
         /// <param name="data">data to be sent.</param>
         /// <returns>false means the data is dropped because to many messages is pending to be sent.</returns>
-        public bool TrySend(byte[] data, int cnt)
+        public virtual bool TrySend(BufferInfo binfo)
         {
-            _PendingSendMessages.Enqueue(new BufferInfo(data, cnt));
+            _PendingSendMessages.Enqueue(binfo);
             _HaveDataToSend.Set();
             //StartConnect();
             return true;
         }
-        public virtual void Send(byte[] data, int cnt)
+        public void Send(IPooledBuffer data, int cnt)
         {
-            TrySend(data, cnt);
+            data.AddRef();
+            TrySend(new BufferInfo(data, cnt));
+        }
+        public void Send(object raw, SendSerializer serializer)
+        {
+            TrySend(new BufferInfo(raw, serializer));
+        }
+        public void Send(byte[] data, int cnt)
+        {
+            Send(new UnpooledBuffer(data), cnt);
         }
         public void Send(byte[] data)
         {
             Send(data, data.Length);
+        }
+
+        public class SendAsyncInfo
+        {
+            public IPooledBuffer Data;
+            public Socket Socket;
+            public Action<bool> OnComplete;
+
+            public void OnAsyncCallback(IAsyncResult ar)
+            {
+                bool success = false;
+                try
+                {
+                    Socket.EndSendTo(ar);
+                    success = true;
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
+                if (OnComplete != null)
+                {
+                    OnComplete(success);
+                }
+                Data.Release();
+                ReturnSendAsyncInfoToPool(this);
+            }
+        }
+        private static ConcurrentQueue<SendAsyncInfo> _SendAsyncInfo = new ConcurrentQueue<SendAsyncInfo>();
+        public static SendAsyncInfo GetSendAsyncInfoFromPool()
+        {
+            SendAsyncInfo info;
+            if (!_SendAsyncInfo.TryDequeue(out info))
+            {
+                info = new SendAsyncInfo();
+            }
+            return info;
+        }
+        public static void ReturnSendAsyncInfoToPool(SendAsyncInfo info)
+        {
+            if (info != null)
+            {
+                info.Data = null;
+                info.Socket = null;
+                info.OnComplete = null;
+                _SendAsyncInfo.Enqueue(info);
+            }
         }
         /// <summary>
         /// This should be called in connection thread. Real send data to server. The sending will NOT be done immediately, and we should NOT reuse data before onComplete.
@@ -307,73 +364,66 @@ namespace Capstones.Net
         /// <param name="data">data to send.</param>
         /// <param name="cnt">data count in bytes.</param>
         /// <param name="onComplete">this will be called in some other thread.</param>
+        public void SendRaw(IPooledBuffer data, int cnt, Action<bool> onComplete)
+        {
+            if (data != null)
+            {
+                data.AddRef();
+                _LastSendTick = System.Environment.TickCount;
+                if (_Socket != null)
+                {
+                    try
+                    {
+                        if (_BroadcastEP != null)
+                        {
+                            var info = GetSendAsyncInfoFromPool();
+                            info.Data = data;
+                            info.Socket = _Socket;
+                            info.OnComplete = onComplete;
+                            _Socket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, _BroadcastEP, info.OnAsyncCallback, null);
+                            return;
+                        }
+                        else
+                        {
+                            var info = GetSendAsyncInfoFromPool();
+                            info.Data = data;
+                            info.Socket = _Socket;
+                            info.OnComplete = onComplete;
+                            _Socket.BeginSend(data.Buffer, 0, cnt, SocketFlags.None, info.OnAsyncCallback, null);
+                            return;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+                    }
+                }
+                if (onComplete != null)
+                {
+                    onComplete(false);
+                }
+                data.Release();
+            }
+        }
+        public void SendRaw(IPooledBuffer data, int cnt)
+        {
+            SendRaw(data, cnt, null);
+        }
+        public void SendRaw(IPooledBuffer data)
+        {
+            SendRaw(data, data.Buffer.Length);
+        }
         public void SendRaw(byte[] data, int cnt, Action<bool> onComplete)
         {
-            _LastSendTick = System.Environment.TickCount;
-            if (_Socket != null)
-            {
-                try
-                {
-                    if (_BroadcastEP != null)
-                    {
-                        _Socket.BeginSendTo(data, 0, cnt, SocketFlags.None, _BroadcastEP, ar =>
-                        {
-                            bool success = false;
-                            try
-                            {
-                                _Socket.EndSendTo(ar);
-                                success = true;
-                            }
-                            catch (Exception e)
-                            {
-                                PlatDependant.LogError(e);
-                            }
-                            if (onComplete != null)
-                            {
-                                onComplete(success);
-                            }
-                        }, null);
-                        return;
-                    }
-                    else
-                    {
-                        _Socket.BeginSend(data, 0, cnt, SocketFlags.None, ar =>
-                        {
-                            bool success = false;
-                            try
-                            {
-                                _Socket.EndSend(ar);
-                                success = true;
-                            }
-                            catch (Exception e)
-                            {
-                                PlatDependant.LogError(e);
-                            }
-                            if (onComplete != null)
-                            {
-                                onComplete(success);
-                            }
-                        }, null);
-                        return;
-                    }
-                }
-                catch (Exception e)
-                {
-                    PlatDependant.LogError(e);
-                }
-            }
-            if (onComplete != null)
-            {
-                onComplete(false);
-            }
+            SendRaw(new UnpooledBuffer(data), cnt, onComplete);
         }
-        public void SendRaw(byte[] data, int cnt, Action onComplete)
-        {
-            SendRaw(data, cnt, onComplete == null ? null : (Action<bool>)(success => onComplete()));
-        }
+        //public void SendRaw(byte[] data, int cnt, Action onComplete)
+        //{
+        //    SendRaw(data, cnt, onComplete == null ? null : (Action<bool>)(success => onComplete()));
+        //}
         public void SendRaw(byte[] data, int cnt)
         {
-            SendRaw(data, cnt, (Action<bool>)null);
+            SendRaw(data, cnt, null);
         }
         public void SendRaw(byte[] data)
         {
@@ -422,7 +472,7 @@ namespace Capstones.Net
                             _Socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
                             if (address.AddressFamily == AddressFamily.InterNetworkV6)
                             {
-#if NET_STANDARD_2_0 || NET_4_6
+#if NET_STANDARD_2_0 || NET_4_6 || !UNITY_ENGINE && !UNITY_5_3_OR_NEWER
                                 // Notice: it is a pitty that unity does not support ipv6 multicast. (Unity 5.6)
                                 _Socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.AddMembership, new IPv6MulticastOption(address));
                                 _Socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.MulticastTimeToLive, 5);
@@ -548,22 +598,35 @@ namespace Capstones.Net
                             {
                                 var message = binfo.Buffer;
                                 int cnt = binfo.Count;
-                                if (_OnSend != null && _OnSend(message, cnt))
+                                if (message == null)
                                 {
-                                    if (_OnSendComplete != null)
+                                    if (binfo.Serializer != null)
                                     {
-                                        _OnSendComplete(message, true);
+                                        message = binfo.Serializer(binfo.Raw, out cnt);
                                     }
                                 }
-                                else
+                                if (message != null)
                                 {
-                                    SendRaw(message, cnt, success =>
+                                    if (_OnSend != null && _OnSend(message, cnt))
                                     {
-                                        if (_OnSendComplete != null)
-                                        {
-                                            _OnSendComplete(message, success);
-                                        }
-                                    });
+                                        //if (_OnSendComplete != null)
+                                        //{
+                                        //    _OnSendComplete(true);
+                                        //}
+                                    }
+                                    else
+                                    {
+                                        SendRaw(message, cnt
+                                            //, success =>
+                                            //{
+                                            //    if (_OnSendComplete != null)
+                                            //    {
+                                            //        _OnSendComplete(message, success);
+                                            //    }
+                                            //}
+                                            );
+                                    }
+                                    message.Release();
                                 }
                             }
                         }
@@ -611,7 +674,7 @@ namespace Capstones.Net
                 // set handlers to null.
                 _OnReceive = null;
                 _OnSend = null;
-                _OnSendComplete = null;
+                //_OnSendComplete = null;
                 _OnUpdate = null;
                 _PreDispose = null;
             }

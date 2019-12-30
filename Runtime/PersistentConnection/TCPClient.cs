@@ -26,7 +26,7 @@ namespace Capstones.Net
     {
         private string _Url;
         protected ReceiveHandler _OnReceive;
-        protected SendCompleteHandler _OnSendComplete;
+        //protected SendCompleteHandler _OnSendComplete;
         protected CommonHandler _PreDispose;
         protected SendHandler _OnSend;
 
@@ -75,27 +75,27 @@ namespace Capstones.Net
                 }
             }
         }
-        /// <summary>
-        /// This will be called in undetermined thread.
-        /// </summary>
-        public SendCompleteHandler OnSendComplete
-        {
-            get { return _OnSendComplete; }
-            set
-            {
-                if (value != _OnSendComplete)
-                {
-                    if (IsConnectionAlive)
-                    {
-                        PlatDependant.LogError("Cannot change OnSendComplete when connection started");
-                    }
-                    else
-                    {
-                        _OnSendComplete = value;
-                    }
-                }
-            }
-        }
+        ///// <summary>
+        ///// This will be called in undetermined thread.
+        ///// </summary>
+        //public SendCompleteHandler OnSendComplete
+        //{
+        //    get { return _OnSendComplete; }
+        //    set
+        //    {
+        //        if (value != _OnSendComplete)
+        //        {
+        //            if (IsConnectionAlive)
+        //            {
+        //                PlatDependant.LogError("Cannot change OnSendComplete when connection started");
+        //            }
+        //            else
+        //            {
+        //                _OnSendComplete = value;
+        //            }
+        //        }
+        //    }
+        //}
         /// <summary>
         /// This will be called in connection thread.
         /// </summary>
@@ -174,50 +174,49 @@ namespace Capstones.Net
         /// </summary>
         /// <param name="data">data to be sent.</param>
         /// <returns>false means the data is dropped because to many messages is pending to be sent.</returns>
-        public bool TrySend(byte[] data, int cnt)
+        public virtual bool TrySend(BufferInfo binfo)
         {
-            _PendingSendMessages.Enqueue(new BufferInfo(data, cnt));
+            _PendingSendMessages.Enqueue(binfo);
             _HaveDataToSend.Set();
             //StartConnect();
             return true;
         }
-        public virtual void Send(byte[] data, int cnt)
+        public void Send(IPooledBuffer data, int cnt)
         {
-            TrySend(data, cnt);
+            data.AddRef();
+            TrySend(new BufferInfo(data, cnt));
+        }
+        public void Send(object raw, SendSerializer serializer)
+        {
+            TrySend(new BufferInfo(raw, serializer));
+        }
+        public void Send(byte[] data, int cnt)
+        {
+            Send(new UnpooledBuffer(data), cnt);
         }
         public void Send(byte[] data)
         {
             Send(data, data.Length);
         }
+
         /// <summary>
         /// This should be called in connection thread. Real send data to server. The sending will NOT be done immediately, and we should NOT reuse data before onComplete.
         /// </summary>
         /// <param name="data">data to send.</param>
         /// <param name="cnt">data count in bytes.</param>
         /// <param name="onComplete">this will be called in some other thread.</param>
-        public void SendRaw(byte[] data, int cnt, Action<bool> onComplete)
+        public void SendRaw(IPooledBuffer data, int cnt, Action<bool> onComplete)
         {
+            data.AddRef();
             if (_Socket != null)
             {
                 try
                 {
-                    _Socket.BeginSend(data, 0, cnt, SocketFlags.None, ar =>
-                    {
-                        bool success = false;
-                        try
-                        {
-                            _Socket.EndSend(ar);
-                            success = true;
-                        }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(e);
-                        }
-                        if (onComplete != null)
-                        {
-                            onComplete(success);
-                        }
-                    }, null);
+                    var info = UDPClient.GetSendAsyncInfoFromPool();
+                    info.Data = data;
+                    info.Socket = _Socket;
+                    info.OnComplete = onComplete;
+                    _Socket.BeginSend(data.Buffer, 0, cnt, SocketFlags.None, info.OnAsyncCallback, null);
                     return;
                 }
                 catch (Exception e)
@@ -229,14 +228,27 @@ namespace Capstones.Net
             {
                 onComplete(false);
             }
+            data.Release();
         }
-        public void SendRaw(byte[] data, int cnt, Action onComplete)
+        public void SendRaw(IPooledBuffer data, int cnt)
         {
-            SendRaw(data, cnt, onComplete == null ? null : (Action<bool>)(success => onComplete()));
+            SendRaw(data, cnt, null);
+        }
+        public void SendRaw(IPooledBuffer data)
+        {
+            SendRaw(data, data.Buffer.Length);
+        }
+        //public void SendRaw(byte[] data, int cnt, Action onComplete)
+        //{
+        //    SendRaw(data, cnt, onComplete == null ? null : (Action<bool>)(success => onComplete()));
+        //}
+        public void SendRaw(byte[] data, int cnt, Action<bool> onComplete)
+        {
+            SendRaw(new UnpooledBuffer(data), cnt, onComplete);
         }
         public void SendRaw(byte[] data, int cnt)
         {
-            SendRaw(data, cnt, (Action<bool>)null);
+            SendRaw(data, cnt, null);
         }
         public void SendRaw(byte[] data)
         {
@@ -328,22 +340,35 @@ namespace Capstones.Net
                         {
                             var message = binfo.Buffer;
                             int cnt = binfo.Count;
-                            if (_OnSend != null && _OnSend(message, cnt))
+                            if (message == null)
                             {
-                                if (_OnSendComplete != null)
+                                if (binfo.Serializer != null)
                                 {
-                                    _OnSendComplete(message, true);
+                                    message = binfo.Serializer(binfo.Raw, out cnt);
                                 }
                             }
-                            else
+                            if (message != null)
                             {
-                                SendRaw(message, cnt, success =>
+                                if (_OnSend != null && _OnSend(message, cnt))
                                 {
-                                    if (_OnSendComplete != null)
-                                    {
-                                        _OnSendComplete(message, success);
-                                    }
-                                });
+                                    //if (_OnSendComplete != null)
+                                    //{
+                                    //    _OnSendComplete(message, true);
+                                    //}
+                                }
+                                else
+                                {
+                                    SendRaw(message, cnt
+                                    //, success =>
+                                    //{
+                                    //    if (_OnSendComplete != null)
+                                    //    {
+                                    //        _OnSendComplete(message, success);
+                                    //    }
+                                    //}
+                                    );
+                                }
+                                message.Release();
                             }
                         }
 
@@ -376,7 +401,7 @@ namespace Capstones.Net
                 // set handlers to null.
                 _OnReceive = null;
                 _OnSend = null;
-                _OnSendComplete = null;
+                //_OnSendComplete = null;
                 _PreDispose = null;
             }
         }

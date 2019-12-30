@@ -62,24 +62,25 @@ namespace Capstones.Net
                 if (cnt > CONST.MTU)
                 {
                     int offset = 0;
-                    var buffer = BufferPool.GetBufferFromPool();
+                    var info = BufferPool.GetBufferFromPool();
+                    var buffer = info.Buffer;
                     while (cnt > CONST.MTU)
                     {
-                        Buffer.BlockCopy(data, offset, buffer, 0, CONST.MTU);
+                        Buffer.BlockCopy(data.Buffer, offset, buffer, 0, CONST.MTU);
                         _KCP.kcp_send(buffer, CONST.MTU);
                         cnt -= CONST.MTU;
                         offset += CONST.MTU;
                     }
                     if (cnt > 0)
                     {
-                        Buffer.BlockCopy(data, offset, buffer, 0, cnt);
+                        Buffer.BlockCopy(data.Buffer, offset, buffer, 0, cnt);
                         _KCP.kcp_send(buffer, cnt);
                     }
-                    BufferPool.ReturnBufferToPool(buffer);
+                    info.Release();
                 }
                 else
                 {
-                    _KCP.kcp_send(data, cnt);
+                    _KCP.kcp_send(data.Buffer, cnt);
                 }
                 return true;
             };
@@ -121,9 +122,12 @@ namespace Capstones.Net
                 var connection = gchandle.Target as UDPClient;
                 if (connection != null)
                 {
-                    var buffer = BufferPool.GetBufferFromPool(len);
-                    Marshal.Copy(buf, buffer, 0, len);
-                    connection.SendRaw(buffer, len, success => BufferPool.ReturnBufferToPool(buffer));
+                    var info = BufferPool.GetBufferFromPool(len);
+                    Marshal.Copy(buf, info.Buffer, 0, len);
+                    connection.SendRaw(info, len
+                        //, success => BufferPool.ReturnRawBufferToPool(buffer)
+                        );
+                    info.Release();
                 }
             }
             catch (Exception e)
@@ -163,18 +167,26 @@ namespace Capstones.Net
                 }
             }
         }
-        public SendCompleteHandler OnSendComplete
-        {
-            get { return _Connection.OnSendComplete; }
-            set { _Connection.OnSendComplete = value; }
-        }
+        //public SendCompleteHandler OnSendComplete
+        //{
+        //    get { return _Connection.OnSendComplete; }
+        //    set { _Connection.OnSendComplete = value; }
+        //}
         public virtual void StartConnect()
         {
             _Connection.StartConnect();
         }
-        public void Send(byte[] data, int cnt)
+        public void Send(IPooledBuffer data, int cnt)
         {
             _Connection.Send(data, cnt);
+        }
+        public void Send(object raw, SendSerializer serializer)
+        {
+            _Connection.Send(raw, serializer);
+        }
+        public void Send(byte[] data, int cnt)
+        {
+            Send(new UnpooledBuffer(data), cnt);
         }
         public void Send(byte[] data)
         {

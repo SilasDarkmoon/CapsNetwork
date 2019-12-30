@@ -3,7 +3,8 @@
     "references": [
         "ResManager",
         "Unity.Collections.Concurrent",
-        "JsonObject"
+        "JsonObject",
+        "Google.Protobuf"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -21,6 +21,10 @@ namespace Capstones.Net
             {
                 return new Connection() { _Handle = handle };
             }
+            public static implicit operator IntPtr(Connection con)
+            {
+                return con._Handle;
+            }
         }
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate int kcp_output(IntPtr buf, int len, Connection kcp, IntPtr user);
