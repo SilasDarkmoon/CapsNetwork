@@ -276,7 +276,7 @@ namespace Capstones.Net
         public override long Seek(long offset, SeekOrigin origin) { return -1; }
         public override void SetLength(long value) { }
 
-        private ConcurrentQueue<BufferInfo> _Buffer = new ConcurrentQueue<BufferInfo>(); // TODO: ConcurrentQueueGrowOnly
+        private ConcurrentQueueGrowOnly<BufferInfo> _Buffer = new ConcurrentQueueGrowOnly<BufferInfo>();
         private int _BufferOffset = 0;
         private AutoResetEvent _DataReady = new AutoResetEvent(false);
         private volatile bool _Closed = false;

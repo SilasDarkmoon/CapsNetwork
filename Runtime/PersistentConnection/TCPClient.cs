@@ -167,7 +167,7 @@ namespace Capstones.Net
             }
         }
 
-        protected ConcurrentQueue<BufferInfo> _PendingSendMessages = new ConcurrentQueue<BufferInfo>(); // TODO: ConcurrentQueueGrowOnly
+        protected ConcurrentQueueGrowOnly<BufferInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<BufferInfo>();
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>
         /// Schedule sending the data. Handle OnSendComplete to recyle the data buffer.

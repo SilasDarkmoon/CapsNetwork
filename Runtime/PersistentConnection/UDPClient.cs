@@ -279,7 +279,7 @@ namespace Capstones.Net
 
         public bool HoldSending = false;
         protected int _LastSendTick = int.MinValue;
-        protected ConcurrentQueue<BufferInfo> _PendingSendMessages = new ConcurrentQueue<BufferInfo>(); // TODO: ConcurrentQueueGrowOnly
+        protected ConcurrentQueueGrowOnly<BufferInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<BufferInfo>();
         //public static readonly byte[] EmptyBuffer = new byte[0];
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>
