@@ -295,6 +295,10 @@ namespace Capstones.UnityEngineEx
         }
     }
 
+    /// <summary>
+    /// 在现有ConcurrentQueue的基础上，加入了Segment回收重用的机制。
+    /// 可以有效地减少GC分配。
+    /// </summary>
     public class ConcurrentQueueGrowOnly<T> : IProducerConsumerCollection<T>
     {
         //fields of ConcurrentQueue
@@ -908,6 +912,8 @@ namespace Capstones.UnityEngineEx
             private volatile int _low;
             private volatile int _high;
 
+            private volatile bool _next_is_free;
+
             private volatile ConcurrentQueueGrowOnly<T> _source;
 
             /// <summary>
@@ -915,6 +921,7 @@ namespace Capstones.UnityEngineEx
             /// </summary>
             internal Segment(long index, ConcurrentQueueGrowOnly<T> source)
             {
+                _next_is_free = true;
                 _array = new T[SEGMENT_SIZE];
                 _state = new VolatileBool[SEGMENT_SIZE]; //all initialized to false
                 _high = -1;
@@ -928,7 +935,7 @@ namespace Capstones.UnityEngineEx
             /// </summary>
             internal Segment Next
             {
-                get { return _next; }
+                get { return _next_is_free ? null : _next; }
             }
 
 
@@ -981,17 +988,21 @@ namespace Capstones.UnityEngineEx
             {
                 if (_next == null)
                 {
-                    Segment newSegment = new Segment(_index + 1, _source);  //_index is Int64, we don't need to worry about overflow
+                    Segment newSegment = new Segment(0, _source);  //_index is Int64, we don't need to worry about overflow
                     SpinWait spin = new SpinWait();
-                    while (Interlocked.CompareExchange(ref _source._freetail._next, newSegment, null) != null)
+                    var freetail = _source._freetail;
+                    while (Interlocked.CompareExchange(ref _source._freetail, newSegment, freetail) != freetail)
                     {
                         spin.SpinOnce();
+                        freetail = _source._freetail;
                     }
+                    newSegment._index = freetail._index + 1;
+                    freetail._next = newSegment;
                 }
-                _next._index = _index + 1;
 
                 System.Diagnostics.Debug.Assert(_source._tail == this);
                 _source._tail = _next;
+                _next_is_free = false;
             }
 
 
@@ -1100,12 +1111,27 @@ namespace Capstones.UnityEngineEx
                             System.Diagnostics.Debug.Assert(_source._head == this);
                             _source._head = _next;
 
+                            // cleanup this.
+                            for (int i = 0; i < _array.Length; ++i)
+                            {
+                                _array[i] = default(T);
+                                _state[i]._value = false;
+                            }
+                            _next_is_free = true;
+                            _next = null;
+                            _low = 0;
+                            _high = -1;
+
                             // recycle this.
                             spin.Reset();
-                            while (Interlocked.CompareExchange(ref _source._freetail._next, this, null) != null)
+                            var freetail = _source._freetail;
+                            while (Interlocked.CompareExchange(ref _source._freetail, this, freetail) != freetail)
                             {
                                 spin.SpinOnce();
+                                freetail = _source._freetail;
                             }
+                            this._index = freetail._index + 1;
+                            freetail._next = this;
                         }
                         return true;
                     }
