@@ -988,7 +988,7 @@ namespace Capstones.UnityEngineEx
             {
                 if (_next == null)
                 {
-                    Segment newSegment = new Segment(0, _source);  //_index is Int64, we don't need to worry about overflow
+                    Segment newSegment = new Segment(0, _source);
                     SpinWait spin = new SpinWait();
                     var freetail = _source._freetail;
                     while (Interlocked.CompareExchange(ref _source._freetail, newSegment, freetail) != freetail)
@@ -996,8 +996,14 @@ namespace Capstones.UnityEngineEx
                         spin.SpinOnce();
                         freetail = _source._freetail;
                     }
-                    newSegment._index = freetail._index + 1;
+                    newSegment._index = freetail._index + 1; //_index is Int64, we don't need to worry about overflow
                     freetail._next = newSegment;
+
+                    spin.Reset();
+                    while (_next == null)
+                    {
+                        spin.SpinOnce();
+                    }
                 }
 
                 System.Diagnostics.Debug.Assert(_source._tail == this);
