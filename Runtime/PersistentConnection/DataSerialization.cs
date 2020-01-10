@@ -375,6 +375,7 @@ namespace Capstones.Net
             }
             else
             {
+                SpinWait spin = new SpinWait();
                 while (true)
                 {
                     var old = _CodedOutputStreamPool[index];
@@ -382,6 +383,7 @@ namespace Capstones.Net
                     {
                         return old;
                     }
+                    spin.SpinOnce();
                 }
             }
             return new Google.Protobuf.CodedOutputStream((Stream)null, true);
@@ -398,7 +400,8 @@ namespace Capstones.Net
                 else
                 {
                     --index;
-                    while (System.Threading.Interlocked.CompareExchange(ref _CodedOutputStreamPool[index], stream, null) != null) ;
+                    SpinWait spin = new SpinWait();
+                    while (System.Threading.Interlocked.CompareExchange(ref _CodedOutputStreamPool[index], stream, null) != null) spin.SpinOnce();
                 }
             }
         }

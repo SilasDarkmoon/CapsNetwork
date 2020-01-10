@@ -132,7 +132,8 @@ namespace Capstones.Net
                                 }
                             }
 #endif
-                            while (System.Threading.Interlocked.CompareExchange(ref _LargePool[eindex], buffer, null) != null) ;
+                            SpinWait spin = new SpinWait();
+                            while (System.Threading.Interlocked.CompareExchange(ref _LargePool[eindex], buffer, null) != null) spin.SpinOnce();
                         }
                     }
                 }
@@ -176,6 +177,7 @@ namespace Capstones.Net
                     else
                     {
                         var eindex = level * _LARGE_POOL_SLOT_CNT_PER_LEVEL + index;
+                        SpinWait spin = new SpinWait();
                         while (true)
                         {
                             var old = _LargePool[eindex];
@@ -189,6 +191,7 @@ namespace Capstones.Net
 #endif
                                 return old;
                             }
+                            spin.SpinOnce();
                         }
                     }
                 }
@@ -337,8 +340,10 @@ namespace Capstones.Net
                 }
                 int bsize = _BufferedSize;
                 int nbsize;
+                SpinWait spin = new SpinWait();
                 while (bsize != (nbsize = Interlocked.CompareExchange(ref _BufferedSize, bsize - rcnt, bsize)))
                 {
+                    spin.SpinOnce();
                     bsize = nbsize;
                 }
                 if (bsize > 0)
@@ -371,8 +376,10 @@ namespace Capstones.Net
             }
             int bsize = _BufferedSize;
             int nbsize;
+            SpinWait spin = new SpinWait();
             while (bsize != (nbsize = Interlocked.CompareExchange(ref _BufferedSize, bsize + count, bsize)))
             {
+                spin.SpinOnce();
                 bsize = nbsize;
             }
             _DataReady.Set();

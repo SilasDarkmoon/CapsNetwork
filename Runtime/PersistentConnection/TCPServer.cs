@@ -87,6 +87,7 @@ namespace Capstones.Net
         {
             _AcceptedSemaphore.WaitOne();
             Socket rv = null;
+            SpinWait spin = new SpinWait();
             while (true)
             {
                 rv = _AcceptedSocket4;
@@ -94,12 +95,14 @@ namespace Capstones.Net
                 {
                     break;
                 }
+                spin.SpinOnce();
             }
             if (rv != null)
             {
                 BeginAccept4();
                 return rv;
             }
+            spin.Reset();
             while (true)
             {
                 rv = _AcceptedSocket6;
@@ -107,6 +110,7 @@ namespace Capstones.Net
                 {
                     break;
                 }
+                spin.SpinOnce();
             }
             if (rv != null)
             {

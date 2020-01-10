@@ -201,7 +201,7 @@ namespace Capstones.UnityEngineEx
             GetHeadTailPositions(out headLow, out tailHigh);
             while (tailHigh - headLow < Capacity && Interlocked.CompareExchange(ref _High, tailHigh + 1, tailHigh) != tailHigh)
             {
-                spin.SpinOnce();
+                //spin.SpinOnce();
                 GetHeadTailPositions(out headLow, out tailHigh);
             }
             if (tailHigh - headLow >= Capacity)
@@ -210,7 +210,7 @@ namespace Capstones.UnityEngineEx
             }
             var index = tailHigh % _InnerList.Length;
 
-            spin.Reset();
+            //spin.Reset();
             while (_InnerListReadyMark[index].Value)
             {
                 spin.SpinOnce();
@@ -228,7 +228,7 @@ namespace Capstones.UnityEngineEx
             GetHeadTailPositions(out headLow, out tailHigh);
             while (tailHigh - headLow > 0 && Interlocked.CompareExchange(ref _Low, headLow + 1, headLow) != headLow)
             {
-                spin.SpinOnce();
+                //spin.SpinOnce();
                 GetHeadTailPositions(out headLow, out tailHigh);
             }
             if (tailHigh - headLow <= 0)
@@ -238,7 +238,7 @@ namespace Capstones.UnityEngineEx
             }
             var index = headLow % _InnerList.Length;
 
-            spin.Reset();
+            //spin.Reset();
             while (!_InnerListReadyMark[index].Value)
             {
                 spin.SpinOnce();
@@ -307,9 +307,6 @@ namespace Capstones.UnityEngineEx
         private volatile Segment _freetail;
 
         private const int SEGMENT_SIZE = 32;
-
-        //number of snapshot takers, GetEnumerator(), ToList() and ToArray() operations take snapshot.
-        internal volatile int _numSnapshotTakers = 0;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConcurrentQueue{T}"/> class.
@@ -539,41 +536,84 @@ namespace Capstones.UnityEngineEx
         /// elements copied from the <see cref="ConcurrentQueue{T}"/>.</returns>
         private List<T> ToList()
         {
-            // Increments the number of active snapshot takers. This increment must happen before the snapshot is 
-            // taken. At the same time, Decrement must happen after list copying is over. Only in this way, can it
-            // eliminate race condition when Segment.TryRemove() checks whether _numSnapshotTakers == 0. 
-            Interlocked.Increment(ref _numSnapshotTakers);
-
             List<T> list = new List<T>();
-            try
-            {
-                //store head and tail positions in buffer, 
-                Segment head, tail;
-                int headLow, tailHigh;
-                GetHeadTailPositions(out head, out tail, out headLow, out tailHigh);
+            //store head and tail positions in buffer,
+            long headindex;
+            Segment head, tail;
+            int headLow, tailHigh;
+            GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex);
 
-                if (head == tail)
+            Segment curr = head;
+            long curindex = headindex;
+            List<T> part = new List<T>();
+            bool[] states = new bool[SEGMENT_SIZE];
+            T[] values = new T[SEGMENT_SIZE];
+            while (true)
+            {
+                part.Clear();
+                for (int i = 0; i < SEGMENT_SIZE; ++i)
                 {
-                    head.AddToList(list, headLow, tailHigh);
+                    states[i] = curr._state[i]._value;
+                    values[i] = curr._array[i];
+                }
+
+                GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex);
+                if (headindex > curindex)
+                {
+                    curr = head;
+                    curindex = headindex;
+                    list.Clear();
                 }
                 else
                 {
-                    head.AddToList(list, headLow, SEGMENT_SIZE - 1);
-                    Segment curr = head.Next;
-                    while (curr != tail)
+                    var next = curr.Next;
+                    long nextindex = 0;
+                    if (next != null && (nextindex = next._index) != curindex + 1)
                     {
-                        curr.AddToList(list, 0, SEGMENT_SIZE - 1);
-                        curr = curr.Next;
+                        curr = head;
+                        curindex = headindex;
+                        list.Clear();
                     }
-                    //Add tail segment
-                    tail.AddToList(list, 0, tailHigh);
+                    else
+                    {
+                        int low = 0, high = SEGMENT_SIZE - 1;
+                        if (curr == head)
+                        {
+                            low = headLow;
+                        }
+                        if (curr == tail)
+                        {
+                            high = tailHigh;
+                        }
+                        bool ready = true;
+                        for (int i = low; i <= high; ++i)
+                        {
+                            if (!states[i])
+                            {
+                                ready = false;
+                                break;
+                            }
+                            part.Add(values[i]);
+                        }
+                        if (!ready)
+                        {
+                            continue;
+                        }
+                        list.AddRange(part);
+
+                        if (next == null || curr == tail)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            curr = next;
+                            curindex = nextindex;
+                        }
+                    }
                 }
             }
-            finally
-            {
-                // This Decrement must happen after copying is over. 
-                Interlocked.Decrement(ref _numSnapshotTakers);
-            }
+
             return list;
         }
 
@@ -587,7 +627,14 @@ namespace Capstones.UnityEngineEx
         private void GetHeadTailPositions(out Segment head, out Segment tail,
             out int headLow, out int tailHigh)
         {
+            long index;
+            GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out index);
+        }
+        private void GetHeadTailPositions(out Segment head, out Segment tail,
+            out int headLow, out int tailHigh, out long segmentIndex)
+        {
             head = _head;
+            segmentIndex = head._index;
             tail = _tail;
             headLow = head.Low;
             tailHigh = tail.High;
@@ -605,6 +652,7 @@ namespace Capstones.UnityEngineEx
             {
                 spin.SpinOnce();
                 head = _head;
+                segmentIndex = head._index;
                 tail = _tail;
                 headLow = head.Low;
                 tailHigh = tail.High;
@@ -699,102 +747,7 @@ namespace Capstones.UnityEngineEx
         /// </remarks>
         public IEnumerator<T> GetEnumerator()
         {
-            // Increments the number of active snapshot takers. This increment must happen before the snapshot is 
-            // taken. At the same time, Decrement must happen after the enumeration is over. Only in this way, can it
-            // eliminate race condition when Segment.TryRemove() checks whether _numSnapshotTakers == 0. 
-            Interlocked.Increment(ref _numSnapshotTakers);
-
-            // Takes a snapshot of the queue. 
-            // A design flaw here: if a Thread.Abort() happens, we cannot decrement _numSnapshotTakers. But we cannot 
-            // wrap the following with a try/finally block, otherwise the decrement will happen before the yield return 
-            // statements in the GetEnumerator (head, tail, headLow, tailHigh) method.           
-            Segment head, tail;
-            int headLow, tailHigh;
-            GetHeadTailPositions(out head, out tail, out headLow, out tailHigh);
-
-            //If we put yield-return here, the iterator will be lazily evaluated. As a result a snapshot of
-            // the queue is not taken when GetEnumerator is initialized but when MoveNext() is first called.
-            // This is inconsistent with existing generic collections. In order to prevent it, we capture the 
-            // value of _head in a buffer and call out to a helper method.
-            //The old way of doing this was to return the ToList().GetEnumerator(), but ToList() was an 
-            // unnecessary performance hit.
-            return GetEnumerator(head, tail, headLow, tailHigh);
-        }
-
-        /// <summary>
-        /// Helper method of GetEnumerator to separate out yield return statement, and prevent lazy evaluation. 
-        /// </summary>
-        private IEnumerator<T> GetEnumerator(Segment head, Segment tail, int headLow, int tailHigh)
-        {
-            try
-            {
-                SpinWait spin = new SpinWait();
-
-                if (head == tail)
-                {
-                    for (int i = headLow; i <= tailHigh; i++)
-                    {
-                        // If the position is reserved by an Enqueue operation, but the value is not written into,
-                        // spin until the value is available.
-                        spin.Reset();
-                        while (!head._state[i]._value)
-                        {
-                            spin.SpinOnce();
-                        }
-                        yield return head._array[i];
-                    }
-                }
-                else
-                {
-                    //iterate on head segment
-                    for (int i = headLow; i < SEGMENT_SIZE; i++)
-                    {
-                        // If the position is reserved by an Enqueue operation, but the value is not written into,
-                        // spin until the value is available.
-                        spin.Reset();
-                        while (!head._state[i]._value)
-                        {
-                            spin.SpinOnce();
-                        }
-                        yield return head._array[i];
-                    }
-                    //iterate on middle segments
-                    Segment curr = head.Next;
-                    while (curr != tail)
-                    {
-                        for (int i = 0; i < SEGMENT_SIZE; i++)
-                        {
-                            // If the position is reserved by an Enqueue operation, but the value is not written into,
-                            // spin until the value is available.
-                            spin.Reset();
-                            while (!curr._state[i]._value)
-                            {
-                                spin.SpinOnce();
-                            }
-                            yield return curr._array[i];
-                        }
-                        curr = curr.Next;
-                    }
-
-                    //iterate on tail segment
-                    for (int i = 0; i <= tailHigh; i++)
-                    {
-                        // If the position is reserved by an Enqueue operation, but the value is not written into,
-                        // spin until the value is available.
-                        spin.Reset();
-                        while (!tail._state[i]._value)
-                        {
-                            spin.SpinOnce();
-                        }
-                        yield return tail._array[i];
-                    }
-                }
-            }
-            finally
-            {
-                // This Decrement must happen after the enumeration is over. 
-                Interlocked.Decrement(ref _numSnapshotTakers);
-            }
+            return ToList().GetEnumerator();
         }
 
         /// <summary>
@@ -851,20 +804,19 @@ namespace Capstones.UnityEngineEx
         /// <returns>true if and object was returned successfully; otherwise, false.</returns>
         public bool TryPeek(out T result)
         {
-            Interlocked.Increment(ref _numSnapshotTakers);
-
             while (!IsEmpty)
             {
                 Segment head = _head;
                 if (head.TryPeek(out result))
                 {
-                    Interlocked.Decrement(ref _numSnapshotTakers);
-                    return true;
+                    if (head == _head)
+                    {
+                        return true;
+                    }
                 }
                 //since method IsEmpty spins, we don't need to spin in the while loop
             }
             result = default(T);
-            Interlocked.Decrement(ref _numSnapshotTakers);
             return false;
         }
 
@@ -912,6 +864,7 @@ namespace Capstones.UnityEngineEx
             private volatile int _low;
             private volatile int _high;
 
+            //internal int _ref_cnt;
             private volatile bool _next_is_free;
 
             private volatile ConcurrentQueueGrowOnly<T> _source;
@@ -921,6 +874,7 @@ namespace Capstones.UnityEngineEx
             /// </summary>
             internal Segment(long index, ConcurrentQueueGrowOnly<T> source)
             {
+                //_ref_cnt = 1;
                 _next_is_free = true;
                 _array = new T[SEGMENT_SIZE];
                 _state = new VolatileBool[SEGMENT_SIZE]; //all initialized to false
@@ -986,7 +940,8 @@ namespace Capstones.UnityEngineEx
             /// </summary>
             internal void Grow()
             {
-                if (_next == null)
+                Segment next;
+                if ((next = _next) == null)
                 {
                     Segment newSegment = new Segment(0, _source);
                     SpinWait spin = new SpinWait();
@@ -1000,14 +955,14 @@ namespace Capstones.UnityEngineEx
                     freetail._next = newSegment;
 
                     spin.Reset();
-                    while (_next == null)
+                    while ((next = _next) == null)
                     {
                         spin.SpinOnce();
                     }
                 }
 
                 System.Diagnostics.Debug.Assert(_source._tail == this);
-                _source._tail = _next;
+                _source._tail = next;
                 _next_is_free = false;
             }
 
@@ -1093,14 +1048,14 @@ namespace Capstones.UnityEngineEx
                         // If there is no other thread taking snapshot (GetEnumerator(), ToList(), etc), reset the deleted entry to null.
                         // It is ok if after this conditional check _numSnapshotTakers becomes > 0, because new snapshots won't include 
                         // the deleted entry at _array[lowLocal]. 
-                        if (_source._numSnapshotTakers <= 0)
+                        //if (_source._numSnapshotTakers <= 0)
                         {
                             _array[lowLocal] = default(T); //release the reference to the object. 
                         }
 
                         //if the current thread sets _low to SEGMENT_SIZE, which means the current segment becomes
                         //disposable, then this thread is responsible to dispose this segment, and reset _head 
-                        if (lowLocal + 1 >= SEGMENT_SIZE)
+                        if (lowLocal + 1 == SEGMENT_SIZE)
                         {
                             //  Invariant: we only dispose the current _head, not any other segment
                             //  In usual situation, disposing a segment is simply setting _head to _head._next
@@ -1110,34 +1065,15 @@ namespace Capstones.UnityEngineEx
                             //dispose the current (and ONLY) segment. Then we need to wait till thread A finishes its 
                             //Grow operation, this is the reason of having the following while loop
                             spinLocal = new SpinWait();
-                            while (_next == null)
+                            Segment next;
+                            while ((next = _next) == null)
                             {
                                 spinLocal.SpinOnce();
                             }
                             System.Diagnostics.Debug.Assert(_source._head == this);
-                            _source._head = _next;
+                            _source._head = next;
 
-                            // cleanup this.
-                            for (int i = 0; i < _array.Length; ++i)
-                            {
-                                _array[i] = default(T);
-                                _state[i]._value = false;
-                            }
-                            _next_is_free = true;
-                            _next = null;
-                            _low = 0;
-                            _high = -1;
-
-                            // recycle this.
-                            spin.Reset();
-                            var freetail = _source._freetail;
-                            while (Interlocked.CompareExchange(ref _source._freetail, this, freetail) != freetail)
-                            {
-                                spin.SpinOnce();
-                                freetail = _source._freetail;
-                            }
-                            this._index = freetail._index + 1;
-                            freetail._next = this;
+                            Recycle();
                         }
                         return true;
                     }
@@ -1151,6 +1087,30 @@ namespace Capstones.UnityEngineEx
                 result = default(T);
                 return false;
             }
+            internal void Recycle()
+            {
+                // cleanup this.
+                for (int i = 0; i < _array.Length; ++i)
+                {
+                    _array[i] = default(T);
+                    _state[i]._value = false;
+                }
+                _next_is_free = true;
+                _next = null;
+                _low = 0;
+                _high = -1;
+
+                // recycle this.
+                SpinWait spin = new SpinWait();
+                var freetail = _source._freetail;
+                while (Interlocked.CompareExchange(ref _source._freetail, this, freetail) != freetail)
+                {
+                    spin.SpinOnce();
+                    freetail = _source._freetail;
+                }
+                this._index = freetail._index + 1;
+                freetail._next = this;
+            }
 #pragma warning restore 0420
             /// <summary>
             /// try to peek the current segment
@@ -1161,36 +1121,44 @@ namespace Capstones.UnityEngineEx
             internal bool TryPeek(out T result)
             {
                 result = default(T);
-                int lowLocal = Low;
-                if (lowLocal > High)
-                    return false;
-                SpinWait spin = new SpinWait();
-                while (!_state[lowLocal]._value)
+                while (true)
                 {
-                    spin.SpinOnce();
-                }
-                result = _array[lowLocal];
-                return true;
-            }
-
-            /// <summary>
-            /// Adds part or all of the current segment into a List.
-            /// </summary>
-            /// <param name="list">the list to which to add</param>
-            /// <param name="start">the start position</param>
-            /// <param name="end">the end position</param>
-            internal void AddToList(List<T> list, int start, int end)
-            {
-                for (int i = start; i <= end; i++)
-                {
+                    int lowLocal = Low;
+                    if (lowLocal > High)
+                        return false;
                     SpinWait spin = new SpinWait();
-                    while (!_state[i]._value)
+                    while (!_state[lowLocal]._value)
                     {
                         spin.SpinOnce();
                     }
-                    list.Add(_array[i]);
+                    var val = _array[lowLocal];
+                    if (lowLocal == Low)
+                    {
+                        result = val;
+                        break;
+                    }
                 }
+                return true;
             }
+
+            ///// <summary>
+            ///// Adds part or all of the current segment into a List.
+            ///// </summary>
+            ///// <param name="list">the list to which to add</param>
+            ///// <param name="start">the start position</param>
+            ///// <param name="end">the end position</param>
+            //internal void AddToList(List<T> list, int start, int end)
+            //{
+            //    for (int i = start; i <= end; i++)
+            //    {
+            //        SpinWait spin = new SpinWait();
+            //        while (!_state[i]._value)
+            //        {
+            //            spin.SpinOnce();
+            //        }
+            //        list.Add(_array[i]);
+            //    }
+            //}
 
             /// <summary>
             /// return the position of the head of the current segment
@@ -1224,5 +1192,112 @@ namespace Capstones.UnityEngineEx
             public volatile bool _value;
         }
 
+    }
+
+    public static class ConcurrentCollectionTest
+    {
+        public static void TestConcurrentQueue<T>() where T : IProducerConsumerCollection<int>, new()
+        {
+            ConcurrentDictionary<int, bool> dict = new ConcurrentDictionary<int, bool>();
+            const int cntprethread = 1000;
+            const int threadcnt = 8;
+            const int totalcnt = cntprethread * threadcnt;
+            var queue = new T();
+            int index = 0;
+            Action<TaskProgress> produce = prog =>
+            {
+                int val;
+                for (int i = 0; i < cntprethread; ++i)
+                {
+                    val = Interlocked.Increment(ref index);
+                    dict[val] = true;
+                    if (queue.TryAdd(val))
+                    {
+                        PlatDependant.LogInfo("Enqueue " + val);
+                    }
+                    else
+                    {
+                        dict.TryRemove(val, out bool b);
+                        PlatDependant.LogWarning("Enqueue Failed " + val);
+                    }
+                }
+            };
+            Action<TaskProgress> consume = prog =>
+            {
+                int val;
+                int tick = Environment.TickCount;
+                while (Environment.TickCount - tick <= 2000)
+                {
+                    if (index < totalcnt)
+                    {
+                        tick = Environment.TickCount;
+                    }
+                    if (queue.TryTake(out val))
+                    {
+                        PlatDependant.LogInfo("Dequeue " + val);
+                        dict.TryRemove(val, out bool b);
+                    }
+                }
+                PlatDependant.LogInfo(dict.Count);
+                foreach (var kvp in dict)
+                {
+                    PlatDependant.LogError(kvp.Key);
+                }
+            };
+
+            for (int i = 0; i < threadcnt; ++i)
+            {
+                PlatDependant.RunBackground(produce);
+                PlatDependant.RunBackground(consume);
+            }
+        }
+
+        public static void TestConcurrentQueueLite<T>() where T : IProducerConsumerCollection<int>, new()
+        {
+            ConcurrentDictionary<int, bool> dict = new ConcurrentDictionary<int, bool>();
+            var queue = new T();
+            bool done = false;
+            PlatDependant.RunBackground(prog =>
+            {
+                for (int i = 0; i < 1000; ++i)
+                {
+                    var val = i;
+                    dict[val] = true;
+                    if (queue.TryAdd(val))
+                    {
+                        PlatDependant.LogInfo("Enqueue " + val);
+                    }
+                    else
+                    {
+                        dict.TryRemove(val, out bool b);
+                        PlatDependant.LogWarning("Enqueue Failed " + val);
+                    }
+                    Thread.Sleep(1000 / 30);
+                }
+                Volatile.Write(ref done, true);
+            });
+            PlatDependant.RunBackground(prog =>
+            {
+                int tick = Environment.TickCount;
+                while (Environment.TickCount - tick <= 2000)
+                {
+                    if (!Volatile.Read(ref done))
+                    {
+                        tick = Environment.TickCount;
+                    }
+                    int val;
+                    if (queue.TryTake(out val))
+                    {
+                        PlatDependant.LogInfo("Dequeue " + val);
+                        dict.TryRemove(val, out bool b);
+                    }
+                }
+                PlatDependant.LogInfo(dict.Count);
+                foreach (var kvp in dict)
+                {
+                    PlatDependant.LogError(kvp.Key);
+                }
+            });
+        }
     }
 }
