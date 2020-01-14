@@ -90,5 +90,14 @@ namespace Capstones.Net.FrameSync
             }
             return 0;
         }
+
+        public static bool IsFrameSyncRelative(object obj)
+        {
+            return IsFrameSyncBegin(obj)
+                || IsFrameSyncEnd(obj)
+                || IsFrameSyncTick(obj)
+                || IsFrameSyncProtocol(obj)
+                || IsFrameSyncReqProtocol(obj);
+        }
     }
 }
