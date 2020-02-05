@@ -538,10 +538,10 @@ namespace Capstones.UnityEngineEx
         {
             List<T> list = new List<T>();
             //store head and tail positions in buffer,
-            long headindex;
+            long headindex, tailindex;
             Segment head, tail;
             int headLow, tailHigh;
-            GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex);
+            GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex, out tailindex);
 
             Segment curr = head;
             long curindex = headindex;
@@ -557,7 +557,7 @@ namespace Capstones.UnityEngineEx
                     values[i] = curr._array[i];
                 }
 
-                GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex);
+                GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex, out tailindex);
                 if (headindex > curindex)
                 {
                     curr = head;
@@ -627,15 +627,16 @@ namespace Capstones.UnityEngineEx
         private void GetHeadTailPositions(out Segment head, out Segment tail,
             out int headLow, out int tailHigh)
         {
-            long index;
-            GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out index);
+            long hindex, tindex;
+            GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out hindex, out tindex);
         }
         private void GetHeadTailPositions(out Segment head, out Segment tail,
-            out int headLow, out int tailHigh, out long segmentIndex)
+            out int headLow, out int tailHigh, out long headIndex, out long tailIndex)
         {
             head = _head;
-            segmentIndex = head._index;
+            headIndex = head._index;
             tail = _tail;
+            tailIndex = tail._index;
             headLow = head.Low;
             tailHigh = tail.High;
             SpinWait spin = new SpinWait();
@@ -652,8 +653,9 @@ namespace Capstones.UnityEngineEx
             {
                 spin.SpinOnce();
                 head = _head;
-                segmentIndex = head._index;
+                headIndex = head._index;
                 tail = _tail;
+                tailIndex = tail._index;
                 headLow = head.Low;
                 tailHigh = tail.High;
             }
@@ -676,7 +678,8 @@ namespace Capstones.UnityEngineEx
                 //store head and tail positions in buffer, 
                 Segment head, tail;
                 int headLow, tailHigh;
-                GetHeadTailPositions(out head, out tail, out headLow, out tailHigh);
+                long headindex, tailindex;
+                GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex, out tailindex);
 
                 if (head == tail)
                 {
@@ -688,7 +691,7 @@ namespace Capstones.UnityEngineEx
 
                 //middle segment(s), if any, are full.
                 //We don't deal with overflow to be consistent with the behavior of generic types in CLR.
-                count += SEGMENT_SIZE * ((int)(tail._index - head._index - 1));
+                count += SEGMENT_SIZE * ((int)(tailindex - headindex - 1));
 
                 //tail segment
                 count += tailHigh + 1;
