@@ -139,7 +139,7 @@ namespace Capstones.Net
 
                 while (!_ConnectWorkCanceled)
                 {
-                    _HaveDataToSend.WaitOne();
+                    _HaveDataToSend.WaitOne(CONST.MAX_WAIT_MILLISECONDS);
                 }
 
                 //_Socket.Shutdown(SocketShutdown.Both);
@@ -178,7 +178,7 @@ namespace Capstones.Net
                 _PreDispose = null;
             }
         }
-        public override bool TrySend(BufferInfo binfo)
+        public override bool TrySend(MessageInfo minfo)
         {
             _HaveDataToSend.Set();
             StartConnect();

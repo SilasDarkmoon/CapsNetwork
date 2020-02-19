@@ -248,8 +248,8 @@ namespace Capstones.Net
             }
         }
 
-        protected bool _ConnectWorkRunning;
-        protected bool _ConnectWorkCanceled;
+        protected volatile bool _ConnectWorkRunning;
+        protected volatile bool _ConnectWorkCanceled;
         protected Socket _Socket;
         public EndPoint RemoteEndPoint
         {
@@ -279,7 +279,7 @@ namespace Capstones.Net
 
         public bool HoldSending = false;
         protected int _LastSendTick = int.MinValue;
-        protected ConcurrentQueueGrowOnly<BufferInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<BufferInfo>();
+        protected ConcurrentQueueGrowOnly<MessageInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<MessageInfo>();
         //public static readonly byte[] EmptyBuffer = new byte[0];
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>
@@ -287,21 +287,24 @@ namespace Capstones.Net
         /// </summary>
         /// <param name="data">data to be sent.</param>
         /// <returns>false means the data is dropped because to many messages is pending to be sent.</returns>
-        public virtual bool TrySend(BufferInfo binfo)
+        public virtual bool TrySend(MessageInfo minfo)
         {
-            _PendingSendMessages.Enqueue(binfo);
+            _PendingSendMessages.Enqueue(minfo);
             _HaveDataToSend.Set();
             //StartConnect();
             return true;
         }
         public void Send(IPooledBuffer data, int cnt)
         {
-            data.AddRef();
-            TrySend(new BufferInfo(data, cnt));
+            TrySend(new MessageInfo(data, cnt));
+        }
+        public void Send(ValueList<PooledBufferSpan> data)
+        {
+
         }
         public void Send(object raw, SendSerializer serializer)
         {
-            TrySend(new BufferInfo(raw, serializer));
+            TrySend(new MessageInfo(raw, serializer));
         }
         public void Send(byte[] data, int cnt)
         {
@@ -593,20 +596,22 @@ namespace Capstones.Net
 
                         if (!HoldSending)
                         {
-                            BufferInfo binfo;
-                            while (_PendingSendMessages.TryDequeue(out binfo))
+                            MessageInfo minfo;
+                            while (_PendingSendMessages.TryDequeue(out minfo))
                             {
-                                var message = binfo.Buffer;
-                                int cnt = binfo.Count;
-                                if (message == null)
+                                ValueList<PooledBufferSpan> messages;
+                                if (minfo.Serializer != null)
                                 {
-                                    if (binfo.Serializer != null)
-                                    {
-                                        message = binfo.Serializer(binfo.Raw, out cnt);
-                                    }
+                                    messages = minfo.Serializer(minfo.Raw);
                                 }
-                                if (message != null)
+                                else
                                 {
+                                    messages = minfo.Buffers;
+                                }
+                                for (int i = 0; i < messages.Count; ++i)
+                                {
+                                    var message = messages[i];
+                                    var cnt = message.Length;
                                     if (_OnSend != null && _OnSend(message, cnt))
                                     {
                                         //if (_OnSendComplete != null)

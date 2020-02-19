@@ -13,7 +13,7 @@ namespace Capstones.Net
     public delegate void ReceiveHandler(byte[] buffer, int cnt, EndPoint sender);
     //public delegate void SendCompleteHandler(bool success);
     public delegate bool SendHandler(IPooledBuffer buffer, int cnt);
-    public delegate IPooledBuffer SendSerializer(object obj, out int cnt);
+    public delegate ValueList<PooledBufferSpan> SendSerializer(object obj);
 
     public interface IPersistentConnection
     {
@@ -22,6 +22,7 @@ namespace Capstones.Net
         EndPoint RemoteEndPoint { get; }
         ReceiveHandler OnReceive { get; set; }
         void Send(IPooledBuffer data, int cnt);
+        void Send(ValueList<PooledBufferSpan> data); // the buffer in data do not need to AddRef and can be released directly.
         void Send(object data, SendSerializer serializer);
         //SendCompleteHandler OnSendComplete { get; set; }
     }

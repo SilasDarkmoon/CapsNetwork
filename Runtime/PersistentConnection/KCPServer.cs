@@ -152,21 +152,23 @@ namespace Capstones.Net
                 // 1, send.
                 if (_Started)
                 {
-                    BufferInfo binfo;
-                    while (_PendingSendMessages.TryDequeue(out binfo))
+                    MessageInfo minfo;
+                    while (_PendingSendMessages.TryDequeue(out minfo))
                     {
-                        var message = binfo.Buffer;
-                        int cnt = binfo.Count;
-                        if (message == null)
+                        ValueList<PooledBufferSpan> messages;
+                        if (minfo.Serializer != null)
                         {
-                            if (binfo.Serializer != null)
-                            {
-                                message = binfo.Serializer(binfo.Raw, out cnt);
-                            }
+                            messages = minfo.Serializer(minfo.Raw);
                         }
-                        if (message != null)
+                        else
                         {
-                            if (binfo.Count > CONST.MTU)
+                            messages = minfo.Buffers;
+                        }
+                        for (int i = 0; i < messages.Count; ++i)
+                        {
+                            var message = messages[i];
+                            var cnt = message.Length;
+                            if (cnt > CONST.MTU)
                             {
                                 int offset = 0;
                                 var pinfo = BufferPool.GetBufferFromPool();
@@ -187,7 +189,7 @@ namespace Capstones.Net
                             }
                             else
                             {
-                                _KCP.kcp_send(message.Buffer, binfo.Count);
+                                _KCP.kcp_send(message.Buffer, cnt);
                             }
                             message.Release();
                         }
@@ -300,20 +302,23 @@ namespace Capstones.Net
             //    }
             //}
 
-            protected ConcurrentQueueGrowOnly<BufferInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<BufferInfo>();
-            public virtual bool TrySend(BufferInfo binfo)
+            protected ConcurrentQueueGrowOnly<MessageInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<MessageInfo>();
+            public virtual bool TrySend(MessageInfo minfo)
             {
-                _PendingSendMessages.Enqueue(binfo);
-                return Server._Connection.TrySend(new BufferInfo());
+                _PendingSendMessages.Enqueue(minfo);
+                return Server._Connection.TrySend(new MessageInfo());
             }
             public void Send(IPooledBuffer data, int cnt)
             {
-                data.AddRef();
-                TrySend(new BufferInfo(data, cnt));
+                TrySend(new MessageInfo(data, cnt));
+            }
+            public void Send(ValueList<PooledBufferSpan> data)
+            {
+                TrySend(new MessageInfo(data));
             }
             public void Send(object raw, SendSerializer serializer)
             {
-                TrySend(new BufferInfo(raw, serializer));
+                TrySend(new MessageInfo(raw, serializer));
             }
             public void Send(byte[] data, int cnt)
             {

@@ -17,5 +17,6 @@ namespace Capstones.Net
         public const int MAX_SERVER_PENDING_CONNECTIONS = 100;
         public const int DEFAULT_TIMEOUT = 15000;
         public const int MAX_QUEUED_MESSAGE = 1000;
+        public const int MAX_WAIT_MILLISECONDS = 5000;
     }
 }

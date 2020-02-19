@@ -25,25 +25,36 @@ namespace Capstones.Net
         int BufferedSize { get; }
     }
 
-    public struct BufferInfo
+    public struct MessageInfo
     {
-        public BufferInfo(IPooledBuffer buffer, int cnt)
+        public MessageInfo(IPooledBuffer buffer, int cnt)
         {
-            Buffer = buffer;
-            Count = cnt;
+            buffer.AddRef();
+            Buffers = new ValueList<PooledBufferSpan>()
+            {
+                new PooledBufferSpan()
+                {
+                    WholeBuffer = buffer,
+                    Length = cnt,
+                }
+            };
             Raw = null;
             Serializer = null;
         }
-        public BufferInfo(object raw, SendSerializer serializer)
+        public MessageInfo(object raw, SendSerializer serializer)
         {
-            Buffer = null;
-            Count = 0;
+            Buffers = new ValueList<PooledBufferSpan>();
             Raw = raw;
             Serializer = serializer;
         }
+        public MessageInfo(ValueList<PooledBufferSpan> buffers)
+        {
+            Buffers = buffers;
+            Raw = null;
+            Serializer = null;
+        }
 
-        public IPooledBuffer Buffer;
-        public int Count;
+        public ValueList<PooledBufferSpan> Buffers;
         public object Raw;
         public SendSerializer Serializer;
     }
@@ -51,12 +62,14 @@ namespace Capstones.Net
     public interface IPooledBuffer
     {
         byte[] Buffer { get; }
+        int Length { get; }
         void AddRef();
         void Release();
     }
     public class UnpooledBuffer : IPooledBuffer
     {
         public byte[] Buffer { get; set; }
+        public int Length { get { return Buffer.Length; } }
         public void AddRef()
         {
         }
@@ -77,6 +90,29 @@ namespace Capstones.Net
         //{
         //    return new UnpooledBuffer(raw);
         //}
+    }
+    public struct PooledBufferSpan : IPooledBuffer
+    {
+        public IPooledBuffer WholeBuffer;
+
+        public byte[] Buffer { get { return WholeBuffer.Buffer; } }
+
+        private int? _Length;
+        public int Length
+        {
+            get { return _Length ?? WholeBuffer.Length; }
+            set { _Length = value; }
+        }
+
+        public void AddRef()
+        {
+            WholeBuffer.AddRef();
+        }
+
+        public void Release()
+        {
+            WholeBuffer.Release();
+        }
     }
     public static class BufferPool
     {
@@ -225,6 +261,7 @@ namespace Capstones.Net
             public int RefCount = 0;
 
             public byte[] Buffer { get; set; }
+            public int Length { get { return Buffer.Length; } }
 
             public void AddRef()
             {
@@ -252,6 +289,13 @@ namespace Capstones.Net
                 }
 #endif
             }
+
+#if DEBUG_PERSIST_CONNECT_BUFFER_POOL
+            ~PooledBuffer()
+            {
+                PlatDependant.LogError("Finalizing a PooledBuffer. May missed release.");
+            }
+#endif
         }
 
         public static IPooledBuffer GetBufferFromPool()
@@ -268,6 +312,17 @@ namespace Capstones.Net
         }
     }
 
+    public struct BufferInfo
+    {
+        public BufferInfo(IPooledBuffer buffer, int cnt)
+        {
+            Buffer = buffer;
+            Count = cnt;
+        }
+
+        public IPooledBuffer Buffer;
+        public int Count;
+    }
     public class BidirectionMemStream : Stream, IBuffered
     {
         public override bool CanRead { get { return true; } }
@@ -280,7 +335,7 @@ namespace Capstones.Net
         public override void SetLength(long value) { }
 
         private ConcurrentQueueGrowOnly<BufferInfo> _Buffer = new ConcurrentQueueGrowOnly<BufferInfo>();
-        private int _BufferOffset = 0;
+        private volatile int _ReadingHeadConsumed = 0;
         private AutoResetEvent _DataReady = new AutoResetEvent(false);
         private volatile bool _Closed = false;
 
@@ -290,9 +345,10 @@ namespace Capstones.Net
         private int _BufferedSize = 0;
         public int BufferedSize { get { return _BufferedSize; } }
 
-        /// <remarks>Should NOT be called from multi-thread.
-        /// Please only read from one single thread.
-        /// Reading and Writing can be in different thread.</remarks>
+        /// <remarks>
+        /// this is thread safe. But it is strongly recommended to read in only one thread.
+        /// If not, the data read can be uncompleted (a part is read by this thread, and other parts are read by other threads).
+        /// </remarks>
         public override int Read(byte[] buffer, int offset, int count)
         {
             if (_Closed)
@@ -301,9 +357,42 @@ namespace Capstones.Net
             }
             while (true)
             {
-                if (!_DataReady.WaitOne(_Timeout))
+                if (_Timeout < 0)
                 {
-                    return 0;
+                    while (!_DataReady.WaitOne(CONST.MAX_WAIT_MILLISECONDS))
+                    {
+                        if (_Closed)
+                        {
+                            _DataReady.Set();
+                            return 0;
+                        }
+                    }
+                }
+                else if (_Timeout <= CONST.MAX_WAIT_MILLISECONDS)
+                {
+                    if (!_DataReady.WaitOne(_Timeout))
+                    {
+                        return 0;
+                    }
+                }
+                else
+                {
+                    var timeout = _Timeout;
+                    var part = CONST.MAX_WAIT_MILLISECONDS;
+                    while (timeout > 0 && !_DataReady.WaitOne(part))
+                    {
+                        if (_Closed)
+                        {
+                            _DataReady.Set();
+                            return 0;
+                        }
+                        timeout -= part;
+                        part = Math.Min(timeout, CONST.MAX_WAIT_MILLISECONDS);
+                    }
+                    if (timeout == 0)
+                    {
+                        return 0;
+                    }
                 }
                 if (_Closed)
                 {
@@ -314,29 +403,40 @@ namespace Capstones.Net
                 int rcnt = 0;
                 while (rcnt < count && _Buffer.TryPeek(out binfo))
                 {
-                    bool binfoHaveData = true;
-                    while (rcnt < count && binfoHaveData)
+                    var consumed = _ReadingHeadConsumed;
+                    var binfolen = binfo.Count;
+                    var prcnt = binfolen - consumed;
+                    if (prcnt <= 0)
                     {
-                        var prcnt = binfo.Count - _BufferOffset;
-                        bool readlessthanbuffer = rcnt + prcnt > count;
-                        if (readlessthanbuffer)
-                        {
-                            prcnt = count - rcnt;
-                        }
-                        Buffer.BlockCopy(binfo.Buffer.Buffer, _BufferOffset, buffer, offset + rcnt, prcnt);
-                        if (readlessthanbuffer)
-                        {
-                            _BufferOffset += prcnt;
-                        }
-                        else
-                        {
-                            _Buffer.TryDequeue(out binfo);
-                            binfo.Buffer.Release();
-                            binfoHaveData = false;
-                            _BufferOffset = 0;
-                        }
-                        rcnt += prcnt;
+                        continue; // the binfo is used up, and it's being dequeued by another thread.
                     }
+                    bool readlessthanbuffer = rcnt + prcnt > count;
+                    if (readlessthanbuffer)
+                    {
+                        prcnt = count - rcnt;
+                    }
+
+                    if (Interlocked.CompareExchange(ref _ReadingHeadConsumed, consumed + prcnt, consumed) != consumed)
+                    {
+                        continue; // another thread read from the buffer. this thread should try again.
+                    }
+
+                    Buffer.BlockCopy(binfo.Buffer.Buffer, consumed, buffer, offset + rcnt, prcnt);
+                    if (!readlessthanbuffer)
+                    { // need to dequeue.
+                        Interlocked.Exchange(ref _ReadingHeadConsumed, int.MaxValue);
+                        while (_Buffer.TryDequeue(out binfo))
+                        {
+                            binfo.Buffer.Release();
+                            _Buffer.TryPeek(out binfo);
+                            if (binfo.Count > 0)
+                            {
+                                break;
+                            }
+                        }
+                        Interlocked.Exchange(ref _ReadingHeadConsumed, 0);
+                    }
+                    rcnt += prcnt;
                 }
                 int bsize = _BufferedSize;
                 int nbsize;
@@ -352,35 +452,72 @@ namespace Capstones.Net
                 }
                 if (rcnt > 0)
                 {
+#if DEBUG_PERSIST_CONNECT
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append("Read ");
+                    sb.Append(rcnt);
+                    for (int i = 0; i < rcnt; ++i)
+                    {
+                        if (i % 32 == 0)
+                        {
+                            sb.AppendLine();
+                        }
+                        sb.Append(buffer[offset + i].ToString("X2"));
+                        sb.Append(" ");
+                    }
+                    PlatDependant.LogInfo(sb);
+#endif
                     return rcnt;
                 }
             }
         }
+        /// <remarks>
+        /// this is thread safe. But it is strongly recommended to write in only one thread.
+        /// If not, the data written may be staggered.
+        /// </remarks>
         public override void Write(byte[] buffer, int offset, int count)
         {
-            int cntwrote = 0;
-            while (cntwrote < count)
+            if (count > 0)
             {
-                var pbuffer = BufferPool.GetBufferFromPool();
-                var sbuffer = pbuffer.Buffer;
-                int scnt = count - cntwrote;
-                if (sbuffer.Length < scnt)
+                int cntwrote = 0;
+                while (cntwrote < count)
                 {
-                    scnt = sbuffer.Length;
+                    var pbuffer = BufferPool.GetBufferFromPool();
+                    var sbuffer = pbuffer.Buffer;
+                    int scnt = count - cntwrote;
+                    if (sbuffer.Length < scnt)
+                    {
+                        scnt = sbuffer.Length;
+                    }
+                    Buffer.BlockCopy(buffer, offset + cntwrote, sbuffer, 0, scnt);
+
+                    _Buffer.Enqueue(new BufferInfo(pbuffer, scnt));
+
+                    cntwrote += scnt;
                 }
-                Buffer.BlockCopy(buffer, offset + cntwrote, sbuffer, 0, scnt);
-
-                _Buffer.Enqueue(new BufferInfo(pbuffer, scnt));
-
-                cntwrote += scnt;
-            }
-            int bsize = _BufferedSize;
-            int nbsize;
-            SpinWait spin = new SpinWait();
-            while (bsize != (nbsize = Interlocked.CompareExchange(ref _BufferedSize, bsize + count, bsize)))
-            {
-                spin.SpinOnce();
-                bsize = nbsize;
+                int bsize = _BufferedSize;
+                int nbsize;
+                SpinWait spin = new SpinWait();
+                while (bsize != (nbsize = Interlocked.CompareExchange(ref _BufferedSize, bsize + count, bsize)))
+                {
+                    spin.SpinOnce();
+                    bsize = nbsize;
+                }
+#if DEBUG_PERSIST_CONNECT
+                var sb = new System.Text.StringBuilder();
+                sb.Append("Write ");
+                sb.Append(count);
+                for (int i = 0; i < count; ++i)
+                {
+                    if (i % 32 == 0)
+                    {
+                        sb.AppendLine();
+                    }
+                    sb.Append(buffer[offset + i].ToString("X2"));
+                    sb.Append(" ");
+                }
+                PlatDependant.LogInfo(sb);
+#endif
             }
             _DataReady.Set();
         }

@@ -25,7 +25,7 @@ namespace Capstones.Net
 {
     public class SerializationConfig : ICloneable
     {
-        public Func<Stream, DataSplitter> SplitterFactory;
+        public DataSplitterFactory SplitterFactory;
         public DataComposer Composer;
         public DataReaderAndWriter ReaderWriter;
         protected internal readonly List<DataPostProcess> PostProcessors = new List<DataPostProcess>();
@@ -84,8 +84,12 @@ namespace Capstones.Net
         protected ConnectionStream _Stream;
         protected DataSplitter _Splitter;
         protected SerializationConfig _SerConfig;
+        protected readonly SendSerializer _SendSerializer;
+        protected ConcurrentQueueGrowOnly<PendingRead> _PendingReadQueue = new ConcurrentQueueGrowOnly<PendingRead>();
+        protected internal AutoResetEvent _WaitForObjRead = new AutoResetEvent(false);
         protected PendingRead _PendingRead;
         protected int _LastReceiveTick;
+        protected bool _PositiveMode = false;
 
         public bool LeaveOpen = false;
         public ConnectionStream Stream { get { return _Stream; } }
@@ -98,11 +102,12 @@ namespace Capstones.Net
         {
             _SerConfig = sconfig;
             _Client = clientFactory(url);
-            _Stream = new ConnectionStream(_Client);
-            _Splitter = sconfig.SplitterFactory(_Stream);
+            _Stream = new ConnectionStream(_Client) { DonotNotifyReceive = _PositiveMode };
+            _Splitter = sconfig.SplitterFactory.Create(_Stream);
             _Splitter.OnReceiveBlock += ReceiveBlock;
             _Client.StartConnect();
             _LastReceiveTick = System.Environment.TickCount;
+            _SendSerializer = SerializeMessage;
         }
 
         protected void ReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq)
@@ -118,40 +123,79 @@ namespace Capstones.Net
                     flags = pack.t1;
                     size = Math.Max(Math.Min(pack.t2, size), 0);
                 }
-                _PendingRead.Type = type;
-                _PendingRead.Obj = _SerConfig.ReaderWriter.Read(type, buffer, 0, size);
-                _PendingRead.Seq = seq;
-                _PendingRead.SSeq = sseq;
-                OnReceiveObj(_PendingRead.Obj, type, seq, sseq);
+                var pending = new PendingRead()
+                {
+                    Type = type,
+                    Obj = _SerConfig.ReaderWriter.Read(type, buffer, 0, size),
+                    Seq = seq,
+                    SSeq = sseq,
+                };
+                if (_PositiveMode)
+                {
+                    _PendingRead = pending;
+                    OnReceiveObj(pending.Obj, type, seq, sseq);
+                }
+                else
+                {
+                    var queue = _PendingReadQueue;
+                    if (queue != null)
+                    {
+                        queue.Enqueue(pending);
+                    }
+                    OnReceiveObj(pending.Obj, type, seq, sseq);
+                    _WaitForObjRead.Set();
+                }
             }
         }
         public delegate void ReceiveObjAction(object obj, uint type, uint seq, uint sseq);
         public event ReceiveObjAction OnReceiveObj = (obj, type, seq, sseq) => { };
         public object TryRead(out uint seq, out uint sseq, out uint type)
         {
-            try
+            if (_PositiveMode)
             {
-                while (_Client != null && _Client.IsConnectionAlive && _Splitter.TryReadBlock())
+                try
                 {
-                    if (_PendingRead.Obj != null)
+                    while (_Client != null && _Client.IsConnectionAlive && _Splitter.TryReadBlock())
                     {
-                        var obj = _PendingRead.Obj;
-                        seq = _PendingRead.Seq;
-                        sseq = _PendingRead.SSeq;
-                        type = _PendingRead.Type;
-                        _PendingRead.Obj = null;
-                        return obj;
+                        if (_PendingRead.Obj != null)
+                        {
+                            var obj = _PendingRead.Obj;
+                            seq = _PendingRead.Seq;
+                            sseq = _PendingRead.SSeq;
+                            type = _PendingRead.Type;
+                            _PendingRead.Obj = null;
+                            return obj;
+                        }
                     }
                 }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
+                seq = 0;
+                sseq = 0;
+                type = 0;
+                return null;
             }
-            catch (Exception e)
+            else
             {
-                PlatDependant.LogError(e);
+                PendingRead pending;
+                var queue = _PendingReadQueue;
+                if (queue != null)
+                {
+                    if (_PendingReadQueue.TryDequeue(out pending))
+                    {
+                        seq = pending.Seq;
+                        sseq = pending.SSeq;
+                        type = pending.Type;
+                        return pending.Obj;
+                    }
+                }
+                seq = 0;
+                sseq = 0;
+                type = 0;
+                return null;
             }
-            seq = 0;
-            sseq = 0;
-            type = 0;
-            return null;
         }
         public object TryRead(out uint seq, out uint sseq)
         {
@@ -176,30 +220,58 @@ namespace Capstones.Net
 
         public object Read(out uint seq, out uint sseq, out uint type)
         {
-            try
+            if (_PositiveMode)
             {
-                while (_Client != null && _Client.IsConnectionAlive)
+                try
                 {
-                    _Splitter.ReadBlock();
-                    if (_PendingRead.Obj != null)
+                    while (_Client != null && _Client.IsConnectionAlive)
                     {
-                        var obj = _PendingRead.Obj;
-                        seq = _PendingRead.Seq;
-                        sseq = _PendingRead.SSeq;
-                        type = _PendingRead.Type;
-                        _PendingRead.Obj = null;
-                        return obj;
+                        _Splitter.ReadBlock();
+                        if (_PendingRead.Obj != null)
+                        {
+                            var obj = _PendingRead.Obj;
+                            seq = _PendingRead.Seq;
+                            sseq = _PendingRead.SSeq;
+                            type = _PendingRead.Type;
+                            _PendingRead.Obj = null;
+                            return obj;
+                        }
                     }
                 }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
+                seq = 0;
+                sseq = 0;
+                type = 0;
+                return null;
             }
-            catch (Exception e)
+            else
             {
-                PlatDependant.LogError(e);
+                PendingRead pending = default(PendingRead);
+                var queue = _PendingReadQueue;
+                if (queue != null)
+                {
+                    while (!queue.TryDequeue(out pending))
+                    {
+                        _WaitForObjRead.WaitOne(CONST.MAX_WAIT_MILLISECONDS);
+                        queue = _PendingReadQueue;
+                        if (queue == null)
+                        {
+                            break;
+                        }
+                        if (_Client == null || !_Client.IsConnectionAlive)
+                        {
+                            break;
+                        }
+                    }
+                }
+                seq = pending.Seq;
+                sseq = pending.SSeq;
+                type = pending.Type;
+                return pending.Obj;
             }
-            seq = 0;
-            sseq = 0;
-            type = 0;
-            return null;
         }
         public object Read(out uint seq, out uint sseq)
         {
@@ -269,40 +341,121 @@ namespace Capstones.Net
         }
         public void Write(object obj, uint seq_pingback, uint flags)
         {
-            // type
-            var rw = _SerConfig.ReaderWriter;
-            var type = rw.GetDataType(obj);
-            // seq
-            uint seq = 0, sseq = 0;
-            if (_IsServer)
+            //if (_PositiveMode)
             {
-                seq = seq_pingback;
-                sseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
-            }
-            else
-            {
-                seq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
-                sseq = seq_pingback;
-            }
-            // write obj
-            var stream = rw.Write(obj);
-            if (stream != null)
-            {
-                // post process (encrypt etc.)
-                var processors = _SerConfig.PostProcessors;
-                for (int i = 0; i < processors.Count; ++i)
+                // type
+                var rw = _SerConfig.ReaderWriter;
+                var type = rw.GetDataType(obj);
+                // seq
+                uint seq = 0, sseq = 0;
+                if (_IsServer)
                 {
-                    var processor = processors[i];
-                    flags = processor.Process(stream, 0, flags, type, seq, sseq, _IsServer);
+                    seq = seq_pingback;
+                    sseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
                 }
-                // compose block
-                _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq);
-                // send
-                _Stream.Write(stream, 0, stream.Count);
+                else
+                {
+                    seq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
+                    sseq = seq_pingback;
+                }
+                // write obj
+                var stream = rw.Write(obj);
+                if (stream != null)
+                {
+                    // post process (encrypt etc.)
+                    var processors = _SerConfig.PostProcessors;
+                    for (int i = 0; i < processors.Count; ++i)
+                    {
+                        var processor = processors[i];
+                        flags = processor.Process(stream, 0, flags, type, seq, sseq, _IsServer);
+                    }
+                    // compose block
+                    _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq);
+                    // send
+                    _Stream.Write(stream, 0, stream.Count);
+                }
             }
+            //else
+            //{ // if we directly send the obj to the connection thread, we need to clone it. So it seems to be better to serialize it here.
+            //    uint seq = 0, sseq = 0;
+            //    if (_IsServer)
+            //    {
+            //        seq = seq_pingback;
+            //        sseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
+            //    }
+            //    else
+            //    {
+            //        seq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
+            //        sseq = seq_pingback;
+            //    }
+            //    var clone = obj;
+            //    if (obj is ICloneable)
+            //    {
+            //        clone = ((ICloneable)obj).Clone();
+            //    }
+            //    else if (obj is Google.Protobuf.IMessage)
+            //    {
+            //        clone = obj.GetType().GetMethod("Clone").Invoke(obj, new object[0]); // TODO: is there a better solution?
+            //    }
+            //    _Stream.Write(new PendingWrite() { Obj = clone, Seq = seq, SSeq = sseq, Flags = flags }, _SendSerializer);
+            //}
         }
 
-#region IDisposable Support
+        protected class PendingWrite
+        {
+            public object Obj;
+            public uint Seq;
+            public uint SSeq;
+            public uint Flags;
+        }
+        public ValueList<PooledBufferSpan> SerializeMessage(object obj)
+        {
+            ValueList<PooledBufferSpan> rv = new ValueList<PooledBufferSpan>();
+            var mess = obj as PendingWrite;
+            if (mess != null)
+            {
+                // type
+                var rw = _SerConfig.ReaderWriter;
+                var type = rw.GetDataType(mess.Obj);
+                // seq
+                uint seq = mess.Seq, sseq = mess.SSeq;
+                // write obj
+                var stream = rw.Write(mess.Obj);
+                if (stream != null)
+                {
+                    // post process (encrypt etc.)
+                    var flags = mess.Flags;
+                    var processors = _SerConfig.PostProcessors;
+                    for (int i = 0; i < processors.Count; ++i)
+                    {
+                        var processor = processors[i];
+                        flags = processor.Process(stream, 0, flags, type, seq, sseq, _IsServer);
+                    }
+                    // compose block
+                    _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq);
+                    // send
+                    stream.Seek(0, SeekOrigin.Begin);
+                    var count = stream.Count;
+                    int cntwrote = 0;
+                    while (cntwrote < count)
+                    {
+                        var pbuffer = BufferPool.GetBufferFromPool();
+                        var sbuffer = pbuffer.Buffer;
+                        int scnt = count - cntwrote;
+                        if (sbuffer.Length < scnt)
+                        {
+                            scnt = sbuffer.Length;
+                        }
+                        stream.Read(sbuffer, 0, scnt);
+                        rv.Add(new PooledBufferSpan() { WholeBuffer = pbuffer, Length = scnt });
+                        cntwrote += scnt;
+                    }
+                }
+            }
+            return rv;
+        }
+
+        #region IDisposable Support
         private bool disposedValue = false;
         protected virtual void Dispose(bool disposing)
         {
@@ -316,11 +469,13 @@ namespace Capstones.Net
                 _Stream = null;
                 if (_Splitter != null)
                 {
+                    _Splitter.OnReceiveBlock -= ReceiveBlock;
                     _Splitter.Dispose();
                     _Splitter = null;
                 }
                 _SerConfig = null;
-                _PendingRead.Obj = null;
+                _PendingReadQueue = null;
+                _WaitForObjRead.Set();
                 disposedValue = true;
             }
         }
@@ -333,7 +488,7 @@ namespace Capstones.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-#endregion
+        #endregion
     }
 
     public class ObjServer : IDisposable
@@ -361,7 +516,7 @@ namespace Capstones.Net
             return new ObjClient(null, CreateServerConnection, _SerConfig) { _IsServer = true };
         }
 
-#region IDisposable Support
+        #region IDisposable Support
         private bool disposedValue = false;
         protected virtual void Dispose(bool disposing)
         {
@@ -385,7 +540,7 @@ namespace Capstones.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-#endregion
+        #endregion
     }
 
     public struct PersistentConnectionResponseData
@@ -701,7 +856,7 @@ namespace Capstones.Net
         {
             try
             {
-                while (_HaveDataToSend.WaitOne())
+                while (_HaveDataToSend.WaitOne(CONST.MAX_WAIT_MILLISECONDS))
                 {
                     try
                     {
@@ -847,7 +1002,7 @@ namespace Capstones.Net
 
         private static readonly SerializationConfig _InnerDefaultSerializationConfig = new SerializationConfig()
         {
-            SplitterFactory = stream => new ProtobufSplitter(stream),
+            SplitterFactory = ProtobufSplitter.Factory,
             Composer = new ProtobufComposer(),
             ReaderWriter = new ProtobufReaderAndWriter(),
         };

@@ -180,6 +180,10 @@ namespace Capstones.Net
         {
             _Connection.Send(data, cnt);
         }
+        public void Send(ValueList<PooledBufferSpan> data)
+        {
+            _Connection.Send(data);
+        }
         public void Send(object raw, SendSerializer serializer)
         {
             _Connection.Send(raw, serializer);

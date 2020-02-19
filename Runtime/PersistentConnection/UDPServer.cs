@@ -472,7 +472,7 @@ namespace Capstones.Net
                 _PreDispose = null;
             }
         }
-        public override bool TrySend(BufferInfo binfo)
+        public override bool TrySend(MessageInfo minfo)
         {
             _HaveDataToSend.Set();
             StartConnect();

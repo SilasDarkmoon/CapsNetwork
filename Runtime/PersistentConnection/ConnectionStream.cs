@@ -10,11 +10,15 @@ using System.IO;
 
 namespace Capstones.Net
 {
-    public class ConnectionStream : BidirectionMemStream
+    public delegate void StreamReceiveHandler(byte[] data, int offset, int cnt);
+    public interface INotifyReceiveStream
+    {
+        event StreamReceiveHandler OnReceive;
+    }
+    public class ConnectionStream : BidirectionMemStream, INotifyReceiveStream
     {
         private IPersistentConnection _Con;
         private bool _LeaveOpen;
-
         public ConnectionStream(IPersistentConnection con, bool leaveOpen)
         {
             if (con != null)
@@ -26,6 +30,9 @@ namespace Capstones.Net
             _LeaveOpen = leaveOpen;
         }
         public ConnectionStream(IPersistentConnection con) : this(con, false) { }
+
+        public event StreamReceiveHandler OnReceive = (data, offset, cnt) => { };
+        public bool DonotNotifyReceive = false;
 
         public override void Write(byte[] buffer, int offset, int count)
         {
@@ -50,7 +57,7 @@ namespace Capstones.Net
                 }
             }
         }
-        public void WriteList(IList<byte> buffer, int offset, int count)
+        public void Write(IList<byte> buffer, int offset, int count)
         {
             if (_Con != null)
             {
@@ -80,6 +87,7 @@ namespace Capstones.Net
         {
             if (_Con != null)
             {
+                ValueList<PooledBufferSpan> buffers = new ValueList<PooledBufferSpan>();
                 buffer.Seek(0, SeekOrigin.Begin);
                 int cntwrote = 0;
                 while (cntwrote < count)
@@ -92,17 +100,26 @@ namespace Capstones.Net
                         scnt = sbuffer.Length;
                     }
                     buffer.Read(sbuffer, 0, scnt);
-
-                    _Con.Send(pbuffer, scnt);
-                    pbuffer.Release();
-
+                    buffers.Add(new PooledBufferSpan() { WholeBuffer = pbuffer, Length = scnt });
                     cntwrote += scnt;
                 }
+                _Con.Send(buffers);
+            }
+        }
+        public void Write(object raw, SendSerializer serializer)
+        {
+            if (_Con != null)
+            {
+                _Con.Send(raw, serializer);
             }
         }
         private void Receive(byte[] buffer, int offset, int count)
         {
             base.Write(buffer, offset, count);
+            if (!DonotNotifyReceive)
+            {
+                OnReceive(buffer, offset, count);
+            }
         }
 
         protected override void Dispose(bool disposing)

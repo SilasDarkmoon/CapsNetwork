@@ -1197,6 +1197,7 @@ namespace Capstones.UnityEngineEx
 
     }
 
+#if UNITY_INCLUDE_TESTS
     public static class ConcurrentCollectionTest
     {
         public static void TestConcurrentQueue<T>() where T : IProducerConsumerCollection<int>, new()
@@ -1303,4 +1304,5 @@ namespace Capstones.UnityEngineEx
             });
         }
     }
+#endif
 }
