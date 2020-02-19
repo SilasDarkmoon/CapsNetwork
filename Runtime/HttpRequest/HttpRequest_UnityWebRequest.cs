@@ -9,7 +9,6 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.Networking;
-using Unity.Collections.Concurrent;
 using Capstones.UnityEngineEx;
 
 namespace Capstones.Net
