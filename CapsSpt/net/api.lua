@@ -1,4 +1,3 @@
-local Translation = require("data.Translation")
 api = {}
 
 local UnityEngine = clr.UnityEngine
@@ -294,17 +293,17 @@ function api.result(request,isMyTimedout)
                 if type(tab) ~= 'table' then
                     failed = true
                     event = "none"
-                    msg = Translation(msg) or clr.trans(msg)
+                    msg = clr.transstr(msg)
                 else
                     dump(tab)
                     local datamt = getmetatable(request.pdata)
                     if datamt and datamt.rawpost then
                         request.val = tab
-                        msg = tab and Translation[tab.tips] or clr.trans(tab.tips) or clr.trans('server_refuse', failed)
+                        msg = tab and clr.transstr(tab.tips) or clr.transstr('server_refuse', failed)
                     else
                         if tab.type == 0 then
                             failed = true
-                            msg = tab.tips and Translation[tab.tips] or clr.trans(tab.tips) or clr.trans('server_refuse', failed)
+                            msg = clr.transstr("i_Internationalization_Core_" .. tab.tips) or tab.tips or clr.transstr('server_refuse', failed)
                         end
                         request.val = tab.d
                         request.event = tab.e
