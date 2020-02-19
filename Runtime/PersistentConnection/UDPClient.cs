@@ -300,7 +300,7 @@ namespace Capstones.Net
         }
         public void Send(ValueList<PooledBufferSpan> data)
         {
-
+            TrySend(new MessageInfo(data));
         }
         public void Send(object raw, SendSerializer serializer)
         {
@@ -371,6 +371,23 @@ namespace Capstones.Net
         {
             if (data != null)
             {
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append("UDPClient Sending ");
+                    sb.Append(cnt);
+                    for (int i = 0; i < cnt; ++i)
+                    {
+                        if (i % 32 == 0)
+                        {
+                            sb.AppendLine();
+                        }
+                        sb.Append(data.Buffer[i].ToString("X2"));
+                        sb.Append(" ");
+                    }
+                    PlatDependant.LogInfo(sb);
+                }
+#endif
                 data.AddRef();
                 _LastSendTick = System.Environment.TickCount;
                 if (_Socket != null)
@@ -546,6 +563,24 @@ namespace Capstones.Net
                                     try
                                     {
                                         receivecnt = _Socket.EndReceive(ar);
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                                        if (receivecnt > 0)
+                                        {
+                                            var sb = new System.Text.StringBuilder();
+                                            sb.Append("UDPClient Receiving ");
+                                            sb.Append(receivecnt);
+                                            for (int i = 0; i < receivecnt; ++i)
+                                            {
+                                                if (i % 32 == 0)
+                                                {
+                                                    sb.AppendLine();
+                                                }
+                                                sb.Append(receivebuffer[i].ToString("X2"));
+                                                sb.Append(" ");
+                                            }
+                                            PlatDependant.LogInfo(sb);
+                                        }
+#endif
                                     }
                                     catch (Exception e)
                                     {

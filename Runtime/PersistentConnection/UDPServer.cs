@@ -331,6 +331,24 @@ namespace Capstones.Net
                                 try
                                 {
                                     dcnt4 = _Socket.EndReceiveFrom(ar, ref sender4);
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                                    if (dcnt4 > 0)
+                                    {
+                                        var sb = new System.Text.StringBuilder();
+                                        sb.Append("UDPServer Receiving (IPv4) ");
+                                        sb.Append(dcnt4);
+                                        for (int i = 0; i < dcnt4; ++i)
+                                        {
+                                            if (i % 32 == 0)
+                                            {
+                                                sb.AppendLine();
+                                            }
+                                            sb.Append(data4[i].ToString("X2"));
+                                            sb.Append(" ");
+                                        }
+                                        PlatDependant.LogInfo(sb);
+                                    }
+#endif
                                 }
                                 catch (Exception e)
                                 {
@@ -338,12 +356,12 @@ namespace Capstones.Net
                                     {
                                         if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
                                         {
-                                        // the remote closed.
-                                    }
+                                            // the remote closed.
+                                        }
                                         else
                                         {
-                                        //_ConnectWorkCanceled = true;
-                                        PlatDependant.LogError(e);
+                                            //_ConnectWorkCanceled = true;
+                                            PlatDependant.LogError(e);
                                         }
                                     }
                                     return;
@@ -366,6 +384,24 @@ namespace Capstones.Net
                                 try
                                 {
                                     dcnt6 = _Socket6.EndReceiveFrom(ar, ref sender6);
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                                    if (dcnt6 > 0)
+                                    {
+                                        var sb = new System.Text.StringBuilder();
+                                        sb.Append("UDPServer Receiving (IPv6) ");
+                                        sb.Append(dcnt6);
+                                        for (int i = 0; i < dcnt6; ++i)
+                                        {
+                                            if (i % 32 == 0)
+                                            {
+                                                sb.AppendLine();
+                                            }
+                                            sb.Append(data6[i].ToString("X2"));
+                                            sb.Append(" ");
+                                        }
+                                        PlatDependant.LogInfo(sb);
+                                    }
+#endif
                                 }
                                 catch (Exception e)
                                 {
@@ -373,12 +409,12 @@ namespace Capstones.Net
                                     {
                                         if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
                                         {
-                                        // the remote closed.
-                                    }
+                                            // the remote closed.
+                                        }
                                         else
                                         {
-                                        //_ConnectWorkCanceled = true;
-                                        PlatDependant.LogError(e);
+                                            //_ConnectWorkCanceled = true;
+                                            PlatDependant.LogError(e);
                                         }
                                     }
                                     return;
@@ -481,6 +517,23 @@ namespace Capstones.Net
 
         public void SendRaw(IPooledBuffer data, int cnt, IPEndPoint ep, Action<bool> onComplete)
         {
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.Append("UDPServer Sending ");
+                sb.Append(cnt);
+                for (int i = 0; i < cnt; ++i)
+                {
+                    if (i % 32 == 0)
+                    {
+                        sb.AppendLine();
+                    }
+                    sb.Append(data.Buffer[i].ToString("X2"));
+                    sb.Append(" ");
+                }
+                PlatDependant.LogInfo(sb);
+            }
+#endif
             data.AddRef();
             if (_ListenBroadcast)
             {
