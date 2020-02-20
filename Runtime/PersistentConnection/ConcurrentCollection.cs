@@ -331,6 +331,7 @@ namespace Capstones.UnityEngineEx
                 System.Diagnostics.Debug.Assert(index >= 0 && index < SEGMENT_SIZE);
                 localTail.UnsafeAdd(element);
                 index++;
+                ++_Count;
 
                 if (index >= SEGMENT_SIZE)
                 {
@@ -673,32 +674,34 @@ namespace Capstones.UnityEngineEx
         /// </remarks>
         public int Count
         {
-            get
-            {
-                //store head and tail positions in buffer, 
-                Segment head, tail;
-                int headLow, tailHigh;
-                long headindex, tailindex;
-                GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex, out tailindex);
+            //get
+            //{
+            //    //store head and tail positions in buffer, 
+            //    Segment head, tail;
+            //    int headLow, tailHigh;
+            //    long headindex, tailindex;
+            //    GetHeadTailPositions(out head, out tail, out headLow, out tailHigh, out headindex, out tailindex);
 
-                if (head == tail)
-                {
-                    return tailHigh - headLow + 1;
-                }
+            //    if (head == tail)
+            //    {
+            //        return tailHigh - headLow + 1;
+            //    }
 
-                //head segment
-                int count = SEGMENT_SIZE - headLow;
+            //    //head segment
+            //    int count = SEGMENT_SIZE - headLow;
 
-                //middle segment(s), if any, are full.
-                //We don't deal with overflow to be consistent with the behavior of generic types in CLR.
-                count += SEGMENT_SIZE * ((int)(tailindex - headindex - 1));
+            //    //middle segment(s), if any, are full.
+            //    //We don't deal with overflow to be consistent with the behavior of generic types in CLR.
+            //    count += SEGMENT_SIZE * ((int)(tailindex - headindex - 1));
 
-                //tail segment
-                count += tailHigh + 1;
+            //    //tail segment
+            //    count += tailHigh + 1;
 
-                return count;
-            }
+            //    return count;
+            //}
+            get { return _Count; }
         }
+        protected volatile int _Count;
 
 
         /// <summary>
@@ -767,7 +770,10 @@ namespace Capstones.UnityEngineEx
             {
                 Segment tail = _tail;
                 if (tail.TryAppend(item))
+                {
+                    Interlocked.Increment(ref _Count);
                     return;
+                }
                 spin.SpinOnce();
             }
         }
@@ -790,7 +796,10 @@ namespace Capstones.UnityEngineEx
             {
                 Segment head = _head;
                 if (head.TryRemove(out result))
+                {
+                    Interlocked.Decrement(ref _Count);
                     return true;
+                }
                 //since method IsEmpty spins, we don't need to spin in the while loop
             }
             result = default(T);
