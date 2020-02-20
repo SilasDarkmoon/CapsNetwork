@@ -12,7 +12,7 @@ using TaskProgress = Capstones.UnityEngineEx.TaskProgress;
 
 namespace Capstones.Net
 {
-    public class KCPClient : IPersistentConnection, IDisposable
+    public class KCPClient : IPersistentConnection, IPositiveConnection, IDisposable
     {
         protected uint _Conv;
         protected UDPClient _Connection;
@@ -225,6 +225,16 @@ namespace Capstones.Net
         public void Send(byte[] data)
         {
             Send(data, data.Length);
+        }
+
+        public bool PositiveMode
+        {
+            get { return _Connection.PositiveMode; }
+            set { _Connection.PositiveMode = value; }
+        }
+        public void Step()
+        {
+            _Connection.Step();
         }
 
         public void Dispose()

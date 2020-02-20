@@ -22,7 +22,7 @@ using TaskProgress = Capstones.UnityEngineEx.TaskProgress;
 
 namespace Capstones.Net
 {
-    public class KCPServer : IPersistentConnectionServer, IDisposable
+    public class KCPServer : IPersistentConnectionServer, IPositiveConnection, IDisposable
     {
         public class ServerConnection : IPersistentConnection, IServerConnection, IDisposable
         {
@@ -446,6 +446,17 @@ namespace Capstones.Net
         {
             _Connection.StartConnect();
         }
+
+        public bool PositiveMode
+        {
+            get { return _Connection.PositiveMode; }
+            set { _Connection.PositiveMode = value; }
+        }
+        public void Step()
+        {
+            _Connection.Step();
+        }
+
         public virtual ServerConnection PrepareConnection()
         {
             var con = new ServerConnection(this);
