@@ -234,6 +234,7 @@ namespace Capstones.Net
         }
 
         protected ConcurrentQueueGrowOnly<MessageInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<MessageInfo>();
+        protected ConcurrentQueueGrowOnly<ValueList<PooledBufferSpan>> _PendingRecvMessages = new ConcurrentQueueGrowOnly<ValueList<PooledBufferSpan>>();
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>
         /// Schedule sending the data. Handle OnSendComplete to recyle the data buffer.
@@ -330,6 +331,58 @@ namespace Capstones.Net
         {
             SendRaw(data, data.Length);
         }
+
+        protected byte[] _ReceiveBuffer = new byte[CONST.MTU];
+        protected void EndReceive(IAsyncResult ar)
+        {
+            try
+            {
+                var receivecnt = _Socket.EndReceive(ar);
+                if (receivecnt > 0)
+                {
+                    var bytesRemaining = _Socket.Available;
+                    if (bytesRemaining > 0)
+                    {
+                        if (bytesRemaining > CONST.MTU - 1)
+                        {
+                            bytesRemaining = CONST.MTU - 1;
+                        }
+                        receivecnt += _Socket.Receive(_ReceiveBuffer, 1, bytesRemaining, SocketFlags.None);
+                    }
+                    _PendingRecvMessages.Enqueue(BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt));
+                    BeginReceive();
+                }
+                else
+                {
+                    if (_ConnectWorkRunning)
+                    {
+                        _ConnectWorkCanceled = true;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                if (IsConnectionAlive)
+                {
+                    _ConnectWorkCanceled = true;
+                    PlatDependant.LogError(e);
+                }
+            }
+            _HaveDataToSend.Set();
+        }
+        protected AsyncCallback EndReceiveFunc;
+        protected void BeginReceive()
+        {
+            try
+            {
+                var cb = EndReceiveFunc = EndReceiveFunc ?? EndReceive;
+                _Socket.BeginReceive(_ReceiveBuffer, 0, 1, SocketFlags.None, cb, null);
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+            }
+        }
         protected virtual void PrepareSocket()
         {
             if (_Url != null)
@@ -411,67 +464,24 @@ namespace Capstones.Net
                 }
                 if (_Socket != null)
                 {
-                    byte[] receivebuffer = new byte[CONST.MTU];
                     int receivecnt = 0;
-                    Action BeginReceive = () =>
-                    {
-                        try
-                        {
-                            _Socket.BeginReceive(receivebuffer, 0, 1, SocketFlags.None, ar =>
-                            {
-                                try
-                                {
-                                    receivecnt = _Socket.EndReceive(ar);
-                                    if (receivecnt > 0)
-                                    {
-                                        var bytesRemaining = _Socket.Available;
-                                        if (bytesRemaining > 0)
-                                        {
-                                            if (bytesRemaining > CONST.MTU - 1)
-                                            {
-                                                bytesRemaining = CONST.MTU - 1;
-                                            }
-                                            receivecnt += _Socket.Receive(receivebuffer, 1, bytesRemaining, SocketFlags.None);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        if (_ConnectWorkRunning)
-                                        {
-                                            _ConnectWorkCanceled = true;
-                                        }
-                                    }
-                                }
-                                catch (Exception e)
-                                {
-                                    if (IsConnectionAlive)
-                                    {
-                                        _ConnectWorkCanceled = true;
-                                        PlatDependant.LogError(e);
-                                    }
-                                }
-                                _HaveDataToSend.Set();
-                            }, null);
-                        }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(e);
-                        }
-                    };
                     BeginReceive();
                     while (!_ConnectWorkCanceled)
                     {
                         int waitinterval;
                         try
                         {
-                            if (receivecnt > 0)
+                            ValueList<PooledBufferSpan> recvmessages;
+                            while (_PendingRecvMessages.TryDequeue(out recvmessages))
                             {
-                                if (_OnReceive != null)
+                                for (int i = 0; i < recvmessages.Count; ++i)
                                 {
-                                    _OnReceive(receivebuffer, receivecnt, _Socket.RemoteEndPoint);
+                                    var message = recvmessages[i];
+                                    if (_OnReceive != null)
+                                    {
+                                        _OnReceive(message.Buffer, message.Length, _Socket.RemoteEndPoint);
+                                    }
                                 }
-                                receivecnt = 0;
-                                BeginReceive();
                             }
 
                             MessageInfo minfo;

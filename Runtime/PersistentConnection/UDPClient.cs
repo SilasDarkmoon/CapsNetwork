@@ -371,8 +371,9 @@ namespace Capstones.Net
             public IPooledBuffer Data;
             public Socket Socket;
             public Action<bool> OnComplete;
+            public AsyncCallback OnAsyncCallback;
 
-            public void OnAsyncCallback(IAsyncResult ar)
+            public void EndSend(IAsyncResult ar)
             {
                 bool success = false;
                 try
@@ -390,6 +391,11 @@ namespace Capstones.Net
                 }
                 Data.Release();
                 ReturnSendAsyncInfoToPool(this);
+            }
+
+            public SendAsyncInfo()
+            {
+                OnAsyncCallback = EndSend;
             }
         }
         private static ConcurrentQueueFixedSize<SendAsyncInfo> _SendAsyncInfo = new ConcurrentQueueFixedSize<SendAsyncInfo>();

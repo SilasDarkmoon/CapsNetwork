@@ -310,6 +310,26 @@ namespace Capstones.Net
             wrapper.Buffer = GetRawBufferFromPool(minsize);
             return wrapper;
         }
+
+        public static ValueList<PooledBufferSpan> GetPooledBufferList(byte[] buffer, int offset, int count)
+        {
+            var rv = new ValueList<PooledBufferSpan>();
+            int cntwrote = 0;
+            while (cntwrote < count)
+            {
+                var pbuffer = BufferPool.GetBufferFromPool();
+                var sbuffer = pbuffer.Buffer;
+                int scnt = count - cntwrote;
+                if (sbuffer.Length < scnt)
+                {
+                    scnt = sbuffer.Length;
+                }
+                Buffer.BlockCopy(buffer, offset + cntwrote, sbuffer, 0, scnt);
+                rv.Add(new PooledBufferSpan() { WholeBuffer = pbuffer, Length = scnt });
+                cntwrote += scnt;
+            }
+            return rv;
+        }
     }
 
     public struct BufferInfo
