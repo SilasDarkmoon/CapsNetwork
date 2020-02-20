@@ -64,6 +64,14 @@ namespace Capstones.Net
                         }
                     }
                 }
+                if (_OnUpdate != null)
+                {
+                    return _OnUpdate(this);
+                }
+                else
+                {
+                    return int.MinValue;
+                }
             };
             _Connection.PreStart = _con =>
             {

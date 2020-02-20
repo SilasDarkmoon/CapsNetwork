@@ -142,12 +142,62 @@ namespace Capstones.Net
                 return 0;
             }
 
+            protected int _ConnectionThreadID;
             protected byte[] _RecvBuffer = new byte[CONST.MTU];
-            protected internal virtual void Update()
+            protected void DoSendWork(MessageInfo minfo)
             {
+                ValueList<PooledBufferSpan> messages;
+                if (minfo.Serializer != null)
+                {
+                    messages = minfo.Serializer(minfo.Raw);
+                }
+                else
+                {
+                    messages = minfo.Buffers;
+                }
+                for (int i = 0; i < messages.Count; ++i)
+                {
+                    var message = messages[i];
+                    var cnt = message.Length;
+                    if (cnt > CONST.MTU)
+                    {
+                        int offset = 0;
+                        var pinfo = BufferPool.GetBufferFromPool();
+                        var buffer = pinfo.Buffer;
+                        while (cnt > CONST.MTU)
+                        {
+                            Buffer.BlockCopy(message.Buffer, offset, buffer, 0, CONST.MTU);
+                            _KCP.kcp_send(buffer, CONST.MTU);
+                            cnt -= CONST.MTU;
+                            offset += CONST.MTU;
+                        }
+                        if (cnt > 0)
+                        {
+                            Buffer.BlockCopy(message.Buffer, offset, buffer, 0, cnt);
+                            _KCP.kcp_send(buffer, cnt);
+                        }
+                        pinfo.Release();
+                    }
+                    else
+                    {
+                        _KCP.kcp_send(message.Buffer, cnt);
+                    }
+                    message.Release();
+                }
+                //if (_OnSendComplete != null)
+                //{
+                //    _OnSendComplete(message, true);
+                //}
+            }
+            protected internal virtual int Update()
+            {
+                if (_ConnectionThreadID == 0)
+                {
+                    _ConnectionThreadID = Thread.CurrentThread.ManagedThreadId;
+                }
                 if (!_Ready)
                 {
-                    return;
+                    return int.MinValue;
                 }
                 // 1, send.
                 if (_Started)
@@ -155,48 +205,7 @@ namespace Capstones.Net
                     MessageInfo minfo;
                     while (_PendingSendMessages.TryDequeue(out minfo))
                     {
-                        ValueList<PooledBufferSpan> messages;
-                        if (minfo.Serializer != null)
-                        {
-                            messages = minfo.Serializer(minfo.Raw);
-                        }
-                        else
-                        {
-                            messages = minfo.Buffers;
-                        }
-                        for (int i = 0; i < messages.Count; ++i)
-                        {
-                            var message = messages[i];
-                            var cnt = message.Length;
-                            if (cnt > CONST.MTU)
-                            {
-                                int offset = 0;
-                                var pinfo = BufferPool.GetBufferFromPool();
-                                var buffer = pinfo.Buffer;
-                                while (cnt > CONST.MTU)
-                                {
-                                    Buffer.BlockCopy(message.Buffer, offset, buffer, 0, CONST.MTU);
-                                    _KCP.kcp_send(buffer, CONST.MTU);
-                                    cnt -= CONST.MTU;
-                                    offset += CONST.MTU;
-                                }
-                                if (cnt > 0)
-                                {
-                                    Buffer.BlockCopy(message.Buffer, offset, buffer, 0, cnt);
-                                    _KCP.kcp_send(buffer, cnt);
-                                }
-                                pinfo.Release();
-                            }
-                            else
-                            {
-                                _KCP.kcp_send(message.Buffer, cnt);
-                            }
-                            message.Release();
-                        }
-                        //if (_OnSendComplete != null)
-                        //{
-                        //    _OnSendComplete(message, true);
-                        //}
+                        DoSendWork(minfo);
                     }
                 }
                 // 2, real update.
@@ -213,9 +222,21 @@ namespace Capstones.Net
                         }
                     }
                 }
+                if (_OnUpdate != null)
+                {
+                    return _OnUpdate(this);
+                }
+                else
+                {
+                    return int.MinValue;
+                }
             }
             protected internal virtual bool Feed(byte[] data, int cnt, IPEndPoint ep)
             {
+                if (_ConnectionThreadID == 0)
+                {
+                    _ConnectionThreadID = Thread.CurrentThread.ManagedThreadId;
+                }
                 if (_Ready)
                 {
                     if (_KCP.kcp_input(data, cnt) == 0)
@@ -279,6 +300,28 @@ namespace Capstones.Net
                     }
                 }
             }
+            protected UpdateHandler _OnUpdate;
+            /// <summary>
+            /// This will be called in connection thread.
+            /// </summary>
+            public UpdateHandler OnUpdate
+            {
+                get { return _OnUpdate; }
+                set
+                {
+                    if (value != _OnUpdate)
+                    {
+                        if (IsConnectionAlive)
+                        {
+                            PlatDependant.LogError("Cannot change OnUpdate when connection started");
+                        }
+                        else
+                        {
+                            _OnUpdate = value;
+                        }
+                    }
+                }
+            }
             //protected SendCompleteHandler _OnSendComplete;
             ///// <summary>
             ///// This will be called in undetermined thread.
@@ -305,8 +348,16 @@ namespace Capstones.Net
             protected ConcurrentQueueGrowOnly<MessageInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<MessageInfo>();
             public virtual bool TrySend(MessageInfo minfo)
             {
-                _PendingSendMessages.Enqueue(minfo);
-                return Server._Connection.TrySend(new MessageInfo());
+                if (_Ready && _Started && Thread.CurrentThread.ManagedThreadId == _ConnectionThreadID)
+                {
+                    DoSendWork(minfo);
+                    return true;
+                }
+                else
+                {
+                    _PendingSendMessages.Enqueue(minfo);
+                    return Server._Connection.TrySend(new MessageInfo());
+                }
             }
             public void Send(IPooledBuffer data, int cnt)
             {
@@ -345,27 +396,44 @@ namespace Capstones.Net
             _Connection.PreDispose = _con => DisposeSelf();
             _Connection.OnReceive = (data, cnt, sender) =>
             {
+                ServerConnection[] cons;
                 lock (_Connections)
                 {
-                    for (int i = 0; i < _Connections.Count; ++i)
+                    cons = _Connections.ToArray();
+                }
+                for (int i = 0; i < cons.Length; ++i)
+                {
+                    var con = cons[i];
+                    if (con.Feed(data, cnt, sender as IPEndPoint))
                     {
-                        var con = _Connections[i];
-                        if (con.Feed(data, cnt, sender as IPEndPoint))
-                        {
-                            return;
-                        }
+                        return;
                     }
                 }
             };
             _Connection.OnUpdate = _con =>
             {
+                ServerConnection[] cons;
                 lock (_Connections)
                 {
-                    for (int i = 0; i < _Connections.Count; ++i)
+                    cons = _Connections.ToArray();
+                }
+                int waitinterval = int.MaxValue;
+                for (int i = 0; i < cons.Length; ++i)
+                {
+                    var con = cons[i];
+                    var interval = con.Update();
+                    if (interval >= 0 && interval < waitinterval)
                     {
-                        var con = _Connections[i];
-                        con.Update();
+                        waitinterval = interval;
                     }
+                }
+                if (waitinterval == int.MaxValue)
+                {
+                    return int.MinValue;
+                }
+                else
+                {
+                    return waitinterval;
                 }
             };
         }

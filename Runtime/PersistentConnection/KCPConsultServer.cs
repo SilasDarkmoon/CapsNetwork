@@ -144,16 +144,25 @@ namespace Capstones.Net
                     return base.Feed(data, cnt, ep);
                 }
             }
-            protected internal override void Update()
+            protected internal override int Update()
             {
                 if (_Conv == 0)
                 {
                     _KCP.kcp_update((uint)Environment.TickCount);
                     _KCP.kcp_recv(_RecvBuffer, CONST.MTU);
+
+                    if (_OnUpdate != null)
+                    {
+                        return _OnUpdate(this);
+                    }
+                    else
+                    {
+                        return int.MinValue;
+                    }
                 }
                 else
                 {
-                    base.Update();
+                    return base.Update();
                 }
             }
 

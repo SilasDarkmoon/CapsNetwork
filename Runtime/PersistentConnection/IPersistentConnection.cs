@@ -14,6 +14,7 @@ namespace Capstones.Net
     //public delegate void SendCompleteHandler(bool success);
     public delegate bool SendHandler(IPooledBuffer buffer, int cnt);
     public delegate ValueList<PooledBufferSpan> SendSerializer(object obj);
+    public delegate int UpdateHandler(IPersistentConnection thiz);
 
     public interface IPersistentConnection
     {
@@ -25,6 +26,7 @@ namespace Capstones.Net
         void Send(ValueList<PooledBufferSpan> data); // the buffer in data do not need to AddRef and can be released directly.
         void Send(object data, SendSerializer serializer);
         //SendCompleteHandler OnSendComplete { get; set; }
+        UpdateHandler OnUpdate { get; set; }
     }
     public interface IServerConnection : IPersistentConnection
     {

@@ -453,12 +453,21 @@ namespace Capstones.Net
                             BeginReceive6();
                         }
 
+                        int waitinterval = int.MinValue;
                         if (_OnUpdate != null)
                         {
-                            _OnUpdate(this);
+                            waitinterval = _OnUpdate(this);
                         }
 
-                        _HaveDataToSend.WaitOne(_UpdateInterval);
+                        if (waitinterval == int.MinValue)
+                        {
+                            waitinterval = _UpdateInterval;
+                            if (waitinterval < 0)
+                            {
+                                waitinterval = CONST.MAX_WAIT_MILLISECONDS;
+                            }
+                        }
+                        _HaveDataToSend.WaitOne(waitinterval);
                     }
                 }
             }

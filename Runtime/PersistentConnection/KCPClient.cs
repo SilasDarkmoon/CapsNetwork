@@ -95,6 +95,14 @@ namespace Capstones.Net
                         _OnReceive(_RecvBuffer, recvcnt, _Connection.RemoteEndPoint);
                     }
                 }
+                if (_OnUpdate != null)
+                {
+                    return _OnUpdate(this);
+                }
+                else
+                {
+                    return int.MinValue;
+                }
             };
         }
 
@@ -172,6 +180,28 @@ namespace Capstones.Net
         //    get { return _Connection.OnSendComplete; }
         //    set { _Connection.OnSendComplete = value; }
         //}
+        protected UpdateHandler _OnUpdate;
+        /// <summary>
+        /// This will be called in connection thread.
+        /// </summary>
+        public UpdateHandler OnUpdate
+        {
+            get { return _OnUpdate; }
+            set
+            {
+                if (value != _OnUpdate)
+                {
+                    if (IsConnectionAlive)
+                    {
+                        PlatDependant.LogError("Cannot change OnUpdate when connection started");
+                    }
+                    else
+                    {
+                        _OnUpdate = value;
+                    }
+                }
+            }
+        }
         public virtual void StartConnect()
         {
             _Connection.StartConnect();

@@ -30,7 +30,7 @@ namespace Capstones.Net
         protected int _EaseUpdateRatio = 8;
         //protected SendCompleteHandler _OnSendComplete;
         protected CommonHandler _PreDispose;
-        protected CommonHandler _OnUpdate;
+        protected UpdateHandler _OnUpdate;
         protected SendHandler _OnSend;
         protected CommonHandler _PreStart;
         protected bool _WaitForBroadcastResp = false;
@@ -169,7 +169,7 @@ namespace Capstones.Net
         /// <summary>
         /// This will be called in connection thread.
         /// </summary>
-        public CommonHandler OnUpdate
+        public UpdateHandler OnUpdate
         {
             get { return _OnUpdate; }
             set
@@ -289,9 +289,16 @@ namespace Capstones.Net
         /// <returns>false means the data is dropped because to many messages is pending to be sent.</returns>
         public virtual bool TrySend(MessageInfo minfo)
         {
-            _PendingSendMessages.Enqueue(minfo);
-            _HaveDataToSend.Set();
-            //StartConnect();
+            if (!HoldSending && Thread.CurrentThread.ManagedThreadId == _ConnectionThreadID)
+            {
+                DoSendWork(minfo);
+            }
+            else
+            {
+                _PendingSendMessages.Enqueue(minfo);
+                _HaveDataToSend.Set();
+                //StartConnect();
+            }
             return true;
         }
         public void Send(IPooledBuffer data, int cnt)
@@ -449,10 +456,54 @@ namespace Capstones.Net
         {
             SendRaw(data, data.Length);
         }
+
+        protected int _ConnectionThreadID;
+        protected void DoSendWork(MessageInfo minfo)
+        {
+            ValueList<PooledBufferSpan> messages;
+            if (minfo.Serializer != null)
+            {
+                messages = minfo.Serializer(minfo.Raw);
+            }
+            else
+            {
+                messages = minfo.Buffers;
+            }
+            for (int i = 0; i < messages.Count; ++i)
+            {
+                var message = messages[i];
+                DoSendWork(message);
+            }
+        }
+        protected void DoSendWork(PooledBufferSpan message)
+        {
+            var cnt = message.Length;
+            if (_OnSend != null && _OnSend(message, cnt))
+            {
+                //if (_OnSendComplete != null)
+                //{
+                //    _OnSendComplete(true);
+                //}
+            }
+            else
+            {
+                SendRaw(message, cnt
+                    //, success =>
+                    //{
+                    //    if (_OnSendComplete != null)
+                    //    {
+                    //        _OnSendComplete(message, success);
+                    //    }
+                    //}
+                    );
+            }
+            message.Release();
+        }
         protected virtual void ConnectWork()
         {
             try
             {
+                _ConnectionThreadID = Thread.CurrentThread.ManagedThreadId;
                 if (_Url != null)
                 {
                     bool isMulticastOrBroadcast = false;
@@ -634,56 +685,31 @@ namespace Capstones.Net
                             MessageInfo minfo;
                             while (_PendingSendMessages.TryDequeue(out minfo))
                             {
-                                ValueList<PooledBufferSpan> messages;
-                                if (minfo.Serializer != null)
-                                {
-                                    messages = minfo.Serializer(minfo.Raw);
-                                }
-                                else
-                                {
-                                    messages = minfo.Buffers;
-                                }
-                                for (int i = 0; i < messages.Count; ++i)
-                                {
-                                    var message = messages[i];
-                                    var cnt = message.Length;
-                                    if (_OnSend != null && _OnSend(message, cnt))
-                                    {
-                                        //if (_OnSendComplete != null)
-                                        //{
-                                        //    _OnSendComplete(true);
-                                        //}
-                                    }
-                                    else
-                                    {
-                                        SendRaw(message, cnt
-                                            //, success =>
-                                            //{
-                                            //    if (_OnSendComplete != null)
-                                            //    {
-                                            //        _OnSendComplete(message, success);
-                                            //    }
-                                            //}
-                                            );
-                                    }
-                                    message.Release();
-                                }
+                                DoSendWork(minfo);
                             }
                         }
 
+                        int waitinterval = int.MinValue;
                         if (_OnUpdate != null)
                         {
-                            _OnUpdate(this);
+                            waitinterval = _OnUpdate(this);
                         }
 
-                        var waitinterval = _UpdateInterval;
-                        var easeratio = _EaseUpdateRatio;
-                        if (waitinterval > 0 && easeratio > 0)
+                        if (waitinterval == int.MinValue)
                         {
-                            var easeinterval = waitinterval * easeratio;
-                            if (_LastSendTick + easeinterval <= System.Environment.TickCount)
+                            waitinterval = _UpdateInterval;
+                            var easeratio = _EaseUpdateRatio;
+                            if (waitinterval > 0 && easeratio > 0)
                             {
-                                waitinterval = easeinterval;
+                                var easeinterval = waitinterval * easeratio;
+                                if (_LastSendTick + easeinterval <= System.Environment.TickCount)
+                                {
+                                    waitinterval = easeinterval;
+                                }
+                            }
+                            if (waitinterval < 0)
+                            {
+                                waitinterval = CONST.MAX_WAIT_MILLISECONDS;
                             }
                         }
                         _HaveDataToSend.WaitOne(waitinterval);
