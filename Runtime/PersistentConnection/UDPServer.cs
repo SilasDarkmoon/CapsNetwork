@@ -67,44 +67,59 @@ namespace Capstones.Net
             public int ReceiveCount = 0;
             public IAsyncResult ReceiveResult;
             public UDPServer ParentServer;
+            protected AsyncCallback EndReceiveFunc;
+            public ConcurrentQueueGrowOnly<RecvFromInfo> PendingRecvMessages = new ConcurrentQueueGrowOnly<RecvFromInfo>();
 
             public BroadcastSocketReceiveInfo(UDPServer parent, Socket socket, EndPoint init_remote)
             {
                 ParentServer = parent;
                 LocalSocket = socket;
                 RemoteEP = init_remote;
+                EndReceiveFunc = EndReceive;
             }
 
+            protected void EndReceive(IAsyncResult ar)
+            {
+                try
+                {
+                    ReceiveCount = LocalSocket.EndReceiveFrom(ar, ref RemoteEP);
+                    if (ReceiveCount > 0)
+                    {
+                        var ep = GetIPEndPointFromPool();
+                        ep.Address = ((IPEndPoint)RemoteEP).Address;
+                        ep.Port = ((IPEndPoint)RemoteEP).Port;
+                        PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(ReceiveData, 0, ReceiveCount), Remote = ep });
+                    }
+                    if (!ParentServer._ConnectWorkCanceled)
+                    {
+                        BeginReceive();
+                    }
+                }
+                catch (Exception e)
+                {
+                    if (ParentServer.IsConnectionAlive)
+                    {
+                        if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                        {
+                            // the remote closed.
+                        }
+                        else
+                        {
+                            //ParentServer._ConnectWorkCanceled = true;
+                            PlatDependant.LogError(e);
+                        }
+                    }
+                    return;
+                }
+                ParentServer._HaveDataToSend.Set();
+            }
             public void BeginReceive()
             {
                 ReceiveCount = 0;
                 ReceiveResult = null;
                 try
                 {
-                    ReceiveResult = LocalSocket.BeginReceiveFrom(ReceiveData, 0, CONST.MTU, SocketFlags.None, ref RemoteEP, ar =>
-                    {
-                        try
-                        {
-                            ReceiveCount = LocalSocket.EndReceiveFrom(ar, ref RemoteEP);
-                        }
-                        catch (Exception e)
-                        {
-                            if (ParentServer.IsConnectionAlive)
-                            {
-                                if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
-                                {
-                                // the remote closed.
-                            }
-                                else
-                                {
-                                //ParentServer._ConnectWorkCanceled = true;
-                                PlatDependant.LogError(e);
-                                }
-                            }
-                            return;
-                        }
-                        ParentServer._HaveDataToSend.Set();
-                    }, null);
+                    ReceiveResult = LocalSocket.BeginReceiveFrom(ReceiveData, 0, CONST.MTU, SocketFlags.None, ref RemoteEP, EndReceiveFunc, null);
                 }
                 catch (Exception e)
                 {
@@ -127,6 +142,140 @@ namespace Capstones.Net
         protected KnownRemotes _KnownRemotes;
         protected KnownRemotes _KnownRemotesR;
         protected KnownRemotes _KnownRemotesS;
+
+        protected byte[] _ReceiveBuffer6 = new byte[CONST.MTU];
+        protected EndPoint _RemoteEP6;
+        protected void EndReceive4(IAsyncResult ar)
+        {
+            try
+            {
+                var receivecnt = _Socket.EndReceiveFrom(ar, ref _RemoteEP);
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                if (receivecnt > 0)
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append("UDPServer Receiving (IPv4) ");
+                    sb.Append(receivecnt);
+                    for (int i = 0; i < receivecnt; ++i)
+                    {
+                        if (i % 32 == 0)
+                        {
+                            sb.AppendLine();
+                        }
+                        sb.Append(_ReceiveBuffer[i].ToString("X2"));
+                        sb.Append(" ");
+                    }
+                    PlatDependant.LogInfo(sb);
+                }
+#endif
+                if (receivecnt > 0)
+                {
+                    var ep = GetIPEndPointFromPool();
+                    ep.Address = ((IPEndPoint)_RemoteEP).Address;
+                    ep.Port = ((IPEndPoint)_RemoteEP).Port;
+                    _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt), Remote = ep });
+                }
+                if (!_ConnectWorkCanceled)
+                {
+                    BeginReceive4();
+                }
+            }
+            catch (Exception e)
+            {
+                if (IsConnectionAlive)
+                {
+                    if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                    {
+                        // the remote closed.
+                    }
+                    else
+                    {
+                        //_ConnectWorkCanceled = true;
+                        PlatDependant.LogError(e);
+                    }
+                }
+                return;
+            }
+            _HaveDataToSend.Set();
+        }
+        protected AsyncCallback EndReceive4Func;
+        protected void EndReceive6(IAsyncResult ar)
+        {
+            try
+            {
+                var receivecnt = _Socket6.EndReceiveFrom(ar, ref _RemoteEP6);
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                if (receivecnt > 0)
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append("UDPServer Receiving (IPv6) ");
+                    sb.Append(receivecnt);
+                    for (int i = 0; i < receivecnt; ++i)
+                    {
+                        if (i % 32 == 0)
+                        {
+                            sb.AppendLine();
+                        }
+                        sb.Append(_ReceiveBuffer6[i].ToString("X2"));
+                        sb.Append(" ");
+                    }
+                    PlatDependant.LogInfo(sb);
+                }
+#endif
+                if (receivecnt > 0)
+                {
+                    var ep = GetIPEndPointFromPool();
+                    ep.Address = ((IPEndPoint)_RemoteEP6).Address;
+                    ep.Port = ((IPEndPoint)_RemoteEP6).Port;
+                    _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer6, 0, receivecnt), Remote = ep });
+                }
+                if (!_ConnectWorkCanceled)
+                {
+                    BeginReceive6();
+                }
+            }
+            catch (Exception e)
+            {
+                if (IsConnectionAlive)
+                {
+                    if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
+                    {
+                        // the remote closed.
+                    }
+                    else
+                    {
+                        //_ConnectWorkCanceled = true;
+                        PlatDependant.LogError(e);
+                    }
+                }
+                return;
+            }
+        }
+        protected AsyncCallback EndReceive6Func;
+        protected void BeginReceive4()
+        {
+            try
+            {
+                var cb = EndReceive4Func = EndReceive4Func ?? EndReceive4;
+                _Socket.BeginReceiveFrom(_ReceiveBuffer, 0, CONST.MTU, SocketFlags.None, ref _RemoteEP, cb, null);
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+            }
+        }
+        protected void BeginReceive6()
+        {
+            try
+            {
+                var cb = EndReceive6Func = EndReceive6Func ?? EndReceive6;
+                _Socket6.BeginReceiveFrom(_ReceiveBuffer6, 0, CONST.MTU, SocketFlags.None, ref _RemoteEP6, cb, null);
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+            }
+        }
 
         protected override IEnumerator ConnectWork()
         {
@@ -258,17 +407,31 @@ namespace Capstones.Net
                         {
                             bool knownRemotesChanged = false;
                             var curTick = Environment.TickCount;
+
                             for (int i = 0; i < _SocketsBroadcast.Count; ++i)
                             {
                                 var bsinfo = _SocketsBroadcast[i];
-                                if (bsinfo.ReceiveCount > 0)
+
+                                RecvFromInfo recvmessages;
+                                while (bsinfo.PendingRecvMessages.TryDequeue(out recvmessages))
                                 {
-                                    var ep = bsinfo.RemoteEP as IPEndPoint;
-                                    //var remote = new IPEndPoint(ep.Address, ep.Port);
+                                    var messages = recvmessages.Buffers;
+                                    var ep = recvmessages.Remote;
+                                    for (int j = 0; j < messages.Count; ++j)
+                                    {
+                                        var message = messages[j];
+                                        if (_OnReceive != null)
+                                        {
+                                            _OnReceive(message.Buffer, message.Length, ep);
+                                        }
+                                        message.Release();
+                                    }
                                     remotes.Remotes[ep.Address] = new KnownRemote() { Address = ep.Address, LocalSocket = bsinfo.LocalSocket, LastTick = curTick };
                                     knownRemotesChanged = true;
+                                    ReturnIPEndPointToPool(ep);
                                 }
                             }
+
                             if (remotes.Remotes.Count > 100)
                             {
                                 KnownRemote[] aremotes = new KnownRemote[remotes.Remotes.Count];
@@ -287,7 +450,6 @@ namespace Capstones.Net
                                     }
                                 }
                             }
-                            // TODO: check dead knownRemotes...
                             if (knownRemotesChanged)
                             {
                                 _KnownRemotesR.Remotes.Clear();
@@ -297,26 +459,6 @@ namespace Capstones.Net
                                 }
                                 _KnownRemotesR.Version = ++knownRemotesVersion;
                                 _KnownRemotesR = System.Threading.Interlocked.Exchange(ref _KnownRemotes, _KnownRemotesR);
-                            }
-
-                            if (_OnReceive != null)
-                            {
-                                for (int i = 0; i < _SocketsBroadcast.Count; ++i)
-                                {
-                                    var bsinfo = _SocketsBroadcast[i];
-                                    if (bsinfo.ReceiveCount > 0)
-                                    {
-                                        _OnReceive(bsinfo.ReceiveData, bsinfo.ReceiveCount, bsinfo.RemoteEP);
-                                    }
-                                }
-                            }
-                            for (int i = 0; i < _SocketsBroadcast.Count; ++i)
-                            {
-                                var bsinfo = _SocketsBroadcast[i];
-                                if (bsinfo.ReceiveResult == null || bsinfo.ReceiveResult.IsCompleted)
-                                {
-                                    bsinfo.BeginReceive();
-                                }
                             }
 
                             waitinterval = int.MinValue;
@@ -359,122 +501,8 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    EndPoint sender4 = new IPEndPoint(IPAddress.Any, _Port);
-                    EndPoint sender6 = new IPEndPoint(IPAddress.IPv6Any, _Port);
-
-                    byte[] data4 = new byte[CONST.MTU];
-                    byte[] data6 = new byte[CONST.MTU];
-                    int dcnt4 = 0;
-                    int dcnt6 = 0;
-                    IAsyncResult readar4 = null;
-                    IAsyncResult readar6 = null;
-
-                    Action BeginReceive4 = () =>
-                    {
-                        try
-                        {
-                            readar4 = null;
-                            readar4 = _Socket.BeginReceiveFrom(data4, 0, CONST.MTU, SocketFlags.None, ref sender4, ar =>
-                            {
-                                try
-                                {
-                                    dcnt4 = _Socket.EndReceiveFrom(ar, ref sender4);
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-                                    if (dcnt4 > 0)
-                                    {
-                                        var sb = new System.Text.StringBuilder();
-                                        sb.Append("UDPServer Receiving (IPv4) ");
-                                        sb.Append(dcnt4);
-                                        for (int i = 0; i < dcnt4; ++i)
-                                        {
-                                            if (i % 32 == 0)
-                                            {
-                                                sb.AppendLine();
-                                            }
-                                            sb.Append(data4[i].ToString("X2"));
-                                            sb.Append(" ");
-                                        }
-                                        PlatDependant.LogInfo(sb);
-                                    }
-#endif
-                                }
-                                catch (Exception e)
-                                {
-                                    if (IsConnectionAlive)
-                                    {
-                                        if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
-                                        {
-                                            // the remote closed.
-                                        }
-                                        else
-                                        {
-                                            //_ConnectWorkCanceled = true;
-                                            PlatDependant.LogError(e);
-                                        }
-                                    }
-                                    return;
-                                }
-                                _HaveDataToSend.Set();
-                            }, null);
-                        }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(e);
-                        }
-                    };
-                    Action BeginReceive6 = () =>
-                    {
-                        try
-                        {
-                            readar6 = null;
-                            readar6 = _Socket6.BeginReceiveFrom(data6, 0, CONST.MTU, SocketFlags.None, ref sender6, ar =>
-                            {
-                                try
-                                {
-                                    dcnt6 = _Socket6.EndReceiveFrom(ar, ref sender6);
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-                                    if (dcnt6 > 0)
-                                    {
-                                        var sb = new System.Text.StringBuilder();
-                                        sb.Append("UDPServer Receiving (IPv6) ");
-                                        sb.Append(dcnt6);
-                                        for (int i = 0; i < dcnt6; ++i)
-                                        {
-                                            if (i % 32 == 0)
-                                            {
-                                                sb.AppendLine();
-                                            }
-                                            sb.Append(data6[i].ToString("X2"));
-                                            sb.Append(" ");
-                                        }
-                                        PlatDependant.LogInfo(sb);
-                                    }
-#endif
-                                }
-                                catch (Exception e)
-                                {
-                                    if (IsConnectionAlive)
-                                    {
-                                        if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
-                                        {
-                                            // the remote closed.
-                                        }
-                                        else
-                                        {
-                                            //_ConnectWorkCanceled = true;
-                                            PlatDependant.LogError(e);
-                                        }
-                                    }
-                                    return;
-                                }
-                                _HaveDataToSend.Set();
-                            }, null);
-                        }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(e);
-                        }
-                    };
+                    _RemoteEP = new IPEndPoint(IPAddress.Any, _Port);
+                    _RemoteEP6 = new IPEndPoint(IPAddress.IPv6Any, _Port);
                     BeginReceive4();
                     BeginReceive6();
                     while (!_ConnectWorkCanceled)
@@ -482,26 +510,21 @@ namespace Capstones.Net
                         int waitinterval;
                         try
                         {
-                            if (_OnReceive != null)
+                            RecvFromInfo recvmessages;
+                            while (_PendingRecvMessages.TryDequeue(out recvmessages))
                             {
-                                if (dcnt4 > 0)
+                                var messages = recvmessages.Buffers;
+                                var ep = recvmessages.Remote ?? _Socket.RemoteEndPoint;
+                                for (int i = 0; i < messages.Count; ++i)
                                 {
-                                    _OnReceive(data4, dcnt4, sender4);
-                                    dcnt4 = 0;
+                                    var message = messages[i];
+                                    if (_OnReceive != null)
+                                    {
+                                        _OnReceive(message.Buffer, message.Length, ep);
+                                    }
+                                    message.Release();
                                 }
-                                if (dcnt6 > 0)
-                                {
-                                    _OnReceive(data6, dcnt6, sender6);
-                                    dcnt6 = 0;
-                                }
-                            }
-                            if (readar4 == null || readar4.IsCompleted)
-                            {
-                                BeginReceive4();
-                            }
-                            if (readar6 == null || readar6.IsCompleted)
-                            {
-                                BeginReceive6();
+                                ReturnIPEndPointToPool(recvmessages.Remote);
                             }
 
                             waitinterval = int.MinValue;

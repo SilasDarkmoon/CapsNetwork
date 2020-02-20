@@ -350,7 +350,11 @@ namespace Capstones.Net
                         receivecnt += _Socket.Receive(_ReceiveBuffer, 1, bytesRemaining, SocketFlags.None);
                     }
                     _PendingRecvMessages.Enqueue(BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt));
-                    BeginReceive();
+
+                    if (!_ConnectWorkCanceled)
+                    {
+                        BeginReceive();
+                    }
                 }
                 else
                 {
@@ -383,6 +387,7 @@ namespace Capstones.Net
                 PlatDependant.LogError(e);
             }
         }
+
         protected virtual void PrepareSocket()
         {
             if (_Url != null)
@@ -464,7 +469,6 @@ namespace Capstones.Net
                 }
                 if (_Socket != null)
                 {
-                    int receivecnt = 0;
                     BeginReceive();
                     while (!_ConnectWorkCanceled)
                     {
@@ -481,6 +485,7 @@ namespace Capstones.Net
                                     {
                                         _OnReceive(message.Buffer, message.Length, _Socket.RemoteEndPoint);
                                     }
+                                    message.Release();
                                 }
                             }
 

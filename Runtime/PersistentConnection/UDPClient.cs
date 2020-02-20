@@ -324,6 +324,7 @@ namespace Capstones.Net
         public bool HoldSending = false;
         protected int _LastSendTick = int.MinValue;
         protected ConcurrentQueueGrowOnly<MessageInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<MessageInfo>();
+        protected ConcurrentQueueGrowOnly<RecvFromInfo> _PendingRecvMessages = new ConcurrentQueueGrowOnly<RecvFromInfo>();
         //public static readonly byte[] EmptyBuffer = new byte[0];
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>
@@ -507,6 +508,133 @@ namespace Capstones.Net
             SendRaw(data, data.Length);
         }
 
+        private static ConcurrentQueueFixedSize<IPEndPoint> _IPEndPointPool = new ConcurrentQueueFixedSize<IPEndPoint>();
+        public static IPEndPoint GetIPEndPointFromPool()
+        {
+            IPEndPoint ep;
+            if (!_IPEndPointPool.TryDequeue(out ep))
+            {
+                ep = new IPEndPoint(IPAddress.Any, 0);
+            }
+            return ep;
+        }
+        public static void ReturnIPEndPointToPool(IPEndPoint ep)
+        {
+            if (ep != null)
+            {
+                _IPEndPointPool.Enqueue(ep);
+            }
+        }
+        protected struct RecvFromInfo
+        {
+            public IPEndPoint Remote;
+            public ValueList<PooledBufferSpan> Buffers;
+        }
+
+        protected byte[] _ReceiveBuffer = new byte[CONST.MTU];
+        protected EndPoint _RemoteEP;
+        protected void EndReceiveFrom(IAsyncResult ar)
+        {
+            try
+            {
+                var receivecnt = _Socket.EndReceiveFrom(ar, ref _RemoteEP);
+                if (receivecnt > 0)
+                {
+                    if (_WaitForBroadcastResp)
+                    {
+                        var ep = GetIPEndPointFromPool();
+                        ep.Address = ((IPEndPoint)_RemoteEP).Address;
+                        ep.Port = ((IPEndPoint)_RemoteEP).Port;
+
+                        _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt), Remote = ep });
+                    }
+                    else
+                    {
+                        _Socket.Connect(_RemoteEP);
+                        _BroadcastEP = null;
+                        _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt) });
+                    }
+                }
+                if (!_ConnectWorkCanceled)
+                {
+                    BeginReceive();
+                }
+            }
+            catch (Exception e)
+            {
+                if (IsConnectionAlive)
+                {
+                    _ConnectWorkCanceled = true;
+                    PlatDependant.LogError(e);
+                }
+            }
+            _HaveDataToSend.Set();
+        }
+        protected AsyncCallback EndReceiveFromFunc;
+        protected void EndReceive(IAsyncResult ar)
+        {
+            try
+            {
+                var receivecnt = _Socket.EndReceive(ar);
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                if (receivecnt > 0)
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append("UDPClient Receiving ");
+                    sb.Append(receivecnt);
+                    for (int i = 0; i < receivecnt; ++i)
+                    {
+                        if (i % 32 == 0)
+                        {
+                            sb.AppendLine();
+                        }
+                        sb.Append(_ReceiveBuffer[i].ToString("X2"));
+                        sb.Append(" ");
+                    }
+                    PlatDependant.LogInfo(sb);
+                }
+#endif
+                if (receivecnt > 0)
+                {
+                    _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt) });
+                }
+                if (!_ConnectWorkCanceled)
+                {
+                    BeginReceive();
+                }
+            }
+            catch (Exception e)
+            {
+                if (IsConnectionAlive)
+                {
+                    _ConnectWorkCanceled = true;
+                    PlatDependant.LogError(e);
+                }
+            }
+            _HaveDataToSend.Set();
+        }
+        protected AsyncCallback EndReceiveFunc;
+        protected void BeginReceive()
+        {
+            try
+            {
+                if (_BroadcastEP != null)
+                {
+                    var cb = EndReceiveFromFunc = EndReceiveFromFunc ?? EndReceiveFrom;
+                    _Socket.BeginReceiveFrom(_ReceiveBuffer, 0, CONST.MTU, SocketFlags.None, ref _RemoteEP, cb, null);
+                }
+                else
+                {
+                    var cb = EndReceiveFunc = EndReceiveFunc ?? EndReceive;
+                    _Socket.BeginReceive(_ReceiveBuffer, 0, CONST.MTU, SocketFlags.None, cb, null);
+                }
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+            }
+        }
+
         protected int _ConnectionThreadID;
         protected void DoSendWork(MessageInfo minfo)
         {
@@ -640,82 +768,14 @@ namespace Capstones.Net
                         _PreStart(this);
                     }
                     byte[] receivebuffer = new byte[CONST.MTU];
-                    int receivecnt = 0;
-                    EndPoint broadcastRespEP;
                     if (_BroadcastEP != null && _BroadcastEP.AddressFamily == AddressFamily.InterNetworkV6)
                     {
-                        broadcastRespEP = new IPEndPoint(IPAddress.IPv6Any, 0);
+                        _RemoteEP = new IPEndPoint(IPAddress.IPv6Any, 0);
                     }
                     else
                     {
-                        broadcastRespEP = new IPEndPoint(IPAddress.Any, 0);
+                        _RemoteEP = new IPEndPoint(IPAddress.Any, 0);
                     }
-                    Action BeginReceive = () =>
-                    {
-                        try
-                        {
-                            if (_BroadcastEP != null)
-                            {
-                                _Socket.BeginReceiveFrom(receivebuffer, 0, CONST.MTU, SocketFlags.None, ref broadcastRespEP, ar =>
-                                {
-                                    try
-                                    {
-                                        receivecnt = _Socket.EndReceiveFrom(ar, ref broadcastRespEP);
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        if (IsConnectionAlive)
-                                        {
-                                            _ConnectWorkCanceled = true;
-                                            PlatDependant.LogError(e);
-                                        }
-                                    }
-                                    _HaveDataToSend.Set();
-                                }, null);
-                            }
-                            else
-                            {
-                                _Socket.BeginReceive(receivebuffer, 0, CONST.MTU, SocketFlags.None, ar =>
-                                {
-                                    try
-                                    {
-                                        receivecnt = _Socket.EndReceive(ar);
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-                                        if (receivecnt > 0)
-                                        {
-                                            var sb = new System.Text.StringBuilder();
-                                            sb.Append("UDPClient Receiving ");
-                                            sb.Append(receivecnt);
-                                            for (int i = 0; i < receivecnt; ++i)
-                                            {
-                                                if (i % 32 == 0)
-                                                {
-                                                    sb.AppendLine();
-                                                }
-                                                sb.Append(receivebuffer[i].ToString("X2"));
-                                                sb.Append(" ");
-                                            }
-                                            PlatDependant.LogInfo(sb);
-                                        }
-#endif
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        if (IsConnectionAlive)
-                                        {
-                                            _ConnectWorkCanceled = true;
-                                            PlatDependant.LogError(e);
-                                        }
-                                    }
-                                    _HaveDataToSend.Set();
-                                }, null);
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(e);
-                        }
-                    };
                     if (_OnReceive != null)
                     {
                         BeginReceive();
@@ -727,25 +787,18 @@ namespace Capstones.Net
                         {
                             if (_OnReceive != null)
                             {
-                                if (receivecnt > 0)
+                                RecvFromInfo recvmessages;
+                                while (_PendingRecvMessages.TryDequeue(out recvmessages))
                                 {
-                                    if (_BroadcastEP != null && _WaitForBroadcastResp)
+                                    var messages = recvmessages.Buffers;
+                                    var ep = recvmessages.Remote ?? _Socket.RemoteEndPoint;
+                                    for (int i = 0; i < messages.Count; ++i)
                                     {
-                                        _OnReceive(receivebuffer, receivecnt, broadcastRespEP);
-                                        receivecnt = 0;
-                                        BeginReceive();
+                                        var message = messages[i];
+                                        _OnReceive(message.Buffer, message.Length, ep);
+                                        message.Release();
                                     }
-                                    else
-                                    {
-                                        if (_BroadcastEP != null)
-                                        {
-                                            _Socket.Connect(broadcastRespEP);
-                                            _BroadcastEP = null;
-                                        }
-                                        _OnReceive(receivebuffer, receivecnt, _Socket.RemoteEndPoint);
-                                        receivecnt = 0;
-                                        BeginReceive();
-                                    }
+                                    ReturnIPEndPointToPool(recvmessages.Remote);
                                 }
                             }
 
