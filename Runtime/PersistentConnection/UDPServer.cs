@@ -128,106 +128,121 @@ namespace Capstones.Net
         protected KnownRemotes _KnownRemotesR;
         protected KnownRemotes _KnownRemotesS;
 
-        protected override void ConnectWork()
+        protected override IEnumerator ConnectWork()
         {
             try
             {
                 KnownRemotes remotes = null;
-                if (_ListenBroadcast)
+                try
                 {
-                    IPAddressInfo.Refresh();
-                    _SocketsBroadcast = new List<BroadcastSocketReceiveInfo>();
-                    remotes = new KnownRemotes();
-                    _KnownRemotes = new KnownRemotes();
-                    _KnownRemotesR = new KnownRemotes();
-                    _KnownRemotesS = new KnownRemotes();
-                }
-
-                if (_ListenBroadcast)
-                {
-                    var ipv4addrs = IPAddressInfo.LocalIPv4Addresses;
-                    for (int i = 0; i < ipv4addrs.Length; ++i)
+                    if (_ListenBroadcast)
                     {
-                        try
+                        IPAddressInfo.Refresh();
+                        _SocketsBroadcast = new List<BroadcastSocketReceiveInfo>();
+                        remotes = new KnownRemotes();
+                        _KnownRemotes = new KnownRemotes();
+                        _KnownRemotesR = new KnownRemotes();
+                        _KnownRemotesS = new KnownRemotes();
+                    }
+
+                    if (_ListenBroadcast)
+                    {
+                        var ipv4addrs = IPAddressInfo.LocalIPv4Addresses;
+                        for (int i = 0; i < ipv4addrs.Length; ++i)
                         {
-                            var address = ipv4addrs[i];
-                            var socket = new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-                            socket.Bind(new IPEndPoint(address, _Port));
-                            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
-                            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, new MulticastOption(IPAddressInfo.IPv4MulticastAddress, address));
-                            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 5);
-                            _SocketsBroadcast.Add(new BroadcastSocketReceiveInfo(this, socket, new IPEndPoint(IPAddress.Any, _Port)));
-                            if (_Socket == null)
+                            try
                             {
-                                _Socket = socket;
+                                var address = ipv4addrs[i];
+                                var socket = new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                                socket.Bind(new IPEndPoint(address, _Port));
+                                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
+                                socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, new MulticastOption(IPAddressInfo.IPv4MulticastAddress, address));
+                                socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 5);
+                                _SocketsBroadcast.Add(new BroadcastSocketReceiveInfo(this, socket, new IPEndPoint(IPAddress.Any, _Port)));
+                                if (_Socket == null)
+                                {
+                                    _Socket = socket;
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                PlatDependant.LogError(ipv4addrs[i]);
+                                PlatDependant.LogError(e);
                             }
                         }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(ipv4addrs[i]);
-                            PlatDependant.LogError(e);
-                        }
                     }
-                }
-                if (_Socket == null)
-                {
-                    var address4 = IPAddress.Any;
-                    _Socket = new Socket(address4.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-                    _Socket.Bind(new IPEndPoint(address4, _Port));
-                }
+                    if (_Socket == null)
+                    {
+                        var address4 = IPAddress.Any;
+                        _Socket = new Socket(address4.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                        _Socket.Bind(new IPEndPoint(address4, _Port));
+                    }
 
 #if NET_STANDARD_2_0 || NET_4_6 || !UNITY_ENGINE && !UNITY_5_3_OR_NEWER
-                // Notice: it is a pitty that unity does not support ipv6 multicast. (Unity 5.6)
-                if (_ListenBroadcast)
-                {
-                    var ipv6addrs = IPAddressInfo.LocalIPv6Addresses;
-                    for (int i = 0; i < ipv6addrs.Length; ++i)
+                    // Notice: it is a pitty that unity does not support ipv6 multicast. (Unity 5.6)
+                    if (_ListenBroadcast)
                     {
-                        try
+                        var ipv6addrs = IPAddressInfo.LocalIPv6Addresses;
+                        for (int i = 0; i < ipv6addrs.Length; ++i)
                         {
-                            var address = ipv6addrs[i];
-                            var maddr = IPAddressInfo.IPv6MulticastAddressOrganization;
-                            if (address.IsIPv6SiteLocal)
+                            try
                             {
-                                maddr = IPAddressInfo.IPv6MulticastAddressSiteLocal;
+                                var address = ipv6addrs[i];
+                                var maddr = IPAddressInfo.IPv6MulticastAddressOrganization;
+                                if (address.IsIPv6SiteLocal)
+                                {
+                                    maddr = IPAddressInfo.IPv6MulticastAddressSiteLocal;
+                                }
+                                else if (address.IsIPv6LinkLocal)
+                                {
+                                    maddr = IPAddressInfo.IPv6MulticastAddressLinkLocal;
+                                }
+                                var socket = new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                                socket.Bind(new IPEndPoint(address, _Port));
+                                var iindex = IPAddressInfo.GetInterfaceIndex(address);
+                                if (iindex == 0)
+                                {
+                                    socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.AddMembership, new IPv6MulticastOption(maddr));
+                                }
+                                else
+                                {
+                                    socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.AddMembership, new IPv6MulticastOption(maddr, iindex));
+                                }
+                                socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.MulticastTimeToLive, 5);
+                                _SocketsBroadcast.Add(new BroadcastSocketReceiveInfo(this, socket, new IPEndPoint(IPAddress.IPv6Any, _Port)));
+                                if (_Socket6 == null)
+                                {
+                                    _Socket6 = socket;
+                                }
                             }
-                            else if (address.IsIPv6LinkLocal)
+                            catch (Exception e)
                             {
-                                maddr = IPAddressInfo.IPv6MulticastAddressLinkLocal;
+                                PlatDependant.LogError(ipv6addrs[i]);
+                                PlatDependant.LogError(e);
                             }
-                            var socket = new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-                            socket.Bind(new IPEndPoint(address, _Port));
-                            var iindex = IPAddressInfo.GetInterfaceIndex(address);
-                            if (iindex == 0)
-                            {
-                                socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.AddMembership, new IPv6MulticastOption(maddr));
-                            }
-                            else
-                            {
-                                socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.AddMembership, new IPv6MulticastOption(maddr, iindex));
-                            }
-                            socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.MulticastTimeToLive, 5);
-                            _SocketsBroadcast.Add(new BroadcastSocketReceiveInfo(this, socket, new IPEndPoint(IPAddress.IPv6Any, _Port)));
-                            if (_Socket6 == null)
-                            {
-                                _Socket6 = socket;
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(ipv6addrs[i]);
-                            PlatDependant.LogError(e);
                         }
                     }
-                }
 #endif
-                if (_Socket6 == null)
-                {
-                    var address6 = IPAddress.IPv6Any;
-                    _Socket6 = new Socket(address6.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-                    _Socket6.Bind(new IPEndPoint(address6, _Port));
+                    if (_Socket6 == null)
+                    {
+                        var address6 = IPAddress.IPv6Any;
+                        _Socket6 = new Socket(address6.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                        _Socket6.Bind(new IPEndPoint(address6, _Port));
+                    }
                 }
-
+                catch (ThreadAbortException)
+                {
+                    if (!_PositiveMode)
+                    {
+                        Thread.ResetAbort();
+                    }
+                    yield break;
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                    yield break;
+                }
                 if (_ListenBroadcast)
                 {
                     for (int i = 0; i < _SocketsBroadcast.Count; ++i)
@@ -238,75 +253,108 @@ namespace Capstones.Net
                     int knownRemotesVersion = 0;
                     while (!_ConnectWorkCanceled)
                     {
-                        bool knownRemotesChanged = false;
-                        var curTick = Environment.TickCount;
-                        for (int i = 0; i < _SocketsBroadcast.Count; ++i)
+                        int waitinterval;
+                        try
                         {
-                            var bsinfo = _SocketsBroadcast[i];
-                            if (bsinfo.ReceiveCount > 0)
-                            {
-                                var ep = bsinfo.RemoteEP as IPEndPoint;
-                                //var remote = new IPEndPoint(ep.Address, ep.Port);
-                                remotes.Remotes[ep.Address] = new KnownRemote() { Address = ep.Address, LocalSocket = bsinfo.LocalSocket, LastTick = curTick };
-                                knownRemotesChanged = true;
-                            }
-                        }
-                        if (remotes.Remotes.Count > 100)
-                        {
-                            KnownRemote[] aremotes = new KnownRemote[remotes.Remotes.Count];
-                            remotes.Remotes.Values.CopyTo(aremotes, 0);
-                            Array.Sort(aremotes, (ra, rb) => ra.LastTick - rb.LastTick);
-                            for (int i = 0; i < aremotes.Length - 100; ++i)
-                            {
-                                var remote = aremotes[i];
-                                if (remote.LastTick + 15000 <= curTick)
-                                {
-                                    remotes.Remotes.Remove(remote.Address);
-                                }
-                                else
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                        // TODO: check dead knownRemotes...
-                        if (knownRemotesChanged)
-                        {
-                            _KnownRemotesR.Remotes.Clear();
-                            foreach (var kvp in remotes.Remotes)
-                            {
-                                _KnownRemotesR.Remotes[kvp.Key] = kvp.Value;
-                            }
-                            _KnownRemotesR.Version = ++knownRemotesVersion;
-                            _KnownRemotesR = System.Threading.Interlocked.Exchange(ref _KnownRemotes, _KnownRemotesR);
-                        }
-
-                        if (_OnReceive != null)
-                        {
+                            bool knownRemotesChanged = false;
+                            var curTick = Environment.TickCount;
                             for (int i = 0; i < _SocketsBroadcast.Count; ++i)
                             {
                                 var bsinfo = _SocketsBroadcast[i];
                                 if (bsinfo.ReceiveCount > 0)
                                 {
-                                    _OnReceive(bsinfo.ReceiveData, bsinfo.ReceiveCount, bsinfo.RemoteEP);
+                                    var ep = bsinfo.RemoteEP as IPEndPoint;
+                                    //var remote = new IPEndPoint(ep.Address, ep.Port);
+                                    remotes.Remotes[ep.Address] = new KnownRemote() { Address = ep.Address, LocalSocket = bsinfo.LocalSocket, LastTick = curTick };
+                                    knownRemotesChanged = true;
+                                }
+                            }
+                            if (remotes.Remotes.Count > 100)
+                            {
+                                KnownRemote[] aremotes = new KnownRemote[remotes.Remotes.Count];
+                                remotes.Remotes.Values.CopyTo(aremotes, 0);
+                                Array.Sort(aremotes, (ra, rb) => ra.LastTick - rb.LastTick);
+                                for (int i = 0; i < aremotes.Length - 100; ++i)
+                                {
+                                    var remote = aremotes[i];
+                                    if (remote.LastTick + 15000 <= curTick)
+                                    {
+                                        remotes.Remotes.Remove(remote.Address);
+                                    }
+                                    else
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+                            // TODO: check dead knownRemotes...
+                            if (knownRemotesChanged)
+                            {
+                                _KnownRemotesR.Remotes.Clear();
+                                foreach (var kvp in remotes.Remotes)
+                                {
+                                    _KnownRemotesR.Remotes[kvp.Key] = kvp.Value;
+                                }
+                                _KnownRemotesR.Version = ++knownRemotesVersion;
+                                _KnownRemotesR = System.Threading.Interlocked.Exchange(ref _KnownRemotes, _KnownRemotesR);
+                            }
+
+                            if (_OnReceive != null)
+                            {
+                                for (int i = 0; i < _SocketsBroadcast.Count; ++i)
+                                {
+                                    var bsinfo = _SocketsBroadcast[i];
+                                    if (bsinfo.ReceiveCount > 0)
+                                    {
+                                        _OnReceive(bsinfo.ReceiveData, bsinfo.ReceiveCount, bsinfo.RemoteEP);
+                                    }
+                                }
+                            }
+                            for (int i = 0; i < _SocketsBroadcast.Count; ++i)
+                            {
+                                var bsinfo = _SocketsBroadcast[i];
+                                if (bsinfo.ReceiveResult == null || bsinfo.ReceiveResult.IsCompleted)
+                                {
+                                    bsinfo.BeginReceive();
+                                }
+                            }
+
+                            waitinterval = int.MinValue;
+                            if (_OnUpdate != null)
+                            {
+                                waitinterval = _OnUpdate(this);
+                            }
+
+                            if (waitinterval == int.MinValue)
+                            {
+                                waitinterval = _UpdateInterval;
+                                if (waitinterval < 0)
+                                {
+                                    waitinterval = CONST.MAX_WAIT_MILLISECONDS;
                                 }
                             }
                         }
-                        for (int i = 0; i < _SocketsBroadcast.Count; ++i)
+                        catch (ThreadAbortException)
                         {
-                            var bsinfo = _SocketsBroadcast[i];
-                            if (bsinfo.ReceiveResult == null || bsinfo.ReceiveResult.IsCompleted)
+                            if (!_PositiveMode)
                             {
-                                bsinfo.BeginReceive();
+                                Thread.ResetAbort();
                             }
+                            yield break;
                         }
-
-                        if (_OnUpdate != null)
+                        catch (Exception e)
                         {
-                            _OnUpdate(this);
+                            PlatDependant.LogError(e);
+                            yield break;
                         }
-
-                        _HaveDataToSend.WaitOne(_UpdateInterval);
+                        if (_PositiveMode)
+                        {
+                            yield return null;
+                        }
+                        else
+                        {
+                            _HaveDataToSend.WaitOne(waitinterval);
+                        }
                     }
                 }
                 else
@@ -431,53 +479,69 @@ namespace Capstones.Net
                     BeginReceive6();
                     while (!_ConnectWorkCanceled)
                     {
-                        if (_OnReceive != null)
+                        int waitinterval;
+                        try
                         {
-                            if (dcnt4 > 0)
+                            if (_OnReceive != null)
                             {
-                                _OnReceive(data4, dcnt4, sender4);
-                                dcnt4 = 0;
+                                if (dcnt4 > 0)
+                                {
+                                    _OnReceive(data4, dcnt4, sender4);
+                                    dcnt4 = 0;
+                                }
+                                if (dcnt6 > 0)
+                                {
+                                    _OnReceive(data6, dcnt6, sender6);
+                                    dcnt6 = 0;
+                                }
                             }
-                            if (dcnt6 > 0)
+                            if (readar4 == null || readar4.IsCompleted)
                             {
-                                _OnReceive(data6, dcnt6, sender6);
-                                dcnt6 = 0;
+                                BeginReceive4();
                             }
-                        }
-                        if (readar4 == null || readar4.IsCompleted)
-                        {
-                            BeginReceive4();
-                        }
-                        if (readar6 == null || readar6.IsCompleted)
-                        {
-                            BeginReceive6();
-                        }
+                            if (readar6 == null || readar6.IsCompleted)
+                            {
+                                BeginReceive6();
+                            }
 
-                        int waitinterval = int.MinValue;
-                        if (_OnUpdate != null)
-                        {
-                            waitinterval = _OnUpdate(this);
-                        }
-
-                        if (waitinterval == int.MinValue)
-                        {
-                            waitinterval = _UpdateInterval;
-                            if (waitinterval < 0)
+                            waitinterval = int.MinValue;
+                            if (_OnUpdate != null)
                             {
-                                waitinterval = CONST.MAX_WAIT_MILLISECONDS;
+                                waitinterval = _OnUpdate(this);
+                            }
+
+                            if (waitinterval == int.MinValue)
+                            {
+                                waitinterval = _UpdateInterval;
+                                if (waitinterval < 0)
+                                {
+                                    waitinterval = CONST.MAX_WAIT_MILLISECONDS;
+                                }
                             }
                         }
-                        _HaveDataToSend.WaitOne(waitinterval);
+                        catch (ThreadAbortException)
+                        {
+                            if (!_PositiveMode)
+                            {
+                                Thread.ResetAbort();
+                            }
+                            yield break;
+                        }
+                        catch (Exception e)
+                        {
+                            PlatDependant.LogError(e);
+                            yield break;
+                        }
+                        if (_PositiveMode)
+                        {
+                            yield return null;
+                        }
+                        else
+                        {
+                            _HaveDataToSend.WaitOne(waitinterval);
+                        }
                     }
                 }
-            }
-            catch (ThreadAbortException)
-            {
-                Thread.ResetAbort();
-            }
-            catch (Exception e)
-            {
-                PlatDependant.LogError(e);
             }
             finally
             {

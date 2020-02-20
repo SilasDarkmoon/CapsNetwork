@@ -120,38 +120,78 @@ namespace Capstones.Net
             return null;
         }
 
-        protected override void ConnectWork()
+        protected override IEnumerator ConnectWork()
         {
             try
             {
-                var address4 = IPAddress.Any;
-                _Socket = new Socket(address4.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                _Socket.Bind(new IPEndPoint(address4, _Port));
-                _Socket.Listen(CONST.MAX_SERVER_PENDING_CONNECTIONS);
+                try
+                {
+                    var address4 = IPAddress.Any;
+                    _Socket = new Socket(address4.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    _Socket.Bind(new IPEndPoint(address4, _Port));
+                    _Socket.Listen(CONST.MAX_SERVER_PENDING_CONNECTIONS);
 
-                var address6 = IPAddress.IPv6Any;
-                _Socket6 = new Socket(address6.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                _Socket6.Bind(new IPEndPoint(address6, _Port));
-                _Socket6.Listen(CONST.MAX_SERVER_PENDING_CONNECTIONS);
+                    var address6 = IPAddress.IPv6Any;
+                    _Socket6 = new Socket(address6.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    _Socket6.Bind(new IPEndPoint(address6, _Port));
+                    _Socket6.Listen(CONST.MAX_SERVER_PENDING_CONNECTIONS);
 
-                BeginAccept4();
-                BeginAccept6();
-
+                    BeginAccept4();
+                    BeginAccept6();
+                }
+                catch (ThreadAbortException)
+                {
+                    if (!_PositiveMode)
+                    {
+                        Thread.ResetAbort();
+                    }
+                    yield break;
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                    yield break;
+                }
                 while (!_ConnectWorkCanceled)
                 {
-                    _HaveDataToSend.WaitOne(CONST.MAX_WAIT_MILLISECONDS);
+                    int waitinterval;
+                    try
+                    {
+                        waitinterval = int.MinValue;
+                        if (_OnUpdate != null)
+                        {
+                            waitinterval = _OnUpdate(this);
+                        }
+                        if (waitinterval < 0)
+                        {
+                            waitinterval = CONST.MAX_WAIT_MILLISECONDS;
+                        }
+                    }
+                    catch (ThreadAbortException)
+                    {
+                        if (!_PositiveMode)
+                        {
+                            Thread.ResetAbort();
+                        }
+                        yield break;
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+                        yield break;
+                    }
+                    if (_PositiveMode)
+                    {
+                        yield return null;
+                    }
+                    else
+                    {
+                        _HaveDataToSend.WaitOne(waitinterval);
+                    }
                 }
 
                 //_Socket.Shutdown(SocketShutdown.Both);
                 //_Socket6.Shutdown(SocketShutdown.Both);
-            }
-            catch (ThreadAbortException)
-            {
-                Thread.ResetAbort();
-            }
-            catch (Exception e)
-            {
-                PlatDependant.LogError(e);
             }
             finally
             {

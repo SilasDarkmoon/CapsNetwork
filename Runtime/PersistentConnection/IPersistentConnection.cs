@@ -22,11 +22,11 @@ namespace Capstones.Net
         bool IsConnectionAlive { get; }
         EndPoint RemoteEndPoint { get; }
         ReceiveHandler OnReceive { get; set; }
+        UpdateHandler OnUpdate { get; set; }
         void Send(IPooledBuffer data, int cnt);
         void Send(ValueList<PooledBufferSpan> data); // the buffer in data do not need to AddRef and can be released directly.
         void Send(object data, SendSerializer serializer);
         //SendCompleteHandler OnSendComplete { get; set; }
-        UpdateHandler OnUpdate { get; set; }
     }
     public interface IServerConnection : IPersistentConnection
     {
@@ -37,6 +37,12 @@ namespace Capstones.Net
     {
         SendHandler OnSend { get; set; }
         void SendRaw(byte[] data, int cnt, Action<bool> onComplete);
+    }
+
+    public interface IPositiveConnection
+    {
+        bool PositiveMode { get; set; }
+        void Step();
     }
 
     public interface IPersistentConnectionServer

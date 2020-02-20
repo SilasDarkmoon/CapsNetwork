@@ -22,7 +22,7 @@ using TaskProgress = Capstones.UnityEngineEx.TaskProgress;
 
 namespace Capstones.Net
 {
-    public class TCPClient : ICustomSendConnection, IDisposable
+    public class TCPClient : ICustomSendConnection, IPositiveConnection, IDisposable
     {
         private string _Url;
         protected ReceiveHandler _OnReceive;
@@ -30,6 +30,7 @@ namespace Capstones.Net
         protected CommonHandler _PreDispose;
         protected SendHandler _OnSend;
         protected UpdateHandler _OnUpdate;
+        protected bool _PositiveMode;
 
         protected TCPClient() { }
         public TCPClient(string url)
@@ -160,6 +161,24 @@ namespace Capstones.Net
                 }
             }
         }
+        public bool PositiveMode
+        {
+            get { return _PositiveMode; }
+            set
+            {
+                if (value != _PositiveMode)
+                {
+                    if (IsConnectionAlive)
+                    {
+                        PlatDependant.LogError("Cannot change PositiveMode when connection started");
+                    }
+                    else
+                    {
+                        _PositiveMode = value;
+                    }
+                }
+            }
+        }
 
         protected volatile bool _ConnectWorkRunning;
         protected volatile bool _ConnectWorkCanceled;
@@ -180,12 +199,37 @@ namespace Capstones.Net
         {
             get { return _ConnectWorkRunning && !_ConnectWorkCanceled; }
         }
+        protected IEnumerator _ConnectWork;
         public void StartConnect()
         {
             if (!IsConnectionAlive)
             {
                 _ConnectWorkRunning = true;
-                PlatDependant.RunBackground(prog => ConnectWork());
+                if (_PositiveMode)
+                {
+                    _ConnectWork = ConnectWork();
+                }
+                else
+                {
+                    PlatDependant.RunBackground(prog =>
+                    {
+                        var work = ConnectWork();
+                        while (work.MoveNext()) ;
+                    });
+                }
+            }
+        }
+        public void Step()
+        {
+            if (_PositiveMode)
+            {
+                if (_ConnectWork != null)
+                {
+                    if (!_ConnectWork.MoveNext())
+                    {
+                        _ConnectWork = null;
+                    }
+                }
             }
         }
 
@@ -198,7 +242,7 @@ namespace Capstones.Net
         /// <returns>false means the data is dropped because to many messages is pending to be sent.</returns>
         public virtual bool TrySend(MessageInfo minfo)
         {
-            if (Thread.CurrentThread.ManagedThreadId == _ConnectionThreadID)
+            if (Thread.CurrentThread.ManagedThreadId == _ConnectionThreadID || _PositiveMode)
             {
                 DoSendWork(minfo);
             }
@@ -343,12 +387,28 @@ namespace Capstones.Net
             }
             message.Release();
         }
-        protected virtual void ConnectWork()
+        protected virtual IEnumerator ConnectWork()
         {
             try
             {
                 _ConnectionThreadID = Thread.CurrentThread.ManagedThreadId;
-                PrepareSocket();
+                try
+                {
+                    PrepareSocket();
+                }
+                catch (ThreadAbortException)
+                {
+                    if (!_PositiveMode)
+                    {
+                        Thread.ResetAbort();
+                    }
+                    yield break;
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                    yield break;
+                }
                 if (_Socket != null)
                 {
                     byte[] receivebuffer = new byte[CONST.MTU];
@@ -401,44 +461,59 @@ namespace Capstones.Net
                     BeginReceive();
                     while (!_ConnectWorkCanceled)
                     {
-                        if (receivecnt > 0)
+                        int waitinterval;
+                        try
                         {
-                            if (_OnReceive != null)
+                            if (receivecnt > 0)
                             {
-                                _OnReceive(receivebuffer, receivecnt, _Socket.RemoteEndPoint);
+                                if (_OnReceive != null)
+                                {
+                                    _OnReceive(receivebuffer, receivecnt, _Socket.RemoteEndPoint);
+                                }
+                                receivecnt = 0;
+                                BeginReceive();
                             }
-                            receivecnt = 0;
-                            BeginReceive();
-                        }
 
-                        MessageInfo minfo;
-                        while (_PendingSendMessages.TryDequeue(out minfo))
-                        {
-                            DoSendWork(minfo);
-                        }
+                            MessageInfo minfo;
+                            while (_PendingSendMessages.TryDequeue(out minfo))
+                            {
+                                DoSendWork(minfo);
+                            }
 
-                        int waitinterval = int.MinValue;
-                        if (_OnUpdate != null)
-                        {
-                            waitinterval = _OnUpdate(this);
+                            waitinterval = int.MinValue;
+                            if (_OnUpdate != null)
+                            {
+                                waitinterval = _OnUpdate(this);
+                            }
+                            if (waitinterval < 0)
+                            {
+                                waitinterval = CONST.MAX_WAIT_MILLISECONDS;
+                            }
                         }
-                        if (waitinterval < 0)
+                        catch (ThreadAbortException)
                         {
-                            waitinterval = CONST.MAX_WAIT_MILLISECONDS;
+                            if (!_PositiveMode)
+                            {
+                                Thread.ResetAbort();
+                            }
+                            yield break;
                         }
-
-                        _HaveDataToSend.WaitOne(waitinterval);
+                        catch (Exception e)
+                        {
+                            PlatDependant.LogError(e);
+                            yield break;
+                        }
+                        if (_PositiveMode)
+                        {
+                            yield return null;
+                        }
+                        else
+                        {
+                            _HaveDataToSend.WaitOne(waitinterval);
+                        }
                     }
                     _Socket.Shutdown(SocketShutdown.Both);
                 }
-            }
-            catch (ThreadAbortException)
-            {
-                Thread.ResetAbort();
-            }
-            catch (Exception e)
-            {
-                PlatDependant.LogError(e);
             }
             finally
             {
@@ -470,7 +545,19 @@ namespace Capstones.Net
             if (_ConnectWorkRunning)
             {
                 _ConnectWorkCanceled = true;
-                _HaveDataToSend.Set();
+                if (_PositiveMode)
+                {
+                    var disposable = _ConnectWork as IDisposable;
+                    if (disposable != null)
+                    {
+                        disposable.Dispose();
+                    }
+                    _ConnectWork = null;
+                }
+                else
+                {
+                    _HaveDataToSend.Set();
+                }
             }
             if (!inFinalizer)
             {
