@@ -490,6 +490,10 @@ namespace Capstones.Net
                             PlatDependant.LogError(e);
                             yield break;
                         }
+                        if (_HaveDataToSend.WaitOne(0))
+                        {
+                            continue;
+                        }
                         if (_PositiveMode)
                         {
                             yield return null;
@@ -555,6 +559,10 @@ namespace Capstones.Net
                         {
                             PlatDependant.LogError(e);
                             yield break;
+                        }
+                        if (_HaveDataToSend.WaitOne(0))
+                        {
+                            continue;
                         }
                         if (_PositiveMode)
                         {
