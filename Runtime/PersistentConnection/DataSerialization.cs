@@ -33,7 +33,7 @@ namespace Capstones.Net
         }
         protected void OnReceiveData(byte[] data, int offset, int cnt)
         {
-            TryReadBlock();
+            while (TryReadBlock()) ;
         }
 
         protected Stream _InputStream;

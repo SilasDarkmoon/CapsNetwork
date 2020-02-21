@@ -406,8 +406,12 @@ namespace Capstones.Net
                                 }
                                 else if (_ParsingVariant == ParsingVariant.UnknownSize)
                                 {
-                                    while (_ParsingVariant == ParsingVariant.UnknownSize && BufferedSize > 0)
+                                    while (true)
                                     {
+                                        if (BufferedSize <= 0)
+                                        {
+                                            return false;
+                                        }
                                         _CodedInputStream.ReadRawBytes(_ParsingVariantData, 1);
                                         var data = _ParsingVariantData[0];
                                         uint partVal;
@@ -423,20 +427,17 @@ namespace Capstones.Net
                                         _Size += (int)partVal;
                                         if (data < 128)
                                         {
-                                            if (_Size < 0)
-                                            {
-                                                ResetReadBlockContext();
-                                            }
-                                            else
-                                            {
-                                                _ParsingVariant = ParsingVariant.UnknownContent;
-                                                _ParsingVariantIndex = 0;
-                                            }
+                                            break;
                                         }
                                     }
-                                    if (_ParsingVariant == ParsingVariant.UnknownSize)
+                                    if (_Size <= 0)
                                     {
-                                        return false;
+                                        ResetReadBlockContext();
+                                    }
+                                    else
+                                    {
+                                        _ParsingVariant = ParsingVariant.UnknownContent;
+                                        _ParsingVariantIndex = 0;
                                     }
                                 }
                                 else if (_ParsingVariant == ParsingVariant.UnknownContent)
@@ -495,35 +496,15 @@ namespace Capstones.Net
                                                 _Size = (int)data;
                                                 break;
                                         }
-                                        if (_ParsingVariant == ParsingVariant.Size)
-                                        {
-                                            if (_Size < 0)
-                                            {
-                                                FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
-                                                ResetReadBlockContext();
-                                                return true;
-                                            }
-                                            else if (_Size > CONST.MAX_MESSAGE_LENGTH)
-                                            {
-                                                _ParsingVariant = ParsingVariant.Content;
-                                                _ParsingVariantIndex = 0;
-                                            }
-                                            else
-                                            {
-                                                _ParsingVariant = ParsingVariant.Content;
-                                                _ParsingVariantIndex = -1;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            _ParsingVariant = 0;
-                                            _ParsingVariantIndex = 0;
-                                        }
                                     }
                                     else
                                     {
-                                        while (_ParsingVariant != 0 && _ParsingVariant != ParsingVariant.Content && BufferedSize > 0)
+                                        while (true)
                                         {
+                                            if (BufferedSize <= 0)
+                                            {
+                                                return false;
+                                            }
                                             _CodedInputStream.ReadRawBytes(_ParsingVariantData, 1);
                                             var data = _ParsingVariantData[0];
                                             uint partVal;
@@ -559,36 +540,39 @@ namespace Capstones.Net
                                             }
                                             if (data < 128)
                                             {
-                                                if (_ParsingVariant == ParsingVariant.Size)
-                                                {
-                                                    if (_Size < 0)
-                                                    {
-                                                        FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
-                                                        ResetReadBlockContext();
-                                                        return true;
-                                                    }
-                                                    else if (_Size > CONST.MAX_MESSAGE_LENGTH)
-                                                    {
-                                                        _ParsingVariant = ParsingVariant.Content;
-                                                        _ParsingVariantIndex = 0;
-                                                    }
-                                                    else
-                                                    {
-                                                        _ParsingVariant = ParsingVariant.Content;
-                                                        _ParsingVariantIndex = -1;
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    _ParsingVariant = 0;
-                                                    _ParsingVariantIndex = 0;
-                                                }
+                                                break;
                                             }
                                         }
-                                        if (_ParsingVariant != 0 && _ParsingVariant != ParsingVariant.Content)
+                                    }
+                                    if (_ParsingVariant == ParsingVariant.Size)
+                                    {
+                                        if (_Size < 0)
                                         {
-                                            return false;
+                                            FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
+                                            ResetReadBlockContext();
+                                            return true;
                                         }
+                                        else if (_Size == 0)
+                                        {
+                                            FireReceiveBlock(_ReadBuffer, 0, _Type, _Flags, _Seq, _SSeq);
+                                            ResetReadBlockContext();
+                                            return true;
+                                        }
+                                        else if (_Size > CONST.MAX_MESSAGE_LENGTH)
+                                        {
+                                            _ParsingVariant = ParsingVariant.Content;
+                                            _ParsingVariantIndex = 0;
+                                        }
+                                        else
+                                        {
+                                            _ParsingVariant = ParsingVariant.Content;
+                                            _ParsingVariantIndex = -1;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        _ParsingVariant = 0;
+                                        _ParsingVariantIndex = 0;
                                     }
                                 }
                             }

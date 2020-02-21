@@ -154,7 +154,8 @@ namespace Capstones.Net
                 if (receivecnt > 0)
                 {
                     var sb = new System.Text.StringBuilder();
-                    sb.Append("UDPServer Receiving (IPv4) ");
+                    sb.Append(Environment.TickCount);
+                    sb.Append(" UDPServer Receiving (IPv4) ");
                     sb.Append(receivecnt);
                     for (int i = 0; i < receivecnt; ++i)
                     {

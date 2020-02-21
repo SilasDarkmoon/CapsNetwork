@@ -213,10 +213,28 @@ namespace Capstones.Net
                 // 3, receive
                 if (_Started)
                 {
-                    int recvcnt = _KCP.kcp_recv(_RecvBuffer, CONST.MTU);
-                    if (_OnReceive != null)
+                    int recvcnt;
+                    while ((recvcnt = _KCP.kcp_recv(_RecvBuffer, CONST.MTU)) > 0)
                     {
-                        if (recvcnt > 0)
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                        {
+                            var sb = new System.Text.StringBuilder();
+                            sb.Append(Environment.TickCount);
+                            sb.Append(" KCP Server Recv ");
+                            sb.Append(recvcnt);
+                            for (int i = 0; i < recvcnt; ++i)
+                            {
+                                if (i % 32 == 0)
+                                {
+                                    sb.AppendLine();
+                                }
+                                sb.Append(_RecvBuffer[i].ToString("X2"));
+                                sb.Append(" ");
+                            }
+                            PlatDependant.LogInfo(sb);
+                        }
+#endif
+                        if (_OnReceive != null)
                         {
                             _OnReceive(_RecvBuffer, recvcnt, _Info.EP);
                         }
@@ -241,6 +259,24 @@ namespace Capstones.Net
                 {
                     if (_KCP.kcp_input(data, cnt) == 0)
                     {
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                        {
+                            var sb = new System.Text.StringBuilder();
+                            sb.Append(Environment.TickCount);
+                            sb.Append(" KCP Server Feed ");
+                            sb.Append(cnt);
+                            for (int i = 0; i < cnt; ++i)
+                            {
+                                if (i % 32 == 0)
+                                {
+                                    sb.AppendLine();
+                                }
+                                sb.Append(data[i].ToString("X2"));
+                                sb.Append(" ");
+                            }
+                            PlatDependant.LogInfo(sb);
+                        }
+#endif
                         if (!ep.Equals(EP))
                         {
                             EP = ep;

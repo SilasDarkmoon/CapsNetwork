@@ -432,7 +432,8 @@ namespace Capstones.Net
 #if DEBUG_PERSIST_CONNECT_LOW_LEVEL
                 {
                     var sb = new System.Text.StringBuilder();
-                    sb.Append("UDPClient Sending ");
+                    sb.Append(Environment.TickCount);
+                    sb.Append(" UDPClient Sending ");
                     sb.Append(cnt);
                     for (int i = 0; i < cnt; ++i)
                     {

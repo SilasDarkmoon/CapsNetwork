@@ -112,6 +112,9 @@ namespace Capstones.Net
 
         protected void ReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq)
         {
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+            PlatDependant.LogError(Environment.TickCount.ToString() + $" Receive(seq{seq} sseq{sseq})");
+#endif
             _LastReceiveTick = System.Environment.TickCount;
             if (buffer != null && size >= 0 && size <= buffer.Length)
             {
@@ -358,6 +361,9 @@ namespace Capstones.Net
                     seq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
                     sseq = seq_pingback;
                 }
+#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+                PlatDependant.LogError(Environment.TickCount.ToString() + $" Write(seq{seq} sseq{sseq})");
+#endif
                 // write obj
                 var stream = rw.Write(obj);
                 if (stream != null)
