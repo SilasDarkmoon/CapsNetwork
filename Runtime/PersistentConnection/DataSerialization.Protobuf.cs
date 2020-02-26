@@ -112,6 +112,11 @@ namespace Capstones.Net
             Attach(input);
         }
 
+        protected override void FireReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq)
+        {
+            ResetReadBlockContext();
+            base.FireReceiveBlock(buffer, size, type, flags, seq, sseq);
+        }
         public override void ReadBlock()
         {
             while (true)
@@ -761,6 +766,8 @@ namespace Capstones.Net
 
     public class ProtobufComposer : DataComposer
     {
+        public bool VariantHeader;
+
         private const int _CODED_STREAM_POOL_SLOT = 4;
         private static Google.Protobuf.CodedOutputStream[] _CodedOutputStreamPool = new Google.Protobuf.CodedOutputStream[_CODED_STREAM_POOL_SLOT];
         private static int _CodedOutputStreamPoolCnt = 0;
@@ -814,14 +821,28 @@ namespace Capstones.Net
                 codedstream.Reinit(data);
                 data.InsertMode = true;
                 data.Seek(0, SeekOrigin.Begin);
-                codedstream.WriteTag(1, Google.Protobuf.WireFormat.WireType.Fixed32);
-                codedstream.WriteFixed32(type);
-                codedstream.WriteTag(2, Google.Protobuf.WireFormat.WireType.Fixed32);
-                codedstream.WriteFixed32(flags);
-                codedstream.WriteTag(3, Google.Protobuf.WireFormat.WireType.Fixed32);
-                codedstream.WriteFixed32(seq);
-                codedstream.WriteTag(4, Google.Protobuf.WireFormat.WireType.Fixed32);
-                codedstream.WriteFixed32(sseq);
+                if (VariantHeader)
+                {
+                    codedstream.WriteTag(1, Google.Protobuf.WireFormat.WireType.Varint);
+                    codedstream.WriteUInt32(type);
+                    codedstream.WriteTag(2, Google.Protobuf.WireFormat.WireType.Varint);
+                    codedstream.WriteUInt32(flags);
+                    codedstream.WriteTag(3, Google.Protobuf.WireFormat.WireType.Varint);
+                    codedstream.WriteUInt32(seq);
+                    codedstream.WriteTag(4, Google.Protobuf.WireFormat.WireType.Varint);
+                    codedstream.WriteUInt32(sseq);
+                }
+                else
+                {
+                    codedstream.WriteTag(1, Google.Protobuf.WireFormat.WireType.Fixed32);
+                    codedstream.WriteFixed32(type);
+                    codedstream.WriteTag(2, Google.Protobuf.WireFormat.WireType.Fixed32);
+                    codedstream.WriteFixed32(flags);
+                    codedstream.WriteTag(3, Google.Protobuf.WireFormat.WireType.Fixed32);
+                    codedstream.WriteFixed32(seq);
+                    codedstream.WriteTag(4, Google.Protobuf.WireFormat.WireType.Fixed32);
+                    codedstream.WriteFixed32(sseq);
+                }
                 codedstream.WriteTag(5, Google.Protobuf.WireFormat.WireType.LengthDelimited);
                 codedstream.WriteLength(size);
                 codedstream.Flush();
@@ -878,6 +899,11 @@ namespace Capstones.Net
         }
         public override object Read(uint type, NativeBufferStream buffer, int offset, int cnt)
         {
+            var frombase = base.Read(type, buffer, offset, cnt);
+            if (frombase != null)
+            {
+                return frombase;
+            }
             Google.Protobuf.MessageParser parser;
             DataParsers.TryGetValue(type, out parser);
             if (parser != null)
@@ -913,6 +939,11 @@ namespace Capstones.Net
         }
         public override NativeBufferStream Write(object data)
         {
+            var frombase = base.Write(data);
+            if (frombase != null)
+            {
+                return frombase;
+            }
             Google.Protobuf.IMessage message = data as Google.Protobuf.IMessage;
             if (message != null)
             {

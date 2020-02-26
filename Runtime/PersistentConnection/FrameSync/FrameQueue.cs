@@ -69,21 +69,21 @@ namespace Capstones.Net.FrameSync
             TimeScale = -1.0f;
         }
 
-        private PersistentConnectionRequestFactoryBase _ReqFac;
+        private IReqServer _ReqListener;
         public void Detach()
         {
-            if (_ReqFac != null)
+            if (_ReqListener != null)
             {
-                _ReqFac.OnFilterMessage -= OnFilterMessage;
+                _ReqListener.RemoveHandler(OnFilterMessage);
             }
         }
-        public void Attach(PersistentConnectionRequestFactoryBase reqfac)
+        public void Attach(IReqServer listener)
         {
             Detach();
-            _ReqFac = reqfac;
-            if (reqfac != null)
+            _ReqListener = listener;
+            if (listener != null)
             {
-                reqfac.OnFilterMessage += OnFilterMessage;
+                listener.RegHandler(OnFilterMessage);
             }
         }
 
@@ -137,9 +137,11 @@ namespace Capstones.Net.FrameSync
             }
             return true;
         }
-        private bool OnFilterMessage(uint type, uint seq, object raw)
+
+        [EventOrder(10)]
+        private object OnFilterMessage(IReqClient from, object raw, uint seq)
         {
-            return InputMessage(raw);
+            return InputMessage(raw) ? null : new PredefinedMessages.Raw();
         }
 
 #region In Main Thread

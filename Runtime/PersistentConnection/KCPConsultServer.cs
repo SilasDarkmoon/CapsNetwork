@@ -20,11 +20,11 @@ namespace Capstones.Net
             {
                 _PendingConv = pendingconv;
                 _Conv = 0;
-                _KCP = KCPLib.kcp_create(1, (IntPtr)_InfoHandle);
+                _KCP = KCPLib.CreateConnection(1, (IntPtr)_InfoHandle);
                 _Ready = true;
 
-                _KCP.kcp_setoutput(Func_KCPOutput);
-                _KCP.kcp_nodelay(1, 10, 2, 1);
+                _KCP.SetOutput(Func_KCPOutput);
+                _KCP.NoDelay(1, 10, 2, 1);
                 // set minrto to 10?
             }
 
@@ -44,7 +44,7 @@ namespace Capstones.Net
                         {
                             if (EP != null && EP.Equals(ep))
                             { // this means the ack-packet or something else.
-                                return _KCP.kcp_input(data, cnt) == 0;
+                                return _KCP.Input(data, cnt) == 0;
                             }
                             else
                             { // client should provide a guid for new connection
@@ -55,7 +55,7 @@ namespace Capstones.Net
                         {
                             if (_PendingGUID == Guid.Empty)
                             { // accept this connection. bind this connection with the guid.
-                                if (_KCP.kcp_input(data, cnt) == 0)
+                                if (_KCP.Input(data, cnt) == 0)
                                 {
                                     _PendingGUID = guid;
                                     EP = ep;
@@ -78,9 +78,10 @@ namespace Capstones.Net
                                             buffer[i] = (byte)((pconv >> ((3 - i) * 8)) & 0xFF);
                                         }
                                     }
-                                    _KCP.kcp_send(buffer, 4);
+                                    _KCP.Send(buffer, 4);
                                     pinfo.Release();
                                     _Connected = true;
+                                    FireOnConnected();
                                     return true;
                                 }
                                 else
@@ -92,7 +93,7 @@ namespace Capstones.Net
                             { // check the guid.
                                 if (_PendingGUID == guid)
                                 {
-                                    if (_KCP.kcp_input(data, cnt) == 0)
+                                    if (_KCP.Input(data, cnt) == 0)
                                     {
                                         if (!ep.Equals(EP))
                                         { // check the ep changed?
@@ -118,11 +119,11 @@ namespace Capstones.Net
                         { // the first packet from accepted connection!
                             // change the kcp to real conv-id.
                             _Conv = conv;
-                            _KCP.kcp_release();
-                            _KCP = KCPLib.kcp_create(conv, (IntPtr)_InfoHandle);
+                            _KCP.Release();
+                            _KCP = KCPLib.CreateConnection(conv, (IntPtr)_InfoHandle);
 
-                            _KCP.kcp_setoutput(Func_KCPOutput);
-                            _KCP.kcp_nodelay(1, 10, 2, 1);
+                            _KCP.SetOutput(Func_KCPOutput);
+                            _KCP.NoDelay(1, 10, 2, 1);
                             // set minrto to 10?
 
                             if (!ep.Equals(EP))
@@ -131,7 +132,7 @@ namespace Capstones.Net
                             }
 
                             // Feed the data.
-                            return _KCP.kcp_input(data, cnt) == 0;
+                            return _KCP.Input(data, cnt) == 0;
                         }
                         else
                         { // this packet is for other connection.
@@ -148,8 +149,8 @@ namespace Capstones.Net
             {
                 if (_Conv == 0)
                 {
-                    _KCP.kcp_update((uint)Environment.TickCount);
-                    _KCP.kcp_recv(_RecvBuffer, CONST.MTU);
+                    _KCP.Update((uint)Environment.TickCount);
+                    _KCP.Receive(_RecvBuffer, CONST.MTU);
 
                     if (_OnUpdate != null)
                     {
@@ -200,10 +201,17 @@ namespace Capstones.Net
 
         public KCPConsultServer(int port) : base(port) { }
 
-        protected static int _LastConv = 1;
+        protected int _LastConv = 1;
         public override KCPServer.ServerConnection PrepareConnection()
         {
             var con = new ServerConnection(this, (uint)Interlocked.Increment(ref _LastConv));
+            Action onChildConnected = null;
+            onChildConnected = () =>
+            {
+                con.OnConnected -= onChildConnected;
+                FireOnConnected(con);
+            };
+            con.OnConnected += onChildConnected;
             lock (_Connections)
             {
                 _Connections.Add(con);
@@ -212,13 +220,12 @@ namespace Capstones.Net
         }
     }
 
-    public static partial class PersistentConnectionFactory
+    public static partial class ConnectionFactory
     {
         private static RegisteredCreator _Reg_KCP = new RegisteredCreator("kcp"
-            , url => new KCPConsultClient(url)
-            , url =>
+            , uri => new KCPConsultClient(uri.ToString())
+            , uri =>
             {
-                var uri = new Uri(url);
                 var port = uri.Port;
                 return new KCPConsultServer(port);
             });

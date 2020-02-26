@@ -1,6 +1,7 @@
 {
     "name": "CapsNetwork",
     "references": [
+        "ResManagerEntry",
         "ResManager",
         "Unity.Collections.Concurrent",
         "JsonObject",

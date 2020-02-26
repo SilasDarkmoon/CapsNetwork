@@ -920,10 +920,10 @@ namespace Capstones.Net
         }
     }
 
-    public static partial class PersistentConnectionFactory
+    public static partial class ConnectionFactory
     {
         private static RegisteredCreator _Reg_UDP = new RegisteredCreator("udp"
-            , url => new UDPClient(url)
+            , uri => new UDPClient(uri.ToString())
             , null);
     }
 }

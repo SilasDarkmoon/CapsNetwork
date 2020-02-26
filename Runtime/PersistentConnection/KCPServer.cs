@@ -52,11 +52,11 @@ namespace Capstones.Net
                 else
                 {
                     _Conv = conv;
-                    _KCP = KCPLib.kcp_create(conv, (IntPtr)_InfoHandle);
+                    _KCP = KCPLib.CreateConnection(conv, (IntPtr)_InfoHandle);
                     _Ready = true;
 
-                    _KCP.kcp_setoutput(Func_KCPOutput);
-                    _KCP.kcp_nodelay(1, 10, 2, 1);
+                    _KCP.SetOutput(Func_KCPOutput);
+                    _KCP.NoDelay(1, 10, 2, 1);
                     // set minrto to 10?
                 }
             }
@@ -86,12 +86,13 @@ namespace Capstones.Net
                     _Disposed = true;
                     if (_Ready)
                     {
-                        _KCP.kcp_release();
+                        _KCP.Release();
                     }
                     _InfoHandle.Free();
-                    _Info = null;
+                    //_Info = null; // maybe we shoud not release this info.
 
                     // set handlers to null.
+                    _OnUpdate = null;
                     _OnReceive = null;
                     //_OnSendComplete = null;
                 }
@@ -167,20 +168,20 @@ namespace Capstones.Net
                         while (cnt > CONST.MTU)
                         {
                             Buffer.BlockCopy(message.Buffer, offset, buffer, 0, CONST.MTU);
-                            _KCP.kcp_send(buffer, CONST.MTU);
+                            _KCP.Send(buffer, CONST.MTU);
                             cnt -= CONST.MTU;
                             offset += CONST.MTU;
                         }
                         if (cnt > 0)
                         {
                             Buffer.BlockCopy(message.Buffer, offset, buffer, 0, cnt);
-                            _KCP.kcp_send(buffer, cnt);
+                            _KCP.Send(buffer, cnt);
                         }
                         pinfo.Release();
                     }
                     else
                     {
-                        _KCP.kcp_send(message.Buffer, cnt);
+                        _KCP.Send(message.Buffer, cnt);
                     }
                     message.Release();
                 }
@@ -209,12 +210,12 @@ namespace Capstones.Net
                     }
                 }
                 // 2, real update.
-                _KCP.kcp_update((uint)Environment.TickCount);
+                _KCP.Update((uint)Environment.TickCount);
                 // 3, receive
                 if (_Started)
                 {
                     int recvcnt;
-                    while ((recvcnt = _KCP.kcp_recv(_RecvBuffer, CONST.MTU)) > 0)
+                    while ((recvcnt = _KCP.Receive(_RecvBuffer, CONST.MTU)) > 0)
                     {
 #if DEBUG_PERSIST_CONNECT_LOW_LEVEL
                         {
@@ -257,7 +258,7 @@ namespace Capstones.Net
                 }
                 if (_Ready)
                 {
-                    if (_KCP.kcp_input(data, cnt) == 0)
+                    if (_KCP.Input(data, cnt) == 0)
                     {
 #if DEBUG_PERSIST_CONNECT_LOW_LEVEL
                         {
@@ -284,6 +285,7 @@ namespace Capstones.Net
                         if (!_Connected)
                         {
                             _Connected = true;
+                            FireOnConnected();
                         }
                         return true;
                     }
@@ -313,6 +315,14 @@ namespace Capstones.Net
             public bool IsConnected
             {
                 get { return _Connected; }
+            }
+            public event Action OnConnected;
+            protected void FireOnConnected()
+            {
+                if (OnConnected != null)
+                {
+                    OnConnected();
+                }
             }
             protected ReceiveHandler _OnReceive;
             /// <summary>
@@ -496,12 +506,28 @@ namespace Capstones.Net
         public virtual ServerConnection PrepareConnection()
         {
             var con = new ServerConnection(this);
+            Action onChildConnected = null;
+            onChildConnected = () =>
+            {
+                con.OnConnected -= onChildConnected;
+                FireOnConnected(con);
+            };
+            con.OnConnected += onChildConnected;
             lock (_Connections)
             {
                 _Connections.Add(con);
             }
             return con;
         }
+        protected void FireOnConnected(IServerConnection child)
+        {
+            if (OnConnected != null)
+            {
+                OnConnected(child);
+            }
+        }
+        public event ConnectedHandler OnConnected;
+
         IServerConnection IPersistentConnectionServer.PrepareConnection()
         {
             return PrepareConnection();
@@ -555,13 +581,12 @@ namespace Capstones.Net
         }
     }
 
-    public static partial class PersistentConnectionFactory
+    public static partial class ConnectionFactory
     {
         private static RegisteredCreator _Reg_KCPRaw = new RegisteredCreator("kcpraw"
-            , url => new KCPClient(url)
-            , url =>
+            , uri => new KCPClient(uri.ToString())
+            , uri =>
             {
-                var uri = new Uri(url);
                 var port = uri.Port;
                 return new KCPServer(port);
             });

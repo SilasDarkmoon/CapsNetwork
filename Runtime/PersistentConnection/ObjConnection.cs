@@ -68,9 +68,27 @@ namespace Capstones.Net
         {
             return Clone();
         }
+
+        public static readonly SerializationConfig Default = new SerializationConfig()
+        {
+            SplitterFactory = ProtobufSplitter.Factory,
+            Composer = new ProtobufComposer(),
+            ReaderWriter = new ProtobufReaderAndWriter(),
+        };
     }
 
-    public class ObjClient : IDisposable
+    public interface IChannel
+    {
+        void Start();
+        bool IsStarted { get; }
+        bool IsAlive { get; }
+
+        event Action OnUpdate;
+        event Action<IChannel> OnConnected;
+        event Action OnClose;
+    }
+
+    public class ObjClient : IPositiveConnection, IChannel, IDisposable
     {
         protected struct PendingRead
         {
@@ -80,49 +98,177 @@ namespace Capstones.Net
             public uint SSeq;
         }
 
-        protected IPersistentConnection _Client;
+        protected IPersistentConnection _Connection;
+        protected IServerConnection _ServerConnection;
         protected ConnectionStream _Stream;
         protected DataSplitter _Splitter;
         protected SerializationConfig _SerConfig;
-        protected readonly SendSerializer _SendSerializer;
-        protected ConcurrentQueueGrowOnly<PendingRead> _PendingReadQueue = new ConcurrentQueueGrowOnly<PendingRead>();
-        protected internal AutoResetEvent _WaitForObjRead = new AutoResetEvent(false);
-        protected PendingRead _PendingRead;
-        protected int _LastReceiveTick;
-        protected bool _PositiveMode = false;
+        protected bool _DeserializeInConnectionThread = false;
+        public bool DeserializeInConnectionThread { get { return _DeserializeInConnectionThread; } }
+        protected bool _SerializeInConnectionThread = false;
+        public bool SerializeInConnectionThread { get { return _SerializeInConnectionThread; } }
 
         public bool LeaveOpen = false;
+        public IPersistentConnection Connection { get { return _Connection; } }
         public ConnectionStream Stream { get { return _Stream; } }
-        public int LastReceiveTick { get { return _LastReceiveTick; } }
 
-        public ObjClient(
-            string url
-            , Func<string, IPersistentConnection> clientFactory
-            , SerializationConfig sconfig)
+        protected int _NextSeq = 1;
+        protected internal uint NextSeq
         {
-            _SerConfig = sconfig;
-            _Client = clientFactory(url);
-            _Stream = new ConnectionStream(_Client) { DonotNotifyReceive = _PositiveMode };
-            _Splitter = sconfig.SplitterFactory.Create(_Stream);
-            _Splitter.OnReceiveBlock += ReceiveBlock;
-            _Client.StartConnect();
-            _LastReceiveTick = System.Environment.TickCount;
-            _SendSerializer = SerializeMessage;
+            get { return (uint)_NextSeq; }
+            set { _NextSeq = (int)value; }
         }
 
+        protected internal bool? _IsServer;
+        public bool IsServer
+        {
+            get
+            {
+                if (_IsServer != null)
+                {
+                    return _IsServer ?? false;
+                }
+                if (_Connection is IServerConnection)
+                {
+                    _IsServer = true;
+                    return true;
+                }
+                else
+                {
+                    _IsServer = false;
+                    return false;
+                }
+            }
+        }
+
+        protected bool _Started;
+        public bool IsStarted { get { return IsConnected; } }
+        public bool IsConnected
+        {
+            get
+            {
+                if (_ServerConnection != null)
+                {
+                    return _Started && _ServerConnection.IsConnected;
+                }
+                else
+                {
+                    return _Started;
+                }
+            }
+        }
+        public event Action<IChannel> OnConnected;
+        protected void FireOnConnected()
+        {
+            if (_ServerConnection != null)
+            {
+                _ServerConnection.OnConnected -= FireOnConnected;
+            }
+            if (OnConnected != null)
+            {
+                OnConnected(this);
+            }
+        }
+        public bool IsAlive
+        {
+            get { return _Connection != null && _Connection.IsConnectionAlive; }
+        }
+        public EndPoint RemoteEndPoint
+        {
+            get { return _Connection == null ? null : _Connection.RemoteEndPoint; }
+        }
+
+        public ObjClient(IPersistentConnection connection, SerializationConfig sconfig, IDictionary<string, object> exconfig)
+        {
+            _DeserializeInConnectionThread = ConfigManager.GetBoolean(exconfig, "DeserializeInConnectionThread");
+            _SerializeInConnectionThread = ConfigManager.GetBoolean(exconfig, "SerializeInConnectionThread");
+            var idletimeout = ConfigManager.GetInt32(exconfig, "IdleTimeout");
+            if (idletimeout != 0)
+            {
+                IdleTimeout = idletimeout;
+            }
+            _SerConfig = sconfig;
+            _Connection = connection;
+            _LastReceiveTick = Environment.TickCount;
+            _Connection.OnUpdate = OnConnectionUpdate;
+            _ServerConnection = connection as IServerConnection;
+            _PositiveConnection = connection as IPositiveConnection;
+            _Stream = new ConnectionStream(_Connection, true) { DonotNotifyReceive = !_DeserializeInConnectionThread };
+            _Splitter = sconfig.SplitterFactory.Create(_Stream);
+            _Splitter.OnReceiveBlock += ReceiveBlock;
+            _SendSerializer = SerializeMessage;
+        }
+        public ObjClient(IPersistentConnection connection, SerializationConfig sconfig)
+            : this(connection, sconfig, null)
+        { }
+        public ObjClient(IPersistentConnection connection)
+            : this(connection, SerializationConfig.Default, null)
+        { }
+
+        public void Start()
+        {
+            if (!_Started)
+            {
+                if (_ServerConnection != null)
+                {
+                    _ServerConnection.OnConnected += FireOnConnected;
+                }
+                _Connection.StartConnect();
+                _Started = true;
+                if (_ServerConnection == null)
+                {
+                    FireOnConnected();
+                }
+            }
+        }
+
+        protected int _LastReceiveTick;
+        public int IdleTimeout = -1;
+        protected int OnConnectionUpdate(IPersistentConnection connection)
+        {
+            if (OnUpdate != null)
+            {
+                OnUpdate();
+            }
+            if (!IsConnected)
+            {
+                _LastReceiveTick = Environment.TickCount;
+            }
+            else
+            {
+#if !DEBUG_PERSIST_CONNECT_NO_IDLE_TIMEOUT
+                var timeout = IdleTimeout;
+                if (timeout >= 0)
+                {
+                    var idletime = Environment.TickCount - _LastReceiveTick;
+                    if (idletime >= timeout)
+                    {
+                        Dispose();
+                    }
+                }
+#endif
+            }
+            return int.MinValue;
+        }
+        public event Action OnUpdate;
+
+#region Read
+        protected ConcurrentQueueGrowOnly<PendingRead> _PendingReadQueue = new ConcurrentQueueGrowOnly<PendingRead>();
+        protected PendingRead _PendingRead;
+        protected internal AutoResetEvent _WaitForObjRead = new AutoResetEvent(false);
         protected void ReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq)
         {
 #if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-            PlatDependant.LogError(Environment.TickCount.ToString() + $" Receive(seq{seq} sseq{sseq})");
+            PlatDependant.LogError(Environment.TickCount.ToString() + $" Receive(size{size} type{type} seq{seq} sseq{sseq})");
 #endif
-            _LastReceiveTick = System.Environment.TickCount;
+            _LastReceiveTick = Environment.TickCount;
             if (buffer != null && size >= 0 && size <= buffer.Length)
             {
                 var processors = _SerConfig.PostProcessors;
                 for (int i = processors.Count - 1; i >= 0; --i)
                 {
                     var processor = processors[i];
-                    var pack = processor.Deprocess(buffer, 0, size, flags, type, seq, sseq, _IsServer);
+                    var pack = processor.Deprocess(buffer, 0, size, flags, type, seq, sseq, IsServer);
                     flags = pack.t1;
                     size = Math.Max(Math.Min(pack.t2, size), 0);
                 }
@@ -133,7 +279,7 @@ namespace Capstones.Net
                     Seq = seq,
                     SSeq = sseq,
                 };
-                if (_PositiveMode)
+                if (!_DeserializeInConnectionThread)
                 {
                     _PendingRead = pending;
                     OnReceiveObj(pending.Obj, type, seq, sseq);
@@ -154,11 +300,11 @@ namespace Capstones.Net
         public event ReceiveObjAction OnReceiveObj = (obj, type, seq, sseq) => { };
         public object TryRead(out uint seq, out uint sseq, out uint type)
         {
-            if (_PositiveMode)
+            if (!_DeserializeInConnectionThread)
             {
                 try
                 {
-                    while (_Client != null && _Client.IsConnectionAlive && _Splitter.TryReadBlock())
+                    while (_Connection != null && _Connection.IsConnectionAlive && _Splitter.TryReadBlock())
                     {
                         if (_PendingRead.Obj != null)
                         {
@@ -209,7 +355,7 @@ namespace Capstones.Net
         {
             uint sseq;
             var obj = TryRead(out seq, out sseq);
-            if (!_IsServer)
+            if (!IsServer)
             {
                 seq = sseq;
             }
@@ -223,11 +369,11 @@ namespace Capstones.Net
 
         public object Read(out uint seq, out uint sseq, out uint type)
         {
-            if (_PositiveMode)
+            if (!_DeserializeInConnectionThread)
             {
                 try
                 {
-                    while (_Client != null && _Client.IsConnectionAlive)
+                    while (_Connection != null && _Connection.IsConnectionAlive)
                     {
                         _Splitter.ReadBlock();
                         if (_PendingRead.Obj != null)
@@ -264,7 +410,7 @@ namespace Capstones.Net
                         {
                             break;
                         }
-                        if (_Client == null || !_Client.IsConnectionAlive)
+                        if (_Connection == null || !_Connection.IsConnectionAlive)
                         {
                             break;
                         }
@@ -285,7 +431,7 @@ namespace Capstones.Net
         {
             uint sseq;
             var obj = Read(out seq, out sseq);
-            if (!_IsServer)
+            if (!IsServer)
             {
                 seq = sseq;
             }
@@ -296,73 +442,39 @@ namespace Capstones.Net
             uint seq, sseq;
             return Read(out seq, out sseq);
         }
+#endregion
 
-        protected int _NextSeq = 1;
-        public uint NextSeq
+#region Write
+        public uint Write(object obj)
         {
-            get { return (uint)_NextSeq; }
-            set { _NextSeq = (int)value; }
+            return Write(obj, 0);
         }
-        protected internal bool _IsServer = false;
-        public bool IsServer { get { return _IsServer; } }
-        private bool _OldIsConnected;
-        public bool IsConnected
+        public uint Write(object obj, uint seq_pingback)
         {
-            get
+            return Write(obj, seq_pingback, 0);
+        }
+        public uint Write(object obj, uint seq_pingback, uint flags)
+        {
+            // seq
+            uint seq = 0, sseq = 0;
+            uint thisseq;
+            if (IsServer)
             {
-                if (_Client is IServerConnection)
-                {
-                    var value = ((IServerConnection)_Client).IsConnected;
-                    if (value && !_OldIsConnected)
-                    {
-                        _OldIsConnected = value;
-                        _LastReceiveTick = System.Environment.TickCount;
-                    }
-                    return value;
-                }
-                else
-                {
-                    return true;
-                }
+                seq = seq_pingback;
+                sseq = thisseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
             }
-        }
-        public bool IsConnectionAlive
-        {
-            get { return _Client != null && _Client.IsConnectionAlive; }
-        }
-        public EndPoint RemoteEndPoint
-        {
-            get { return _Client == null ? null : _Client.RemoteEndPoint; }
-        }
-        public void Write(object obj)
-        {
-            Write(obj, 0);
-        }
-        public void Write(object obj, uint seq_pingback)
-        {
-            Write(obj, seq_pingback, 0);
-        }
-        public void Write(object obj, uint seq_pingback, uint flags)
-        {
-            //if (_PositiveMode)
+            else
+            {
+                seq = thisseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
+                sseq = seq_pingback;
+            }
+            if (!_SerializeInConnectionThread)
             {
                 // type
                 var rw = _SerConfig.ReaderWriter;
                 var type = rw.GetDataType(obj);
-                // seq
-                uint seq = 0, sseq = 0;
-                if (_IsServer)
-                {
-                    seq = seq_pingback;
-                    sseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
-                }
-                else
-                {
-                    seq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
-                    sseq = seq_pingback;
-                }
 #if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-                PlatDependant.LogError(Environment.TickCount.ToString() + $" Write(seq{seq} sseq{sseq})");
+                PlatDependant.LogError(Environment.TickCount.ToString() + $" Write(type{type} seq{seq} sseq{sseq})");
 #endif
                 // write obj
                 var stream = rw.Write(obj);
@@ -373,7 +485,7 @@ namespace Capstones.Net
                     for (int i = 0; i < processors.Count; ++i)
                     {
                         var processor = processors[i];
-                        flags = processor.Process(stream, 0, flags, type, seq, sseq, _IsServer);
+                        flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer);
                     }
                     // compose block
                     _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq);
@@ -381,32 +493,14 @@ namespace Capstones.Net
                     _Stream.Write(stream, 0, stream.Count);
                 }
             }
-            //else
-            //{ // if we directly send the obj to the connection thread, we need to clone it. So it seems to be better to serialize it here.
-            //    uint seq = 0, sseq = 0;
-            //    if (_IsServer)
-            //    {
-            //        seq = seq_pingback;
-            //        sseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
-            //    }
-            //    else
-            //    {
-            //        seq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
-            //        sseq = seq_pingback;
-            //    }
-            //    var clone = obj;
-            //    if (obj is ICloneable)
-            //    {
-            //        clone = ((ICloneable)obj).Clone();
-            //    }
-            //    else if (obj is Google.Protobuf.IMessage)
-            //    {
-            //        clone = obj.GetType().GetMethod("Clone").Invoke(obj, new object[0]); // TODO: is there a better solution?
-            //    }
-            //    _Stream.Write(new PendingWrite() { Obj = clone, Seq = seq, SSeq = sseq, Flags = flags }, _SendSerializer);
-            //}
+            else
+            { // if we directly send the obj to the connection thread, we need to clone it. So it seems to be better to serialize it here.
+                _Stream.Write(new PendingWrite() { Obj = obj, Seq = seq, SSeq = sseq, Flags = flags }, _SendSerializer);
+            }
+            return thisseq;
         }
 
+        protected readonly SendSerializer _SendSerializer;
         protected class PendingWrite
         {
             public object Obj;
@@ -435,7 +529,7 @@ namespace Capstones.Net
                     for (int i = 0; i < processors.Count; ++i)
                     {
                         var processor = processors[i];
-                        flags = processor.Process(stream, 0, flags, type, seq, sseq, _IsServer);
+                        flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer);
                     }
                     // compose block
                     _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq);
@@ -460,18 +554,28 @@ namespace Capstones.Net
             }
             return rv;
         }
+#endregion
 
-        #region IDisposable Support
+        public event Action OnClose = () => { };
+#region IDisposable Support
         private bool disposedValue = false;
         protected virtual void Dispose(bool disposing)
         {
             if (!disposedValue)
             {
+                disposedValue = true;
+                _Stream.Dispose();
                 if (!LeaveOpen)
                 {
-                    _Stream.Dispose();
+                    var dispcon = _Connection as IDisposable;
+                    if (dispcon != null)
+                    {
+                        dispcon.Dispose();
+                    }
                 }
-                _Client = null;
+                _Connection = null;
+                _ServerConnection = null;
+                _PositiveConnection = null;
                 _Stream = null;
                 if (_Splitter != null)
                 {
@@ -482,7 +586,7 @@ namespace Capstones.Net
                 _SerConfig = null;
                 _PendingReadQueue = null;
                 _WaitForObjRead.Set();
-                disposedValue = true;
+                OnClose();
             }
         }
         ~ObjClient()
@@ -494,47 +598,118 @@ namespace Capstones.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-        #endregion
+#endregion
+
+#region IPositiveConnection
+        protected IPositiveConnection _PositiveConnection;
+        public bool PositiveMode
+        {
+            get
+            {
+                if (_PositiveConnection != null)
+                {
+                    return _PositiveConnection.PositiveMode;
+                }
+                return false;
+            }
+            set
+            {
+                if (_PositiveConnection != null)
+                {
+                    _PositiveConnection.PositiveMode = value;
+                }
+            }
+        }
+        public void Step()
+        {
+            if (_PositiveConnection != null)
+            {
+                _PositiveConnection.Step();
+            }
+        }
+#endregion
     }
 
-    public class ObjServer : IDisposable
+    public class ObjServer : IPositiveConnection, IChannel, IDisposable
     {
         protected IPersistentConnectionServer _Server;
         protected SerializationConfig _SerConfig;
+        protected IDictionary<string, object> _ExtraConfig;
 
-        public ObjServer(
-            string url
-            , Func<string, IPersistentConnectionServer> serverFactory
-            , SerializationConfig sconfig)
+        public ObjServer(IPersistentConnectionServer raw, SerializationConfig sconfig, IDictionary<string, object> exconfig)
         {
+            _ExtraConfig = exconfig;
             _SerConfig = sconfig;
-            _Server = serverFactory(url);
-            _Server.StartListening();
+            _Server = raw;
+            if (raw is IPersistentConnection)
+            {
+                var connection = raw as IPersistentConnection;
+                connection.OnUpdate = OnConnectionUpdate;
+            }
+            _PositiveConnection = raw as IPositiveConnection;
         }
+        public ObjServer(IPersistentConnectionServer raw, SerializationConfig sconfig)
+            : this(raw, sconfig, null)
+        { }
+        public ObjServer(IPersistentConnectionServer raw)
+            : this(raw, SerializationConfig.Default, null)
+        { }
 
-        protected IPersistentConnection CreateServerConnection(string url)
+        protected bool _Started = false;
+        public void Start()
         {
-            return _Server.PrepareConnection();
+            if (!_Started)
+            {
+                _Server.StartListening();
+                _Started = true;
+            }
         }
+        public bool IsStarted { get { return _Started; } }
+        public bool IsAlive { get { return _Server.IsAlive; } }
 
         public ObjClient GetConnection()
         {
-            return new ObjClient(null, CreateServerConnection, _SerConfig) { _IsServer = true };
+            var raw = _Server.PrepareConnection();
+            var client = new ObjClient(raw, _SerConfig, _ExtraConfig) { _IsServer = true };
+            client.OnConnected += FireOnConnected;
+            client.Start();
+            return client;
+        }
+        public event Action<IChannel> OnConnected;
+        protected void FireOnConnected(IChannel child)
+        {
+            child.OnConnected -= FireOnConnected;
+            if (OnConnected != null)
+            {
+                OnConnected(child);
+            }
         }
 
-        #region IDisposable Support
+        protected int OnConnectionUpdate(IPersistentConnection connection)
+        {
+            if (OnUpdate != null)
+            {
+                OnUpdate();
+            }
+            return int.MinValue;
+        }
+        public event Action OnUpdate;
+
+        public event Action OnClose = () => { };
+#region IDisposable Support
         private bool disposedValue = false;
         protected virtual void Dispose(bool disposing)
         {
             if (!disposedValue)
             {
+                disposedValue = true;
                 if (_Server is IDisposable)
                 {
                     ((IDisposable)_Server).Dispose();
                 }
                 _Server = null;
                 _SerConfig = null;
-                disposedValue = true;
+                OnClose();
             }
         }
         ~ObjServer()
@@ -546,514 +721,35 @@ namespace Capstones.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-        #endregion
-    }
-
-    public struct PersistentConnectionResponseData
-    {
-        public uint RespDataType;
-        public uint RespSeq;
-        public object Result;
-    }
-    public class PersistentConnectionRequest
-    {
-        // request data
-        protected uint _Seq;
-        public uint Seq { get { return _Seq; } }
-        protected readonly object _Data;
-        public object Data { get { return _Data; } }
-        // response data
-        protected bool _Done;
-        public bool Done { get { return _Done; } }
-        protected internal PersistentConnectionResponseData _Resp;
-        public uint RespReq { get { return _Resp.RespSeq; } }
-        public object Result { get { return _Resp.Result; } }
-        public uint RespDataType { get { return _Resp.RespDataType; } }
-        // timeout and error
-        protected internal string _Error;
-        public string Error { get { return _Error; } }
-        public int Timeout = CONST.DEFAULT_TIMEOUT;
-        protected int _StartTick;
-        public int StartTick { get { return _StartTick; } }
-        protected int _DoneTick;
-        public int DoneTick { get { return _DoneTick; } }
-        public int RTT { get { return _DoneTick - _StartTick; } }
-
-        protected internal PersistentConnectionRequest(object data)
-        {
-            _Data = data;
-            _StartTick = Environment.TickCount;
-        }
-
-        protected internal void Send(ObjClient con)
-        {
-            _Seq = con.NextSeq;
-            con.Write(_Data);
-        }
-        protected internal void Receive(object result)
-        {
-            _DoneTick = Environment.TickCount;
-            _Resp.Result = result;
-            _Done = true;
-        }
-    }
-    public abstract class PersistentConnectionRequestFactoryBase : IDisposable
-    {
-        protected ObjClient _Connection;
-        protected bool _ShouldLock;
-        protected readonly LinkedList<PersistentConnectionRequest> _PendingRequests = new LinkedList<PersistentConnectionRequest>();
-
-        public delegate bool FilterMessageFunc(uint type, uint seq, object raw);
-        protected readonly List<FilterMessageFunc> _FilterMessageHandlers = new List<FilterMessageFunc>();
-        public event FilterMessageFunc OnFilterMessage
-        {
-            add
-            {
-                _FilterMessageHandlers.Add(value);
-            }
-            remove
-            {
-                for (int i = 0; i < _FilterMessageHandlers.Count; ++i)
-                {
-                    if (_FilterMessageHandlers[i] == value)
-                    {
-                        _FilterMessageHandlers.RemoveAt(i--);
-                    }
-                }
-            }
-        }
-        protected bool FilterMessage(uint type, uint seq, object raw)
-        {
-            for (int i = 0; i < _FilterMessageHandlers.Count; ++i)
-            {
-                if (_FilterMessageHandlers[i] != null && !_FilterMessageHandlers[i](type, seq, raw))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-        //public delegate void ReceiveMessageAction(PersistentConnectionResponseData mess);
-        //public event ReceiveMessageAction OnReceiveMessage = mess => { };
-
-        public PersistentConnectionRequestFactoryBase(ObjClient con)
-        {
-            _Connection = con;
-        }
-        protected void Update()
-        {
-            object readobj = null;
-            uint type, seq, sseq;
-            while ((readobj = Read(out seq, out sseq, out type)) != null)
-            {
-                uint reqseq;
-                uint respseq;
-                if (_Connection.IsServer)
-                {
-                    reqseq = sseq;
-                    respseq = seq;
-                }
-                else
-                {
-                    reqseq = seq;
-                    respseq = sseq;
-                }
-                if (reqseq != 0)
-                {
-                    if (_ShouldLock)
-                    {
-                        lock (_PendingRequests)
-                        {
-                            CheckPendingRequests(readobj, type, reqseq, respseq);
-                        }
-                    }
-                    else
-                    {
-                        CheckPendingRequests(readobj, type, reqseq, respseq);
-                    }
-                }
-                else
-                {
-                    if (PushMessageCount >= CONST.MAX_QUEUED_MESSAGE)
-                    {
-                        PlatDependant.LogError("To many unhandled push messages. Do you forget to check push messages?");
-                        while (PushMessageCount >= CONST.MAX_QUEUED_MESSAGE)
-                        {
-                            PersistentConnectionResponseData oldmess;
-                            if (!TryDequeuePushMessage(out oldmess))
-                            {
-                                break;
-                            }
-                        }
-                    }
-                    //else
-                    {
-                        if (FilterMessage(type, respseq, readobj))
-                        {
-                            var mess = new PersistentConnectionResponseData()
-                            {
-                                RespDataType = type,
-                                RespSeq = respseq,
-                                Result = readobj,
-                            };
-                            EnqueuePushMessage(mess);
-                            //OnReceiveMessage(mess);
-                        }
-                    }
-                }
-            }
-        }
-        protected void CheckPendingRequests(object readobj, uint type, uint reqseq, uint respseq)
-        {
-            LinkedListNode<PersistentConnectionRequest> node = _PendingRequests.First;
-            while (node != null)
-            {
-                var req = node.Value;
-                if (reqseq == req.Seq)
-                {
-                    req._Resp.RespDataType = type;
-                    req._Resp.RespSeq = respseq;
-                    req.Receive(readobj);
-                    RecordRequestRTT(req.RTT);
-                    _PendingRequests.Remove(node);
-                    break;
-                }
-                else
-                {
-                    var tick = Environment.TickCount;
-                    var timeout = req.Timeout;
-                    if (timeout == 0)
-                    {
-                        timeout = CONST.DEFAULT_TIMEOUT;
-                    }
-                    if (timeout > 0 && tick - req.StartTick > timeout)
-                    {
-                        req._Error = "timedout";
-                        req.Receive(null);
-                        RecordRequestRTT(timeout);
-                        var next = node.Next;
-                        _PendingRequests.Remove(node);
-                        node = next;
-                    }
-                    else
-                    {
-                        node = node.Next;
-                    }
-                }
-            }
-        }
-#region RTT Timing
-        protected int _RTT = 0;
-        public int RTT { get { return _RTT; } }
-        protected const int _TimedRequestCount = 4;
-        protected int[] _TimedRequestsRTT = new int[_TimedRequestCount];
-        protected int _LastTimedRequestIndex = _TimedRequestCount - 1;
-        protected void RecordRequestRTT(int rtt)
-        {
-            _LastTimedRequestIndex = (_LastTimedRequestIndex + 1) % _TimedRequestCount;
-            _TimedRequestsRTT[_LastTimedRequestIndex] = rtt;
-            int count = 0;
-            int total = 0;
-            for (int i = 0; i < _TimedRequestsRTT.Length; ++i)
-            {
-                var time = _TimedRequestsRTT[i];
-                if (time > 0)
-                {
-                    ++count;
-                    total += time;
-                }
-            }
-            if (count > 0)
-            {
-                _RTT = total / count;
-            }
-            else
-            {
-                _RTT = 0;
-            }
-        }
 #endregion
 
-        protected abstract object Read(out uint seq, out uint sseq, out uint type);
-        protected abstract int PushMessageCount { get; }
-        protected abstract void EnqueuePushMessage(PersistentConnectionResponseData data);
-        protected abstract bool TryDequeuePushMessage(out PersistentConnectionResponseData data);
-        protected abstract void DoSendRequest(PersistentConnectionRequest req);
-        protected abstract void DoSendMessage(object obj, uint seq_pingback);
-
-        public void SendMessage(object obj)
-        {
-            SendMessage(obj, 0);
-        }
-        public void SendMessage(object obj, uint seq_pingback)
-        {
-            DoSendMessage(obj, seq_pingback);
-        }
-        public PersistentConnectionRequest SendRequest(object obj)
-        {
-            var req = new PersistentConnectionRequest(obj);
-            DoSendRequest(req); //req.Send(_Connection);
-            if (_ShouldLock)
-            {
-                lock (_PendingRequests)
-                {
-                    _PendingRequests.AddLast(req);
-                }
-            }
-            else
-            {
-                _PendingRequests.AddLast(req);
-            }
-            return req;
-        }
-        public virtual PersistentConnectionResponseData GetMessageInfo()
-        {
-            PersistentConnectionResponseData message;
-            if (TryDequeuePushMessage(out message))
-            {
-                return message;
-            }
-            return default(PersistentConnectionResponseData);
-        }
-        public object GetMessage()
-        {
-            PersistentConnectionResponseData message = GetMessageInfo();
-            return message.Result;
-        }
-
-        protected virtual void OnDispose() { }
-        public void Dispose()
-        {
-            if (_Connection != null)
-            {
-                _Connection.Dispose();
-                _Connection = null;
-            }
-            _FilterMessageHandlers.Clear();
-            OnDispose();
-        }
-    }
-    public class PersistentConnectionRequestFactory : PersistentConnectionRequestFactoryBase
-    {
-        protected readonly ConcurrentQueueGrowOnly<PersistentConnectionResponseData> _PushMessages = new ConcurrentQueueGrowOnly<PersistentConnectionResponseData>();
-        protected struct PendingSendData
-        {
-            public PersistentConnectionRequest _Req;
-            public object _Raw;
-            public uint _SeqPingBack;
-        }
-        protected readonly ConcurrentQueueGrowOnly<PendingSendData> _PendingSend = new ConcurrentQueueGrowOnly<PendingSendData>();
-        protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
-        protected volatile bool _WriteDone = false;
-
-        public PersistentConnectionRequestFactory(ObjClient con) : base(con)
-        {
-            _ShouldLock = true;
-            PlatDependant.RunBackground(ReadWork);
-            PlatDependant.RunBackground(WriteWork);
-        }
-        protected void ReadWork(TaskProgress prog)
-        {
-            Update();
-            _WriteDone = true;
-            _HaveDataToSend.Set();
-        }
-        protected void WriteWork(TaskProgress prog)
-        {
-            try
-            {
-                while (_HaveDataToSend.WaitOne(CONST.MAX_WAIT_MILLISECONDS))
-                {
-                    try
-                    {
-                        if (_Connection == null || !_Connection.IsConnectionAlive || _WriteDone)
-                        {
-                            return;
-                        }
-                        PendingSendData pending;
-                        while (_PendingSend.TryDequeue(out pending))
-                        {
-                            if (pending._Req != null)
-                            {
-                                pending._Req.Send(_Connection);
-                            }
-                            else if (pending._Raw != null)
-                            {
-                                _Connection.Write(pending._Raw, pending._SeqPingBack);
-                            }
-                        }
-                    }
-                    catch (ThreadAbortException)
-                    {
-                    }
-                    catch (Exception e)
-                    {
-                        PlatDependant.LogError(e);
-                    }
-                }
-            }
-            catch (ThreadAbortException)
-            {
-                Thread.ResetAbort();
-            }
-            catch (Exception e)
-            {
-                PlatDependant.LogError(e);
-            }
-        }
-
-        protected override object Read(out uint seq, out uint sseq, out uint type)
-        {
-            return _Connection.Read(out seq, out sseq, out type);
-        }
-        protected override int PushMessageCount { get { return _PushMessages.Count; } }
-        protected override void EnqueuePushMessage(PersistentConnectionResponseData data)
-        {
-            _PushMessages.Enqueue(data);
-        }
-        protected override bool TryDequeuePushMessage(out PersistentConnectionResponseData data)
-        {
-            return _PushMessages.TryDequeue(out data);
-        }
-        protected override void DoSendRequest(PersistentConnectionRequest req)
-        {
-            _PendingSend.Enqueue(new PendingSendData() { _Req = req });
-            _HaveDataToSend.Set();
-        }
-        protected override void DoSendMessage(object obj, uint seq_pingback)
-        {
-            _PendingSend.Enqueue(new PendingSendData() { _Raw = obj, _SeqPingBack = seq_pingback });
-            _HaveDataToSend.Set();
-        }
-        protected override void OnDispose()
-        {
-            _WriteDone = true;
-            _HaveDataToSend.Set();
-        }
-    }
-    public class PersistentConnectionRequestFactoryMainThread : PersistentConnectionRequestFactoryBase
-    {
-        protected readonly Queue<PersistentConnectionResponseData> _PushMessages = new Queue<PersistentConnectionResponseData>();
-
-        public PersistentConnectionRequestFactoryMainThread(ObjClient con) : base(con)
-        {
-            _ShouldLock = false;
-        }
-
-        protected override object Read(out uint seq, out uint sseq, out uint type)
-        {
-            return _Connection.TryRead(out seq, out sseq, out type);
-        }
-        protected override int PushMessageCount { get { return _PushMessages.Count; } }
-        protected override void EnqueuePushMessage(PersistentConnectionResponseData data)
-        {
-            _PushMessages.Enqueue(data);
-        }
-        protected override bool TryDequeuePushMessage(out PersistentConnectionResponseData data)
-        {
-            if (_PushMessages.Count > 0)
-            {
-                data = _PushMessages.Dequeue();
-                return true;
-            }
-            else
-            {
-                data = default(PersistentConnectionResponseData);
-                return false;
-            }
-        }
-        protected override void DoSendRequest(PersistentConnectionRequest req)
-        {
-            req.Send(_Connection);
-        }
-        protected override void DoSendMessage(object obj, uint seq_pingback)
-        {
-            _Connection.Write(obj, seq_pingback);
-        }
-
-        public override PersistentConnectionResponseData GetMessageInfo()
-        {
-            Update();
-            return base.GetMessageInfo();
-        }
-    }
-
-    public static partial class PersistentConnectionFactory
-    {
-        private struct PersistentConnectionCreator
-        {
-            public Func<string, IPersistentConnection> ClientCreator;
-            public Func<string, IPersistentConnectionServer> ServerCreator;
-
-        }
-        private static Dictionary<string, PersistentConnectionCreator> _Creators;
-        private static Dictionary<string, PersistentConnectionCreator> Creators
+#region IPositiveConnection
+        protected IPositiveConnection _PositiveConnection;
+        public bool PositiveMode
         {
             get
             {
-                if (_Creators == null)
+                if (_PositiveConnection != null)
                 {
-                    _Creators = new Dictionary<string, PersistentConnectionCreator>();
+                    return _PositiveConnection.PositiveMode;
                 }
-                return _Creators;
+                return false;
             }
-        }
-        private class RegisteredCreator
-        {
-            public RegisteredCreator(string scheme, Func<string, IPersistentConnection> clientFactory, Func<string, IPersistentConnectionServer> serverFactory)
+            set
             {
-                Creators[scheme] = new PersistentConnectionCreator() { ClientCreator = clientFactory, ServerCreator = serverFactory };
-            }
-        }
-
-        private static readonly SerializationConfig _InnerDefaultSerializationConfig = new SerializationConfig()
-        {
-            SplitterFactory = ProtobufSplitter.Factory,
-            Composer = new ProtobufComposer(),
-            ReaderWriter = new ProtobufReaderAndWriter(),
-        };
-        private static SerializationConfig _DefaultSerializationConfig = null;
-        public static SerializationConfig DefaultSerializationConfig
-        {
-            get { return _DefaultSerializationConfig ?? _InnerDefaultSerializationConfig; }
-            set { _DefaultSerializationConfig = value; }
-        }
-
-        public static ObjServer GetServer(string url, SerializationConfig sconfig)
-        {
-            var uri = new Uri(url);
-            var scheme = uri.Scheme;
-            PersistentConnectionCreator creator;
-            if (Creators.TryGetValue(scheme, out creator))
-            {
-                if (creator.ServerCreator != null)
+                if (_PositiveConnection != null)
                 {
-                    return new ObjServer(url, creator.ServerCreator, sconfig);
+                    _PositiveConnection.PositiveMode = value;
                 }
             }
-            return null;
         }
-        public static ObjServer GetServer(string url)
+        public void Step()
         {
-            return GetServer(url, DefaultSerializationConfig);
-        }
-        public static ObjClient GetClient(string url, SerializationConfig sconfig)
-        {
-            var uri = new Uri(url);
-            var scheme = uri.Scheme;
-            PersistentConnectionCreator creator;
-            if (Creators.TryGetValue(scheme, out creator))
+            if (_PositiveConnection != null)
             {
-                if (creator.ClientCreator != null)
-                {
-                    return new ObjClient(url, creator.ClientCreator, sconfig);
-                }
+                _PositiveConnection.Step();
             }
-            return null;
         }
-        public static ObjClient GetClient(string url)
-        {
-            return GetClient(url, DefaultSerializationConfig);
-        }
+#endregion
     }
 }

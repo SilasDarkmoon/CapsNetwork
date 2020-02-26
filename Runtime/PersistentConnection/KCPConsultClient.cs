@@ -21,8 +21,8 @@ namespace Capstones.Net
             _Conv = 0;
             _Connection.OnUpdate = _con =>
             {
-                _KCP.kcp_update((uint)Environment.TickCount);
-                int recvcnt = _KCP.kcp_recv(_RecvBuffer, CONST.MTU);
+                _KCP.Update((uint)Environment.TickCount);
+                int recvcnt = _KCP.Receive(_RecvBuffer, CONST.MTU);
                 if (_Conv == 0)
                 {
                     if (recvcnt >= 4)
@@ -45,12 +45,12 @@ namespace Capstones.Net
                             PlatDependant.LogError("KCP conversation id should not be 0 or 1 (with Consult).");
                             throw new ArgumentException("KCP conversation id should not be 0 or 1 (with Consult).");
                         }
-                        _KCP.kcp_release();
+                        _KCP.Release();
 
                         _Conv = conv;
-                        _KCP = KCPLib.kcp_create(conv, (IntPtr)_ConnectionHandle);
-                        _KCP.kcp_setoutput(Func_KCPOutput);
-                        _KCP.kcp_nodelay(1, 10, 2, 1);
+                        _KCP = KCPLib.CreateConnection(conv, (IntPtr)_ConnectionHandle);
+                        _KCP.SetOutput(Func_KCPOutput);
+                        _KCP.NoDelay(1, 10, 2, 1);
                         _Connection.HoldSending = false;
                     }
                 }
@@ -76,7 +76,7 @@ namespace Capstones.Net
             _Connection.PreStart = _con =>
             {
                 var guid = _ConnectionGUID.ToByteArray();
-                _KCP.kcp_send(guid, guid.Length);
+                _KCP.Send(guid, guid.Length);
             };
             _Connection.HoldSending = true;
         }

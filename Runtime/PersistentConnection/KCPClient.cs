@@ -29,14 +29,9 @@ namespace Capstones.Net
         public KCPClient(string url)
         {
             var uri = new Uri(url);
-            var path = uri.AbsolutePath.Trim(_PathSplitChars);
-            var index = path.IndexOfAny(_PathSplitChars);
-            if (index > 0)
-            {
-                path = path.Substring(0, index);
-            }
+            var frag = uri.Fragment;
             uint conv;
-            uint.TryParse(path, out conv);
+            uint.TryParse(frag, out conv);
             Init(url, conv);
         }
         private void Init(string url, uint conv)
@@ -48,15 +43,15 @@ namespace Capstones.Net
             _Connection = new UDPClient(url);
             _Conv = conv;
             _ConnectionHandle = GCHandle.Alloc(_Connection);
-            _KCP = KCPLib.kcp_create(conv, (IntPtr)_ConnectionHandle);
+            _KCP = KCPLib.CreateConnection(conv, (IntPtr)_ConnectionHandle);
 
-            _KCP.kcp_setoutput(Func_KCPOutput);
-            _KCP.kcp_nodelay(1, 10, 2, 1);
+            _KCP.SetOutput(Func_KCPOutput);
+            _KCP.NoDelay(1, 10, 2, 1);
             // set minrto to 10?
 
             _Connection.UpdateInterval = 10;
             _Connection.PreDispose = _con => DisposeSelf();
-            _Connection.OnReceive = (data, cnt, sender) => _KCP.kcp_input(data, cnt);
+            _Connection.OnReceive = (data, cnt, sender) => _KCP.Input(data, cnt);
             _Connection.OnSend = (data, cnt) =>
             {
                 if (cnt > CONST.MTU)
@@ -67,27 +62,27 @@ namespace Capstones.Net
                     while (cnt > CONST.MTU)
                     {
                         Buffer.BlockCopy(data.Buffer, offset, buffer, 0, CONST.MTU);
-                        _KCP.kcp_send(buffer, CONST.MTU);
+                        _KCP.Send(buffer, CONST.MTU);
                         cnt -= CONST.MTU;
                         offset += CONST.MTU;
                     }
                     if (cnt > 0)
                     {
                         Buffer.BlockCopy(data.Buffer, offset, buffer, 0, cnt);
-                        _KCP.kcp_send(buffer, cnt);
+                        _KCP.Send(buffer, cnt);
                     }
                     info.Release();
                 }
                 else
                 {
-                    _KCP.kcp_send(data.Buffer, cnt);
+                    _KCP.Send(data.Buffer, cnt);
                 }
                 return true;
             };
             _Connection.OnUpdate = _con =>
             {
-                _KCP.kcp_update((uint)Environment.TickCount);
-                int recvcnt = _KCP.kcp_recv(_RecvBuffer, CONST.MTU);
+                _KCP.Update((uint)Environment.TickCount);
+                int recvcnt = _KCP.Receive(_RecvBuffer, CONST.MTU);
                 if (_OnReceive != null)
                 {
                     if (recvcnt > 0)
@@ -111,11 +106,12 @@ namespace Capstones.Net
             if (!_Disposed)
             {
                 _Disposed = true;
-                _KCP.kcp_release();
+                _KCP.Release();
                 _ConnectionHandle.Free();
                 //_Connection = null; // the connection should be disposed alreay, so we donot need to set it to null.
 
                 // set handlers to null.
+                _OnUpdate = null;
                 _OnReceive = null;
             }
         }

@@ -25,7 +25,115 @@ namespace Capstones.Net
             {
                 return con._Handle;
             }
+
+            public static Connection Create(uint conv, IntPtr user)
+            {
+                return kcp_create(conv, user);
+            }
+            public void Release()
+            {
+                kcp_release(this);
+                _Handle = IntPtr.Zero;
+            }
+            public void SetOutput(kcp_output output)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    kcp_setoutput(this, output);
+                }
+            }
+            public int Receive(byte[] buffer, int len)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_recv(this, buffer, len);
+                }
+                return -100;
+            }
+            public int Send(byte[] buffer, int len)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_send(this, buffer, len);
+                }
+                return -100;
+            }
+            public void Update(uint current)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    kcp_update(this, current);
+                }
+            }
+            public uint Check(uint current)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_check(this, current);
+                }
+                return current;
+            }
+            public int Input(byte[] data, int size)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_input(this, data, size);
+                }
+                return -100;
+            }
+            public void Flush()
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    kcp_flush(this);
+                }
+            }
+            public int PeekSize()
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_peeksize(this);
+                }
+                return -100;
+            }
+            public int SetMTU(int mtu)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_setmtu(this, mtu);
+                }
+                return -100;
+            }
+            public int WndSize(int sndwnd, int rcvwnd)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_wndsize(this, sndwnd, rcvwnd);
+                }
+                return 0;
+            }
+            public int WaitSnd()
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_waitsnd(this);
+                }
+                return 0;
+            }
+            public int NoDelay(int nodelay, int interval, int resend, int nc)
+            {
+                if (_Handle != IntPtr.Zero)
+                {
+                    return kcp_nodelay(this, nodelay, interval, resend, nc);
+                }
+                return 0;
+            }
         }
+        public static Connection CreateConnection(uint conv, IntPtr user)
+        {
+            return Connection.Create(conv, user);
+        }
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate int kcp_output(IntPtr buf, int len, Connection kcp, IntPtr user);
 
@@ -35,40 +143,40 @@ namespace Capstones.Net
             [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr kcp_create(uint conv, IntPtr user);
         }
-        public static Connection kcp_create(uint conv, IntPtr user)
+        private static Connection kcp_create(uint conv, IntPtr user)
         {
             return (Connection)ImportedPrivate.kcp_create(conv, user);
         }
 #else
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern Connection kcp_create(uint conv, IntPtr user);
+        private static extern Connection kcp_create(uint conv, IntPtr user);
 #endif
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void kcp_release(this Connection kcp);
+        private static extern void kcp_release(this Connection kcp);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void kcp_setoutput(this Connection kcp, kcp_output output);
+        private static extern void kcp_setoutput(this Connection kcp, kcp_output output);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kcp_recv(this Connection kcp, byte[] buffer, int len);
+        private static extern int kcp_recv(this Connection kcp, byte[] buffer, int len);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kcp_send(this Connection kcp, byte[] buffer, int len);
+        private static extern int kcp_send(this Connection kcp, byte[] buffer, int len);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void kcp_update(this Connection kcp, uint current);
+        private static extern void kcp_update(this Connection kcp, uint current);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern uint kcp_check(this Connection kcp, uint current);
+        private static extern uint kcp_check(this Connection kcp, uint current);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kcp_input(this Connection kcp, byte[] data, int size);
+        private static extern int kcp_input(this Connection kcp, byte[] data, int size);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void kcp_flush(this Connection kcp);
+        private static extern void kcp_flush(this Connection kcp);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kcp_peeksize(this Connection kcp);
+        private static extern int kcp_peeksize(this Connection kcp);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kcp_setmtu(this Connection kcp, int mtu);
+        private static extern int kcp_setmtu(this Connection kcp, int mtu);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kcp_wndsize(this Connection kcp, int sndwnd, int rcvwnd);
+        private static extern int kcp_wndsize(this Connection kcp, int sndwnd, int rcvwnd);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kcp_waitsnd(this Connection kcp);
+        private static extern int kcp_waitsnd(this Connection kcp);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int kcp_nodelay(this Connection kcp, int nodelay, int interval, int resend, int nc);
+        private static extern int kcp_nodelay(this Connection kcp, int nodelay, int interval, int resend, int nc);
         [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
         public static extern void kcp_memmove(IntPtr dst, IntPtr src, int cnt);
 

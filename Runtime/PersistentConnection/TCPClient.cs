@@ -550,6 +550,7 @@ namespace Capstones.Net
                 // set handlers to null.
                 _OnReceive = null;
                 _OnSend = null;
+                _OnUpdate = null;
                 //_OnSendComplete = null;
                 _PreDispose = null;
             }

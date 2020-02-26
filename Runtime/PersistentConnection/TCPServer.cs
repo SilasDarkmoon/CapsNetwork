@@ -28,7 +28,12 @@ namespace Capstones.Net
             {
                 _Socket = _Server.Accept();
                 _Connected = true;
+                if (OnConnected != null)
+                {
+                    OnConnected();
+                }
             }
+            public event Action OnConnected;
             public bool IsConnected
             {
                 get { return _Connected; }
@@ -218,6 +223,7 @@ namespace Capstones.Net
                 // set handlers to null.
                 _OnReceive = null;
                 _OnSend = null;
+                _OnUpdate = null;
                 //_OnSendComplete = null;
                 _PreDispose = null;
             }
@@ -236,21 +242,32 @@ namespace Capstones.Net
         public bool IsAlive { get { return IsConnectionAlive; } }
         public ServerConnection PrepareConnection()
         {
-            return new ServerConnection(this);
+            var con = new ServerConnection(this);
+            Action onChildConnected = null;
+            onChildConnected = () =>
+            {
+                con.OnConnected -= onChildConnected;
+                if (OnConnected != null)
+                {
+                    OnConnected(con);
+                }
+            };
+            con.OnConnected += onChildConnected;
+            return con;
         }
+        public event ConnectedHandler OnConnected;
         IServerConnection IPersistentConnectionServer.PrepareConnection()
         {
             return PrepareConnection();
         }
     }
 
-    public static partial class PersistentConnectionFactory
+    public static partial class ConnectionFactory
     {
         private static RegisteredCreator _Reg_TCP = new RegisteredCreator("tcp"
-            , url => new TCPClient(url)
-            , url =>
+            , uri => new TCPClient(uri.ToString())
+            , uri =>
             {
-                var uri = new Uri(url);
                 var port = uri.Port;
                 return new TCPServer(port);
             });
