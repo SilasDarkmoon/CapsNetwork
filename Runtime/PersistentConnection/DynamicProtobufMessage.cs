@@ -2278,16 +2278,34 @@ namespace Capstones.Net
         {
             if (alreadyHandledNodes != null && alreadyHandledNodes.Contains(this))
             {
-                { // {
-                    if (indent >= 0)
-                    {
-                        sb.Append(' ', indent * 4);
-                    }
+                if (indent >= 0)
+                {
+                    sb.Append(' ', indent * 4);
                 }
                 sb.Append("\"*Ref*");
                 sb.Append(Name);
                 sb.Append("\"");
                 return;
+            }
+            else
+            {
+                if (indent >= 0)
+                {
+                    sb.Append(' ', indent * 4);
+                }
+                sb.Append("\"@name\"");
+                if (indent >= 0)
+                {
+                    sb.Append(' ');
+                }
+                sb.Append(':');
+                if (indent >= 0)
+                {
+                    sb.Append(' ');
+                }
+                sb.Append("\"");
+                sb.Append(Name);
+                sb.Append("\"");
             }
             base.ToJson(sb, indent, alreadyHandledNodes);
         }
