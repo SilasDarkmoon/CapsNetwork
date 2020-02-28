@@ -2287,27 +2287,85 @@ namespace Capstones.Net
                 sb.Append("\"");
                 return;
             }
-            else
-            {
-                if (indent >= 0)
-                {
-                    sb.Append(' ', indent * 4);
-                }
-                sb.Append("\"@name\"");
-                if (indent >= 0)
-                {
-                    sb.Append(' ');
-                }
-                sb.Append(':');
-                if (indent >= 0)
-                {
-                    sb.Append(' ');
-                }
-                sb.Append("\"");
-                sb.Append(Name);
-                sb.Append("\"");
-            }
+            var startIndex = sb.Length;
             base.ToJson(sb, indent, alreadyHandledNodes);
+            var endIndex = sb.Length;
+            int firstMark = -1;
+            int firstLineEnding = -1;
+            for (int i = startIndex; i < endIndex; ++i)
+            {
+                if (firstMark < 0)
+                {
+                    if (sb[i] == '{')
+                    {
+                        firstMark = i;
+                    }
+                }
+                else
+                {
+                    if (firstLineEnding < 0)
+                    {
+                        if (sb[i] == '\r' || sb[i] == '\n')
+                        {
+                            firstLineEnding = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (firstMark >= 0)
+            {
+                bool isEmpty = true;
+                for (int i = firstMark + 1; i < endIndex; ++i)
+                {
+                    if (!char.IsWhiteSpace(sb[i]) && sb[i] != '}')
+                    {
+                        isEmpty = false;
+                        break;
+                    }
+                }
+                if (firstLineEnding >= 0)
+                {
+                    for (; firstLineEnding < endIndex; ++firstLineEnding)
+                    {
+                        if (sb[firstLineEnding] != '\r' && sb[firstLineEnding] != '\n')
+                        {
+                            break;
+                        }
+                    }
+                    firstMark = firstLineEnding;
+                }
+                else
+                {
+                    ++firstMark;
+                }
+
+                if (indent >= 0)
+                {
+                    sb.Insert(firstMark, Environment.NewLine);
+                }
+                if (!isEmpty)
+                {
+                    sb.Insert(firstMark, ",");
+                }
+                sb.Insert(firstMark, "\"");
+                sb.Insert(firstMark, Name);
+                sb.Insert(firstMark, "\"");
+                if (indent >= 0)
+                {
+                    sb.Insert(firstMark, " ");
+                }
+                sb.Insert(firstMark, ":");
+                if (indent >= 0)
+                {
+                    sb.Insert(firstMark, " ");
+                }
+                sb.Insert(firstMark, "\"@name\"");
+                if (indent >= 0)
+                {
+                    sb.Insert(firstMark, " ", indent * 4 + 4);
+                }
+            }
         }
 
         public IEnumerator GetEnumerator()
@@ -3052,7 +3110,6 @@ namespace Capstones.Net
             var templates = ProtobufMessagePool.ReadTemplates(new ListSegment<byte>(TestDescriptorFileData));
             foreach (var kvp in templates)
             {
-                UnityEngine.Debug.Log(kvp.Key);
                 UnityEngine.Debug.Log(kvp.Value.ToString());
             }
         }
