@@ -134,7 +134,7 @@ namespace Capstones.Net
         }
     }
 
-    public struct ProtobufParsedValue
+    public struct ProtobufParsedValue : IEquatable<ProtobufParsedValue>
     {
         [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
         private struct OverlappedValue
@@ -1054,6 +1054,27 @@ namespace Capstones.Net
             }
         }
 
+        public bool Equals(ProtobufParsedValue other)
+        {
+            return _Type == other._Type && _Union._Int64Val == other._Union._Int64Val && Equals(_ObjectVal, other._ObjectVal);
+        }
+        public override bool Equals(object obj)
+        {
+            return obj is ProtobufParsedValue && Equals((ProtobufParsedValue)obj);
+        }
+        public override int GetHashCode()
+        {
+            return _Type.GetHashCode() ^ _Union._Int64Val.GetHashCode() ^ (_ObjectVal == null ? 0 : _ObjectVal.GetHashCode());
+        }
+        public static bool operator==(ProtobufParsedValue v1, ProtobufParsedValue v2)
+        {
+            return v1.Equals(v2);
+        }
+        public static bool operator!=(ProtobufParsedValue v1, ProtobufParsedValue v2)
+        {
+            return !v1.Equals(v2);
+        }
+
         #region Converters
         public static implicit operator ProtobufMessage(ProtobufParsedValue thiz)
         {
@@ -1790,40 +1811,388 @@ namespace Capstones.Net
             }
         }
 
-        public T GetValue<T>(string fieldName)
+        public struct SlotValueAccessor : IList<ProtobufParsedValue>
         {
-            FieldSlot slot;
-            if (_FieldMap.TryGetValue(fieldName, out slot))
+            internal FieldSlot _Slot;
+            internal SlotValueAccessor(FieldSlot slot)
             {
-                var val = slot.FirstValue.Parsed.Get<T>();
-                return val;
+                _Slot = slot;
             }
-            return default(T);
-        }
-        public void GetValues<T>(string fieldName, IList<T> list)
-        {
-            FieldSlot slot;
-            if (_FieldMap.TryGetValue(fieldName, out slot))
+
+            public bool IsValid { get { return _Slot != null; } }
+
+            public int Count { get { return _Slot.Values.Count; } }
+            public bool IsReadOnly { get { return false; } }
+            public ProtobufParsedValue this[int index]
             {
-                for (int i = 0; i < slot.Values.Count; ++i)
+                get { return _Slot.Values[index].Parsed; }
+                set
                 {
-                    var val = slot.Values[i].Parsed.Get();
-                    if (val is T)
-                    {
-                        list.Add((T)val);
-                    }
-                    //else
-                    //{
-                    //    list.Add(default(T));
-                    //}
+                    var old = _Slot.Values[index];
+                    old.Parsed = value;
+                    _Slot.Values[index] = old;
                 }
             }
+            public int IndexOf(ProtobufParsedValue item)
+            {
+                for (int i = 0; i < Count; ++i)
+                {
+                    if (this[i] == item)
+                    {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            public void Insert(int index, ProtobufParsedValue item)
+            {
+                var newVal = new ProtobufValue() { Parsed = item };
+                if (_Slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_ENUM)
+                {
+                    newVal.Parsed._ObjectVal = _Slot.Desc.Type.CLRType;
+                }
+                _Slot.Values.Insert(index, newVal);
+            }
+            public void RemoveAt(int index)
+            {
+                _Slot.Values.RemoveAt(index);
+            }
+            public void Add(ProtobufParsedValue item)
+            {
+                Insert(Count, item);
+            }
+            public void Clear()
+            {
+                _Slot.Values.Clear();
+            }
+            public bool Contains(ProtobufParsedValue item)
+            {
+                return IndexOf(item) >= 0;
+            }
+            public void CopyTo(ProtobufParsedValue[] array, int arrayIndex)
+            {
+                for (int i = 0; i < Count && i + arrayIndex < array.Length; ++i)
+                {
+                    array[i + arrayIndex] = _Slot.Values[i].Parsed;
+                }
+            }
+            public bool Remove(ProtobufParsedValue item)
+            {
+                bool found = false;
+                for (int i = Count - 1; i >= 0; --i)
+                {
+                    if (this[i] == item)
+                    {
+                        RemoveAt(i);
+                        found = true;
+                    }
+                }
+                return found;
+            }
+            public IEnumerator<ProtobufParsedValue> GetEnumerator()
+            {
+                for (int i = 0; i < Count; ++i)
+                {
+                    yield return _Slot.Values[i].Parsed;
+                }
+            }
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+            public ProtobufParsedValue[] ToArray()
+            {
+                ProtobufParsedValue[] arr = new ProtobufParsedValue[Count];
+                CopyTo(arr, 0);
+                return arr;
+            }
+
+            public T As<T>()
+            {
+                return _Slot.FirstValue.Parsed.Get<T>();
+            }
+            public SlotValueAccessor<T> AsList<T>()
+            {
+                return new SlotValueAccessor<T>(_Slot);
+            }
+            public T Get<T>()
+            {
+                return As<T>();
+            }
+            public void Set<T>(T val)
+            {
+                var old = _Slot.FirstValue; old.Parsed.Set<T>(val); _Slot.FirstValue = old;
+            }
+
+            public bool Boolean
+            {
+                get { return _Slot.FirstValue.Parsed.Boolean; }
+                set { var old = _Slot.FirstValue; old.Parsed.Boolean = value; _Slot.FirstValue = old; }
+            }
+            public byte Byte
+            {
+                get { return _Slot.FirstValue.Parsed.Byte; }
+                set { var old = _Slot.FirstValue; old.Parsed.Byte = value; _Slot.FirstValue = old; }
+            }
+            public sbyte SByte
+            {
+                get { return _Slot.FirstValue.Parsed.SByte; }
+                set { var old = _Slot.FirstValue; old.Parsed.SByte = value; _Slot.FirstValue = old; }
+            }
+            public short Int16
+            {
+                get { return _Slot.FirstValue.Parsed.Int16; }
+                set { var old = _Slot.FirstValue; old.Parsed.Int16 = value; _Slot.FirstValue = old; }
+            }
+            public ushort UInt16
+            {
+                get { return _Slot.FirstValue.Parsed.UInt16; }
+                set { var old = _Slot.FirstValue; old.Parsed.UInt16 = value; _Slot.FirstValue = old; }
+            }
+            public int Int32
+            {
+                get { return _Slot.FirstValue.Parsed.Int32; }
+                set { var old = _Slot.FirstValue; old.Parsed.Int32 = value; _Slot.FirstValue = old; }
+            }
+            public uint UInt32
+            {
+                get { return _Slot.FirstValue.Parsed.UInt32; }
+                set { var old = _Slot.FirstValue; old.Parsed.UInt32 = value; _Slot.FirstValue = old; }
+            }
+            public long Int64
+            {
+                get { return _Slot.FirstValue.Parsed.Int64; }
+                set { var old = _Slot.FirstValue; old.Parsed.Int64 = value; _Slot.FirstValue = old; }
+            }
+            public ulong UInt64
+            {
+                get { return _Slot.FirstValue.Parsed.UInt64; }
+                set { var old = _Slot.FirstValue; old.Parsed.UInt64 = value; _Slot.FirstValue = old; }
+            }
+            public IntPtr IntPtr
+            {
+                get { return _Slot.FirstValue.Parsed.IntPtr; }
+                set { var old = _Slot.FirstValue; old.Parsed.IntPtr = value; _Slot.FirstValue = old; }
+            }
+            public UIntPtr UIntPtr
+            {
+                get { return _Slot.FirstValue.Parsed.UIntPtr; }
+                set { var old = _Slot.FirstValue; old.Parsed.UIntPtr = value; _Slot.FirstValue = old; }
+            }
+            public float Single
+            {
+                get { return _Slot.FirstValue.Parsed.Single; }
+                set { var old = _Slot.FirstValue; old.Parsed.Single = value; _Slot.FirstValue = old; }
+            }
+            public double Double
+            {
+                get { return _Slot.FirstValue.Parsed.Double; }
+                set { var old = _Slot.FirstValue; old.Parsed.Double = value; _Slot.FirstValue = old; }
+            }
+            public object Object
+            {
+                get { return _Slot.FirstValue.Parsed.Object; }
+                set { var old = _Slot.FirstValue; old.Parsed.Object = value; _Slot.FirstValue = old; }
+            }
+            public string String
+            {
+                get { return _Slot.FirstValue.Parsed.String; }
+                set { var old = _Slot.FirstValue; old.Parsed.String = value; _Slot.FirstValue = old; }
+            }
+            public byte[] Bytes
+            {
+                get { return _Slot.FirstValue.Parsed.Bytes; }
+                set { var old = _Slot.FirstValue; old.Parsed.Bytes = value; _Slot.FirstValue = old; }
+            }
+            public ProtobufUnknowValue Unknown
+            {
+                get { return _Slot.FirstValue.Parsed.Unknown; }
+                set { var old = _Slot.FirstValue; old.Parsed.Unknown = value; _Slot.FirstValue = old; }
+            }
+            public ProtobufMessage Message
+            {
+                get { return _Slot.FirstValue.Parsed.Message; }
+                set { var old = _Slot.FirstValue; old.Parsed.Message = value; _Slot.FirstValue = old; }
+            }
+
+            public SlotValueAccessor<bool> Booleans
+            {
+                get { return new SlotValueAccessor<bool>(_Slot); }
+            }
+            public SlotValueAccessor<byte> RepeatedByte
+            {
+                get { return new SlotValueAccessor<byte>(_Slot); }
+            }
+            public SlotValueAccessor<sbyte> SBytes
+            {
+                get { return new SlotValueAccessor<sbyte>(_Slot); }
+            }
+            public SlotValueAccessor<short> Int16s
+            {
+                get { return new SlotValueAccessor<short>(_Slot); }
+            }
+            public SlotValueAccessor<ushort> UInt16s
+            {
+                get { return new SlotValueAccessor<ushort>(_Slot); }
+            }
+            public SlotValueAccessor<int> Int32s
+            {
+                get { return new SlotValueAccessor<int>(_Slot); }
+            }
+            public SlotValueAccessor<uint> UInt32s
+            {
+                get { return new SlotValueAccessor<uint>(_Slot); }
+            }
+            public SlotValueAccessor<long> Int64s
+            {
+                get { return new SlotValueAccessor<long>(_Slot); }
+            }
+            public SlotValueAccessor<ulong> UInt64s
+            {
+                get { return new SlotValueAccessor<ulong>(_Slot); }
+            }
+            public SlotValueAccessor<IntPtr> IntPtrs
+            {
+                get { return new SlotValueAccessor<IntPtr>(_Slot); }
+            }
+            public SlotValueAccessor<UIntPtr> UIntPtrs
+            {
+                get { return new SlotValueAccessor<UIntPtr>(_Slot); }
+            }
+            public SlotValueAccessor<float> Singles
+            {
+                get { return new SlotValueAccessor<float>(_Slot); }
+            }
+            public SlotValueAccessor<double> Doubles
+            {
+                get { return new SlotValueAccessor<double>(_Slot); }
+            }
+            public SlotValueAccessor<object> Objects
+            {
+                get { return new SlotValueAccessor<object>(_Slot); }
+            }
+            public SlotValueAccessor<string> Strings
+            {
+                get { return new SlotValueAccessor<string>(_Slot); }
+            }
+            public SlotValueAccessor<byte[]> RepeatedBytes
+            {
+                get { return new SlotValueAccessor<byte[]>(_Slot); }
+            }
+            public SlotValueAccessor<ProtobufUnknowValue> Unknowns
+            {
+                get { return new SlotValueAccessor<ProtobufUnknowValue>(_Slot); }
+            }
+            public SlotValueAccessor<ProtobufMessage> Messages
+            {
+                get { return new SlotValueAccessor<ProtobufMessage>(_Slot); }
+            }
+            // TODO: implicit operators
         }
-        public List<T> GetValues<T>(string fieldName)
+        public struct SlotValueAccessor<T> : IList<T>
         {
-            List<T> rv = new List<T>();
-            GetValues(fieldName, rv);
-            return rv;
+            internal FieldSlot _Slot;
+            internal SlotValueAccessor(FieldSlot slot)
+            {
+                _Slot = slot;
+            }
+
+            public T this[int index]
+            {
+                get { return _Slot.Values[index].Parsed.Get<T>(); }
+                set
+                {
+                    var old = _Slot.Values[index];
+                    old.Parsed.Set<T>(value);
+                    _Slot.Values[index] = old;
+                }
+            }
+            public int Count { get { return _Slot.Values.Count; } }
+            public bool IsReadOnly { get { return false; } }
+            public void Insert(int index, T item)
+            {
+                var newVal = new ProtobufValue();
+                newVal.Parsed.Set<T>(item);
+                if (_Slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_ENUM)
+                {
+                    newVal.Parsed._ObjectVal = _Slot.Desc.Type.CLRType;
+                }
+                _Slot.Values.Insert(index, newVal);
+            }
+            public int IndexOf(T item)
+            {
+                for (int i = 0; i < Count; ++i)
+                {
+                    if (Equals(this[i], item))
+                    {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            public void Add(T item)
+            {
+                Insert(Count, item);
+            }
+            public void Clear()
+            {
+                _Slot.Values.Clear();
+            }
+            public bool Contains(T item)
+            {
+                return IndexOf(item) >= 0;
+            }
+            public void CopyTo(T[] array, int arrayIndex)
+            {
+                for (int i = 0; i < Count && i + arrayIndex < array.Length; ++i)
+                {
+                    array[i + arrayIndex] = _Slot.Values[i].Parsed.Get<T>();
+                }
+            }
+            public T[] ToArray()
+            {
+                T[] arr = new T[Count];
+                CopyTo(arr, 0);
+                return arr;
+            }
+            public IEnumerator<T> GetEnumerator()
+            {
+                for (int i = 0; i < Count; ++i)
+                {
+                    yield return _Slot.Values[i].Parsed.Get<T>();
+                }
+            }
+            public bool Remove(T item)
+            {
+                bool found = false;
+                for (int i = Count - 1; i >= 0; --i)
+                {
+                    if (Equals(this[i], item))
+                    {
+                        RemoveAt(i);
+                        found = true;
+                    }
+                }
+                return found;
+            }
+            public void RemoveAt(int index)
+            {
+                _Slot.Values.RemoveAt(index);
+            }
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+        }
+
+        public SlotValueAccessor this[string name]
+        {
+            get
+            {
+                FieldSlot slot = null;
+                _FieldMap.TryGetValue(name, out slot);
+                return new SlotValueAccessor(slot);
+            }
         }
 
         public ProtobufMessage ApplyTemplate(ProtobufMessage template)
@@ -2433,10 +2802,10 @@ namespace Capstones.Net
                 var tslot = template.GetSlot(i);
                 ApplyTemplate(rslot, tslot);
             }
-            foreach (var rawslotkvp in raw._HighFields)
+            foreach (var tslotkvp in template._HighFields)
             {
-                var rslot = rawslotkvp.Value;
-                var tslot = template.GetSlot(rslot.Desc.Number);
+                var tslot = tslotkvp.Value;
+                var rslot = raw.GetOrCreateSlot(tslot.Desc.Number);
                 ApplyTemplate(rslot, tslot);
             }
             raw.FinishBuild();
@@ -2543,11 +2912,11 @@ namespace Capstones.Net
 
         private static void GetMessages(ProtobufMessage parent, string pre, Dictionary<string, ProtobufMessage> messages)
         {
-            var myname = parent.GetValue<string>("name");
+            var myname = parent["name"].String;
             var myfullname = pre + myname;
             var childpre = myfullname + ".";
             messages[myfullname] = parent;
-            var subs = parent.GetValues<ProtobufMessage>("nested_type");
+            var subs = parent["nested_type"].Messages;
             for (int i = 0; i < subs.Count; ++i)
             {
                 var sub = subs[i];
@@ -2561,9 +2930,9 @@ namespace Capstones.Net
             {
                 ProtobufMessageReader.ApplyTemplate(file, DescriptorFileTemplate);
                 Dictionary<string, TemplateProtobufMessage> templates = new Dictionary<string, TemplateProtobufMessage>();
-                var package = file.GetValue<string>("package");
+                var package = file["package"].String;
                 Dictionary<string, ProtobufMessage> allmessages = new Dictionary<string, ProtobufMessage>();
-                var messages = file.GetValues<ProtobufMessage>("message_type");
+                var messages = file["message_type"].Messages;
                 var rootpre = package + ".";
                 for (int i = 0; i < messages.Count; ++i)
                 {
@@ -2578,14 +2947,14 @@ namespace Capstones.Net
                 {
                     var message = kvp.Value;
                     var template = templates[kvp.Key];
-                    var fields = message.GetValues<ProtobufMessage>("field");
+                    var fields = message["field"].Messages;
                     for (int i = 0; i < fields.Count; ++i)
                     {
                         var field = fields[i];
-                        var name = field.GetValue<string>("name");
-                        var num = field.GetValue<int>("number");
-                        var ntype = field.GetValue<ProtobufNativeType>("type");
-                        var mtype = field.GetValue<string>("type_name");
+                        var name = field["name"].String;
+                        var num = field["number"].Int32;
+                        var ntype = field["type"].As<ProtobufNativeType>();
+                        var mtype = field["type_name"].String;
                         if (num > 0 && !string.IsNullOrEmpty(name))
                         {
                             var slot = template.GetOrCreateSlot(num);
