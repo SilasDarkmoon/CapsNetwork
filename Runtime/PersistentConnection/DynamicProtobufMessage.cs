@@ -134,30 +134,1134 @@ namespace Capstones.Net
         }
     }
 
+    public struct ProtobufParsedValue
+    {
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
+        private struct OverlappedValue
+        {
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public bool _BooleanVal;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public byte _ByteVal;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public sbyte _SByteVal;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public short _Int16Val;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public ushort _UInt16Val;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public int _Int32Val;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public uint _UInt32Val;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public long _Int64Val;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public ulong _UInt64Val;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public IntPtr _IntPtrVal;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public UIntPtr _UIntPtrVal;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public float _SingleVal;
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public double _DoubleVal;
+        }
+
+        internal ProtobufNativeType _Type;
+        private OverlappedValue _Union;
+        internal object _ObjectVal;
+
+        public ProtobufNativeType NativeType
+        {
+            get { return _Type; }
+            internal set { _Type = value; }
+        }
+        public bool Boolean
+        {
+            get { return Get<bool>(); }
+            set { Set(value); }
+        }
+        public byte Byte
+        {
+            get { return Get<byte>(); }
+            set { Set(value); }
+        }
+        public sbyte SByte
+        {
+            get { return Get<sbyte>(); }
+            set { Set(value); }
+        }
+        public short Int16
+        {
+            get { return Get<short>(); }
+            set { Set(value); }
+        }
+        public ushort UInt16
+        {
+            get { return Get<ushort>(); }
+            set { Set(value); }
+        }
+        public int Int32
+        {
+            get { return Get<int>(); }
+            set { Set(value); }
+        }
+        public uint UInt32
+        {
+            get { return Get<uint>(); }
+            set { Set(value); }
+        }
+        public long Int64
+        {
+            get { return Get<long>(); }
+            set { Set(value); }
+        }
+        public ulong UInt64
+        {
+            get { return Get<ulong>(); }
+            set { Set(value); }
+        }
+        public IntPtr IntPtr
+        {
+            get { return Get<IntPtr>(); }
+            set { Set(value); }
+        }
+        public UIntPtr UIntPtr
+        {
+            get { return Get<UIntPtr>(); }
+            set { Set(value); }
+        }
+        public float Single
+        {
+            get { return Get<float>(); }
+            set { Set(value); }
+        }
+        public double Double
+        {
+            get { return Get<double>(); }
+            set { Set(value); }
+        }
+        public object Object
+        {
+            get { return Get<object>(); }
+            set { Set(value); }
+        }
+        public string String
+        {
+            get { return Get<string>(); }
+            set { Set(value); }
+        }
+        public byte[] Bytes
+        {
+            get { return Get<byte[]>(); }
+            set { Set(value); }
+        }
+        public ProtobufUnknowValue Unknown
+        {
+            get { return Get<ProtobufUnknowValue>(); }
+            set { Set(value); }
+        }
+        public ProtobufMessage Message
+        {
+            get { return Get<ProtobufMessage>(); }
+            set { Set(value); }
+        }
+
+        public ProtobufParsedValue(ProtobufNativeType ntype)
+            : this()
+        {
+            _Type = ntype;
+        }
+
+        public bool IsEmpty
+        {
+            get { return _Type == 0; }
+        }
+        private static HashSet<ProtobufNativeType> _ObjNativeTypes = new HashSet<ProtobufNativeType>()
+        {
+            ProtobufNativeType.TYPE_BYTES,
+            ProtobufNativeType.TYPE_GROUP,
+            ProtobufNativeType.TYPE_MESSAGE,
+            ProtobufNativeType.TYPE_STRING,
+            ProtobufNativeType.TYPE_UNKNOWN,
+        };
+        public bool IsObject
+        {
+            get { return _ObjNativeTypes.Contains(_Type); }
+        }
+        #region Accessors
+        private interface IProtobufParsedValueAccessor
+        {
+            object Get(ref ProtobufParsedValue pval);
+            bool Set(ref ProtobufParsedValue pval, object val);
+        }
+        private abstract class ProtobufParsedValueAccessor<T> : IProtobufParsedValueAccessor
+        {
+            public abstract bool Get(ref ProtobufParsedValue pval, out T val);
+            public abstract bool Set(ref ProtobufParsedValue pval, T val);
+            public T Get(ref ProtobufParsedValue pval)
+            {
+                T val;
+                Get(ref pval, out val);
+                return val;
+            }
+            object IProtobufParsedValueAccessor.Get(ref ProtobufParsedValue pval)
+            {
+                return Get(ref pval);
+            }
+            public bool Set(ref ProtobufParsedValue pval, object val)
+            {
+                if (val is T)
+                {
+                    return Set(ref pval, (T)val);
+                }
+                return false;
+            }
+        }
+        private class ProtobufParsedBooleanAccessor : ProtobufParsedValueAccessor<bool>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out bool val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(bool);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._UInt64Val != 0;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, bool val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_BOOL;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._BooleanVal = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedByteAccessor : ProtobufParsedValueAccessor<byte>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out byte val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(byte);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._ByteVal;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, byte val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_UINT32;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._ByteVal = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedSByteAccessor : ProtobufParsedValueAccessor<sbyte>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out sbyte val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(sbyte);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._SByteVal;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, sbyte val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_INT32;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._SByteVal = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedInt16Accessor : ProtobufParsedValueAccessor<short>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out short val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(short);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._Int16Val;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, short val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_INT32;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._Int16Val = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedUInt16Accessor : ProtobufParsedValueAccessor<ushort>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out ushort val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(ushort);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._UInt16Val;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, ushort val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_UINT32;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._UInt16Val = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedInt32Accessor : ProtobufParsedValueAccessor<int>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out int val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(int);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._Int32Val;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, int val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_INT32;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._Int32Val = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedUInt32Accessor : ProtobufParsedValueAccessor<uint>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out uint val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(uint);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._UInt32Val;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, uint val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_UINT32;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._UInt32Val = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedInt64Accessor : ProtobufParsedValueAccessor<long>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out long val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(long);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._Int64Val;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, long val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_INT64;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._Int64Val = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedUInt64Accessor : ProtobufParsedValueAccessor<ulong>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out ulong val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(ulong);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._UInt64Val;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, ulong val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_UINT64;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._UInt64Val = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedIntPtrAccessor : ProtobufParsedValueAccessor<IntPtr>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out IntPtr val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(IntPtr);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._IntPtrVal;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, IntPtr val)
+            {
+                if (pval.IsEmpty)
+                {
+                    if (IntPtr.Size > 4)
+                    {
+                        pval._Type = ProtobufNativeType.TYPE_INT64;
+                    }
+                    else
+                    {
+                        pval._Type = ProtobufNativeType.TYPE_INT32;
+                    }
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._IntPtrVal = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedUIntPtrAccessor : ProtobufParsedValueAccessor<UIntPtr>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out UIntPtr val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(UIntPtr);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._UIntPtrVal;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, UIntPtr val)
+            {
+                if (pval.IsEmpty)
+                {
+                    if (UIntPtr.Size > 4)
+                    {
+                        pval._Type = ProtobufNativeType.TYPE_UINT64;
+                    }
+                    else
+                    {
+                        pval._Type = ProtobufNativeType.TYPE_UINT32;
+                    }
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._UIntPtrVal = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedSingleAccessor : ProtobufParsedValueAccessor<float>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out float val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(float);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._SingleVal;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, float val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_FLOAT;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._SingleVal = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedDoubleAccessor : ProtobufParsedValueAccessor<double>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out double val)
+            {
+                if (pval.IsObject)
+                {
+                    val = default(double);
+                    return false;
+                }
+                else
+                {
+                    val = pval._Union._DoubleVal;
+                    return true;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, double val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_DOUBLE;
+                }
+                if (pval.IsObject)
+                {
+                    return false;
+                }
+                else
+                {
+                    pval._Union._DoubleVal = val;
+                    return true;
+                }
+            }
+        }
+        private class ProtobufParsedObjectAccessor : IProtobufParsedValueAccessor
+        {
+            public bool Get(ref ProtobufParsedValue pval, out object val)
+            {
+                if (pval.IsObject)
+                {
+                    val = pval._ObjectVal;
+                    return true;
+                }
+                else
+                {
+                    val = null;
+                    return false;
+                }
+            }
+            public bool Set(ref ProtobufParsedValue pval, object val)
+            {
+                if (pval.IsEmpty)
+                {
+                    if (val != null)
+                    {
+                        pval._ObjectVal = val;
+                        if (val is string)
+                        {
+                            pval._Type = ProtobufNativeType.TYPE_STRING;
+                        }
+                        else if (val is byte[])
+                        {
+                            pval._Type = ProtobufNativeType.TYPE_BYTES;
+                        }
+                        else if (val is ProtobufUnknowValue)
+                        {
+                            pval._Type = ProtobufNativeType.TYPE_UNKNOWN;
+                        }
+                        else
+                        {
+                            pval._Type = ProtobufNativeType.TYPE_MESSAGE;
+                        }
+                    }
+                    return true;
+                }
+                if (pval.IsObject)
+                {
+                    pval._ObjectVal = val;
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            public T Get<T>(ref ProtobufParsedValue pval)
+            {
+                object val;
+                if (Get(ref pval, out val))
+                {
+                    if (val is T)
+                    {
+                        return (T)val;
+                    }
+                }
+                return default(T);
+            }
+            public void Set<T>(ref ProtobufParsedValue pval, T val)
+            {
+                Set(ref pval, (object)val);
+            }
+            public object Get(ref ProtobufParsedValue pval)
+            {
+                object val;
+                if (Get(ref pval, out val))
+                {
+                    return val;
+                }
+                return null;
+            }
+        }
+        private class ProtobufParsedEnumAccessor : IProtobufParsedValueAccessor
+        {
+            public bool Get(ref ProtobufParsedValue pval, out object val)
+            {
+                if (pval._Type == ProtobufNativeType.TYPE_ENUM)
+                {
+                    if (pval._ObjectVal is Type)
+                    {
+                        val = Enum.ToObject(pval._ObjectVal as Type, pval._Union._UInt64Val);
+                    }
+                    else
+                    {
+                        val = pval._Union._UInt64Val;
+                    }
+                    return true;
+                }
+                else
+                {
+                    val = null;
+                    return false;
+                }
+            }
+            public bool Set(ref ProtobufParsedValue pval, object val)
+            {
+                if (val is Enum)
+                {
+                    if (pval._Type == 0 || pval._Type == ProtobufNativeType.TYPE_ENUM)
+                    {
+                        pval._Type = ProtobufNativeType.TYPE_ENUM;
+                        pval._ObjectVal = val.GetType();
+                        pval._Union._UInt64Val = Convert.ToUInt64(val);
+                        return true;
+                    }
+                }
+                return false;
+            }
+            public T Get<T>(ref ProtobufParsedValue pval)
+            {
+                object val;
+                if (Get(ref pval, out val))
+                {
+                    if (val is T)
+                    {
+                        return (T)val;
+                    }
+                    else if (val is ulong)
+                    {
+                        if (typeof(T).IsEnum)
+                        {
+                            return (T)Enum.ToObject(typeof(T), (ulong)val);
+                        }
+                    }
+                }
+                return default(T);
+            }
+            public void Set<T>(ref ProtobufParsedValue pval, T val)
+            {
+                Set(ref pval, (object)val);
+            }
+            public object Get(ref ProtobufParsedValue pval)
+            {
+                object val;
+                if (Get(ref pval, out val))
+                {
+                    return val;
+                }
+                return null;
+            }
+        }
+        private static ProtobufParsedObjectAccessor _ObjAccessor = new ProtobufParsedObjectAccessor();
+        private static ProtobufParsedEnumAccessor _EnumAccessor = new ProtobufParsedEnumAccessor();
+        private static ProtobufParsedBooleanAccessor _BooleanAccessor = new ProtobufParsedBooleanAccessor();
+        private static ProtobufParsedByteAccessor _ByteAccessor = new ProtobufParsedByteAccessor();
+        private static ProtobufParsedSByteAccessor _SByteAccessor = new ProtobufParsedSByteAccessor();
+        private static ProtobufParsedInt16Accessor _Int16Accessor = new ProtobufParsedInt16Accessor();
+        private static ProtobufParsedUInt16Accessor _UInt16Accessor = new ProtobufParsedUInt16Accessor();
+        private static ProtobufParsedInt32Accessor _Int32Accessor = new ProtobufParsedInt32Accessor();
+        private static ProtobufParsedUInt32Accessor _UInt32Accessor = new ProtobufParsedUInt32Accessor();
+        private static ProtobufParsedInt64Accessor _Int64Accessor = new ProtobufParsedInt64Accessor();
+        private static ProtobufParsedUInt64Accessor _UInt64Accessor = new ProtobufParsedUInt64Accessor();
+        private static ProtobufParsedIntPtrAccessor _IntPtrAccessor = new ProtobufParsedIntPtrAccessor();
+        private static ProtobufParsedUIntPtrAccessor _UIntPtrAccessor = new ProtobufParsedUIntPtrAccessor();
+        private static ProtobufParsedSingleAccessor _SingleAccessor = new ProtobufParsedSingleAccessor();
+        private static ProtobufParsedDoubleAccessor _DoubleAccessor = new ProtobufParsedDoubleAccessor();
+        private static Dictionary<Type, IProtobufParsedValueAccessor> _TypedAccessors = new Dictionary<Type, IProtobufParsedValueAccessor>()
+        {
+            { typeof(bool), _BooleanAccessor },
+            { typeof(byte), _ByteAccessor },
+            { typeof(sbyte), _SByteAccessor },
+            { typeof(short), _Int16Accessor },
+            { typeof(ushort), _UInt16Accessor },
+            { typeof(int), _Int32Accessor },
+            { typeof(uint), _UInt32Accessor },
+            { typeof(long), _Int64Accessor },
+            { typeof(ulong), _UInt64Accessor },
+            { typeof(IntPtr), _IntPtrAccessor },
+            { typeof(UIntPtr), _UIntPtrAccessor },
+            { typeof(float), _SingleAccessor },
+            { typeof(double), _DoubleAccessor },
+        };
+        private static Dictionary<ProtobufNativeType, IProtobufParsedValueAccessor> _NativeAccessors = new Dictionary<ProtobufNativeType, IProtobufParsedValueAccessor>()
+        {
+            { ProtobufNativeType.TYPE_BOOL, _BooleanAccessor },
+            { ProtobufNativeType.TYPE_BYTES, _ObjAccessor },
+            { ProtobufNativeType.TYPE_DOUBLE, _DoubleAccessor },
+            { ProtobufNativeType.TYPE_ENUM, _EnumAccessor },
+            { ProtobufNativeType.TYPE_FIXED32, _UInt32Accessor },
+            { ProtobufNativeType.TYPE_FIXED64, _UInt64Accessor },
+            { ProtobufNativeType.TYPE_FLOAT, _SingleAccessor },
+            { ProtobufNativeType.TYPE_GROUP, _ObjAccessor },
+            { ProtobufNativeType.TYPE_INT32, _Int32Accessor },
+            { ProtobufNativeType.TYPE_INT64, _Int64Accessor },
+            { ProtobufNativeType.TYPE_MESSAGE, _ObjAccessor },
+            { ProtobufNativeType.TYPE_SFIXED32, _Int32Accessor },
+            { ProtobufNativeType.TYPE_SFIXED64, _Int64Accessor },
+            { ProtobufNativeType.TYPE_SINT32, _Int32Accessor },
+            { ProtobufNativeType.TYPE_SINT64, _Int64Accessor },
+            { ProtobufNativeType.TYPE_STRING, _ObjAccessor },
+            { ProtobufNativeType.TYPE_UINT32, _UInt32Accessor },
+            { ProtobufNativeType.TYPE_UINT64, _UInt64Accessor },
+            { ProtobufNativeType.TYPE_UNKNOWN, _ObjAccessor },
+        };
+        #endregion
+        public T Get<T>()
+        {
+            var type = typeof(T);
+            if (type.IsEnum)
+            {
+                return _EnumAccessor.Get<T>(ref this);
+            }
+            else
+            {
+                IProtobufParsedValueAccessor accessor;
+                if (_TypedAccessors.TryGetValue(type, out accessor))
+                {
+                    var taccessor = accessor as ProtobufParsedValueAccessor<T>;
+                    if (taccessor != null)
+                    {
+                        return taccessor.Get(ref this);
+                    }
+                }
+            }
+            var obj = _ObjAccessor.Get<T>(ref this);
+            return obj;
+        }
+        public object Get(Type type)
+        {
+            if (type == null)
+            {
+                return Get();
+            }
+            else if (type.IsEnum)
+            {
+                return _EnumAccessor.Get(ref this);
+            }
+            else
+            {
+                IProtobufParsedValueAccessor accessor;
+                if (_TypedAccessors.TryGetValue(type, out accessor))
+                {
+                    return accessor.Get(ref this);
+                }
+            }
+            var obj = _ObjAccessor.Get(ref this);
+            if (type.IsInstanceOfType(obj))
+            {
+                return obj;
+            }
+            return null;
+        }
+        public object Get()
+        {
+            IProtobufParsedValueAccessor accessor;
+            if (_NativeAccessors.TryGetValue(_Type, out accessor))
+            {
+                return accessor.Get(ref this);
+            }
+            return null;
+        }
+        public void Set<T>(T val)
+        {
+            var type = typeof(T);
+            if (type.IsEnum)
+            {
+                _EnumAccessor.Set<T>(ref this, val);
+                return;
+            }
+            else
+            {
+                IProtobufParsedValueAccessor accessor;
+                if (_TypedAccessors.TryGetValue(type, out accessor))
+                {
+                    var taccessor = accessor as ProtobufParsedValueAccessor<T>;
+                    if (taccessor != null)
+                    {
+                        taccessor.Set(ref this, val);
+                        return;
+                    }
+                }
+            }
+            _ObjAccessor.Set<T>(ref this, val);
+        }
+        public void Set(object val)
+        {
+            if (val == null)
+            {
+                _Union._UInt64Val = 0;
+                _ObjectVal = null;
+            }
+            else
+            {
+                if (val is Enum)
+                {
+                    _EnumAccessor.Set(ref this, val);
+                    return;
+                }
+                else
+                {
+                    IProtobufParsedValueAccessor accessor;
+                    if (_TypedAccessors.TryGetValue(val.GetType(), out accessor))
+                    {
+                        accessor.Set(ref this, val);
+                        return;
+                    }
+                }
+                _ObjAccessor.Set(ref this, val);
+            }
+        }
+
+        #region Converters
+        public static implicit operator ProtobufMessage(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<ProtobufMessage>();
+        }
+        public static implicit operator ProtobufParsedValue(ProtobufMessage val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator string(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<string>();
+        }
+        public static implicit operator ProtobufParsedValue(string val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator byte[](ProtobufParsedValue thiz)
+        {
+            return thiz.Get<byte[]>();
+        }
+        public static implicit operator ProtobufParsedValue(byte[] val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator ProtobufUnknowValue(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<ProtobufUnknowValue>();
+        }
+        public static implicit operator ProtobufParsedValue(ProtobufUnknowValue val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator Enum(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<Enum>();
+        }
+        public static implicit operator ProtobufParsedValue(Enum val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator bool(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<bool>();
+        }
+        public static implicit operator ProtobufParsedValue(bool val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator byte(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<byte>();
+        }
+        public static implicit operator ProtobufParsedValue(byte val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator sbyte(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<sbyte>();
+        }
+        public static implicit operator ProtobufParsedValue(sbyte val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator short(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<short>();
+        }
+        public static implicit operator ProtobufParsedValue(short val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator ushort(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<ushort>();
+        }
+        public static implicit operator ProtobufParsedValue(ushort val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator int(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<int>();
+        }
+        public static implicit operator ProtobufParsedValue(int val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator uint(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<uint>();
+        }
+        public static implicit operator ProtobufParsedValue(uint val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator long(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<long>();
+        }
+        public static implicit operator ProtobufParsedValue(long val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator ulong(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<ulong>();
+        }
+        public static implicit operator ProtobufParsedValue(ulong val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator IntPtr(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<IntPtr>();
+        }
+        public static implicit operator ProtobufParsedValue(IntPtr val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator UIntPtr(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<UIntPtr>();
+        }
+        public static implicit operator ProtobufParsedValue(UIntPtr val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator float(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<float>();
+        }
+        public static implicit operator ProtobufParsedValue(float val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        public static implicit operator double(ProtobufParsedValue thiz)
+        {
+            return thiz.Get<double>();
+        }
+        public static implicit operator ProtobufParsedValue(double val)
+        {
+            var pval = new ProtobufParsedValue();
+            pval.Set(val);
+            return pval;
+        }
+        #endregion
+    }
+
     public struct ProtobufValue
     {
-        public object Parsed;
+        public ProtobufParsedValue Parsed;
         public ListSegment<byte> RawData;
 
-        public ProtobufValue(object parsed)
+        public ProtobufValue(ProtobufNativeType ntype)
         {
-            Parsed = parsed;
-            RawData = default(ListSegment<byte>);
+            Parsed = new ProtobufParsedValue() { _Type = ntype };
+            RawData = new ListSegment<byte>();
         }
 
         public bool IsValid
         {
             get
             {
-                return Parsed != null || RawData.List != null;
+                return !Parsed.IsEmpty || RawData.List != null;
             }
         }
 
         public override string ToString()
         {
-            if (Parsed != null)
+            if (!Parsed.IsEmpty)
             {
-                return Parsed.ToString();
+                return Parsed.Get().ToString();
             }
             else if (!IsValid)
             {
@@ -171,10 +1275,10 @@ namespace Capstones.Net
     }
     public class ProtobufUnknowValue
     {
-        public byte[] Raw;
+        public ListSegment<byte> Raw;
         public override string ToString()
         {
-            return string.Format("*Unknown[{0}]*", Raw == null ? 0 : Raw.Length);
+            return string.Format("*Unknown[{0}]*", Raw == null ? 0 : Raw.Count);
         }
     }
 
@@ -186,7 +1290,7 @@ namespace Capstones.Net
         Fixed32 = 5,
         // TODO: support group?
     }
-    public enum ProtobufNativeType
+    public enum ProtobufNativeType : int
     {
         // 0 is reserved for errors.
         // Order is weird for historical reasons.
@@ -218,11 +1322,29 @@ namespace Capstones.Net
         TYPE_SFIXED64 = 16,
         TYPE_SINT32 = 17,  // Uses ZigZag encoding.
         TYPE_SINT64 = 18,  // Uses ZigZag encoding.
+
+        TYPE_EMPTY = 0,
+        TYPE_UNKNOWN = 255,
     };
     public struct ProtobufHighLevelType
     {
         public ProtobufNativeType KnownType;
-        public string MessageName; // when it is a dynamic message.
+        private object _TypeDesc;
+        public string MessageName
+        {
+            get { return _TypeDesc as string; }
+            set { _TypeDesc = value; }
+        }
+        public Type CLRType
+        {
+            get { return _TypeDesc as Type; }
+            set { _TypeDesc = value; }
+        }
+        public object TypeDesc
+        {
+            get { return _TypeDesc; }
+            set { _TypeDesc = value; }
+        }
     }
     public struct ProtobufFieldDesc
     {
@@ -467,7 +1589,7 @@ namespace Capstones.Net
             {
                 sb.Append("\"*Invalid*\"");
             }
-            else if (value.Parsed == null)
+            else if (value.Parsed.IsEmpty)
             {
                 sb.Append("\"*RawData(");
                 sb.Append(value.RawData.Count);
@@ -475,7 +1597,11 @@ namespace Capstones.Net
             }
             else
             {
-                var val = value.Parsed;
+                var val = value.Parsed.Get();
+                if (val == null)
+                {
+                    ;
+                }
                 if (val is ProtobufMessage)
                 {
                     if (indent >= 0)
@@ -483,14 +1609,7 @@ namespace Capstones.Net
                         sb.AppendLine();
                     }
                     var message = (ProtobufMessage)val;
-                    if (alreadyHandledNodes == null || alreadyHandledNodes.Add(message))
-                    {
-                        message.ToJson(sb, indent, alreadyHandledNodes);
-                    }
-                    else
-                    {
-                        sb.Append("\"*Ref*\"");
-                    }
+                    message.ToJson(sb, indent, alreadyHandledNodes);
                 }
                 else if (val is ProtobufUnknowValue)
                 {
@@ -562,11 +1681,15 @@ namespace Capstones.Net
         }
 
         protected class TooLongToReanderToJsonException : Exception { }
-        public void ToJson(System.Text.StringBuilder sb, int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
+        protected virtual void ToJson(System.Text.StringBuilder sb, int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
         {
             if (alreadyHandledNodes == null && (indent > 100 || sb.Length > 1024 * 1024))
             {
                 throw new TooLongToReanderToJsonException();
+            }
+            if (alreadyHandledNodes != null && !alreadyHandledNodes.Add(this))
+            {
+                return;
             }
             { // {
                 if (indent >= 0)
@@ -603,8 +1726,12 @@ namespace Capstones.Net
                 }
                 sb.Append('}');
             }
+            if (alreadyHandledNodes != null)
+            {
+                alreadyHandledNodes.Remove(this);
+            }
         }
-        public string ToJson(int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
+        protected string ToJson(int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
         {
             var sb = new System.Text.StringBuilder();
             try
@@ -621,7 +1748,7 @@ namespace Capstones.Net
             }
             return sb.ToString();
         }
-        public string ToJson(int indent)
+        public virtual string ToJson(int indent)
         {
             return ToJson(indent, null);
         }
@@ -635,29 +1762,24 @@ namespace Capstones.Net
         }
 
         protected Dictionary<string, FieldSlot> _FieldMap = new Dictionary<string, FieldSlot>();
-        protected bool _BuildFinished;
-        public void FinishBuild()
+        protected internal virtual void FinishBuild()
         {
-            if (_BuildFinished)
-            {
-                return;
-            }
-            _BuildFinished = true;
             _FieldMap.Clear();
             foreach (var slot in Slots)
             {
                 for (int i = 0; i < slot.Values.Count; ++i)
                 {
                     var val = slot.Values[i];
-                    if (val.Parsed == null)
+                    if (val.Parsed.IsEmpty)
                     {
-                        val.Parsed = new ProtobufUnknowValue() { Raw = val.RawData.ToArray() };
+                        val.Parsed = new ProtobufUnknowValue() { Raw = new ListSegment<byte>(val.RawData.ToArray()) };
                     }
                     val.RawData = default(ListSegment<byte>);
                     slot.Values[i] = val;
-                    if (val.Parsed is ProtobufMessage)
+                    var sub = val.Parsed.Message;
+                    if (sub != null)
                     {
-                        ((ProtobufMessage)val.Parsed).FinishBuild();
+                        sub.FinishBuild();
                     }
                 }
                 var name = slot.Desc.Name;
@@ -673,11 +1795,8 @@ namespace Capstones.Net
             FieldSlot slot;
             if (_FieldMap.TryGetValue(fieldName, out slot))
             {
-                var val = slot.FirstValue.Parsed;
-                if (val is T)
-                {
-                    return (T)val;
-                }
+                var val = slot.FirstValue.Parsed.Get<T>();
+                return val;
             }
             return default(T);
         }
@@ -688,7 +1807,7 @@ namespace Capstones.Net
             {
                 for (int i = 0; i < slot.Values.Count; ++i)
                 {
-                    var val = slot.Values[i].Parsed;
+                    var val = slot.Values[i].Parsed.Get();
                     if (val is T)
                     {
                         list.Add((T)val);
@@ -706,6 +1825,11 @@ namespace Capstones.Net
             GetValues(fieldName, rv);
             return rv;
         }
+
+        public ProtobufMessage ApplyTemplate(ProtobufMessage template)
+        {
+            return ProtobufMessageReader.ApplyTemplate(this, template);
+        }
     }
 
     public class TemplateProtobufMessage : ProtobufMessage, System.Collections.IEnumerable
@@ -720,24 +1844,83 @@ namespace Capstones.Net
         {
             var slot = GetOrCreateSlot(fieldno);
             slot.Desc.Name = fieldname;
+            slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_MESSAGE;
+            slot.FirstValue = new ProtobufValue() { Parsed = subtemplate };
+        }
+        public void Add(int fieldno, string fieldname, TemplateProtobufMessage subtemplate)
+        {
+            var slot = GetOrCreateSlot(fieldno);
+            slot.Desc.Name = fieldname;
+            slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_MESSAGE;
+            slot.Desc.Type.MessageName = subtemplate.Name;
             slot.FirstValue = new ProtobufValue() { Parsed = subtemplate };
         }
         public void Add<T>(int fieldno, string fieldname, T templateValue) // currently only used for enums
         {
             var slot = GetOrCreateSlot(fieldno);
-            if (typeof(T).IsSubclassOf(typeof(Enum)))
+            if (typeof(T).IsEnum)
             {
                 slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_ENUM;
+                slot.Desc.Type.CLRType = typeof(T);
             }
             slot.Desc.Name = fieldname;
-            slot.FirstValue = new ProtobufValue() { Parsed = templateValue };
+            var val = new ProtobufValue();
+            val.Parsed.Set(templateValue);
+            slot.FirstValue = val;
         }
         internal void Add<T>(int fieldno, string fieldname, ProtobufNativeType knownType, T templateValue) // currently only used for enums
         {
             var slot = GetOrCreateSlot(fieldno);
             slot.Desc.Name = fieldname;
             slot.Desc.Type.KnownType = knownType;
-            slot.FirstValue = new ProtobufValue() { Parsed = templateValue };
+            if (knownType == ProtobufNativeType.TYPE_ENUM && typeof(T).IsEnum)
+            {
+                slot.Desc.Type.CLRType = typeof(T);
+            }
+            var val = new ProtobufValue(knownType);
+            val.Parsed.Set(templateValue);
+            slot.FirstValue = val;
+        }
+
+        protected bool _BuildFinished;
+        protected internal override void FinishBuild()
+        {
+            if (_BuildFinished)
+            {
+                return;
+            }
+            _BuildFinished = true;
+            base.FinishBuild();
+        }
+
+        public string Name { get; protected internal set; }
+
+        public TemplateProtobufMessage() { }
+        public TemplateProtobufMessage(string name)
+        {
+            Name = name;
+        }
+
+        public override string ToJson(int indent)
+        {
+            return ToJson(indent, new HashSet<ProtobufMessage>());
+        }
+        protected override void ToJson(System.Text.StringBuilder sb, int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
+        {
+            if (alreadyHandledNodes != null && alreadyHandledNodes.Contains(this))
+            {
+                { // {
+                    if (indent >= 0)
+                    {
+                        sb.Append(' ', indent * 4);
+                    }
+                }
+                sb.Append("\"*Ref*");
+                sb.Append(Name);
+                sb.Append("\"");
+                return;
+            }
+            base.ToJson(sb, indent, alreadyHandledNodes);
         }
 
         public IEnumerator GetEnumerator()
@@ -973,11 +2156,11 @@ namespace Capstones.Net
             typeof(double),
             typeof(decimal),
         };
-        private delegate bool DecodeFuncForNativeType(ProtobufValue raw, out object value);
+        private delegate bool DecodeFuncForNativeType(ProtobufValue raw, out ProtobufParsedValue value);
         private static Dictionary<ProtobufNativeType, DecodeFuncForNativeType> _DecodeForNativeTypeFuncs = new Dictionary<ProtobufNativeType, DecodeFuncForNativeType>()
         {
             { ProtobufNativeType.TYPE_BYTES, 
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
                     var buffer = raw.RawData.ToArray();
                     value = buffer;
@@ -985,7 +2168,7 @@ namespace Capstones.Net
                 }
             },
             { ProtobufNativeType.TYPE_STRING, 
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
                     var buffer = raw.RawData.ToArray();
                     try
@@ -995,296 +2178,185 @@ namespace Capstones.Net
                     }
                     catch
                     {
-                        value = null;
+                        value = default(ProtobufParsedValue);
                         return false;
                     }
                 }
             },
             { ProtobufNativeType.TYPE_BOOL,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is uint)
-                    {
-                        value = ((uint)raw.Parsed) != 0;
-                        return true;
-                    }
-                    else if (raw.Parsed is ulong)
+                    if (!raw.Parsed.IsObject)
                     {
                         value = ((ulong)raw.Parsed) != 0;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_ENUM,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is uint || raw.Parsed is ulong)
+                    if (!raw.Parsed.IsObject)
                     {
-                        value = raw.Parsed;
+                        value = (ulong)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_DOUBLE,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        ulong r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (ulong)(uint)raw.Parsed;
-                        }
-                        value = BitConverter.Int64BitsToDouble((long)r);
+                        value = (double)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_FLOAT,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        uint r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (uint)(ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (uint)raw.Parsed;
-                        }
-                        value = BitConverter.ToSingle(BitConverter.GetBytes(r), 0);
+                        value = (float)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_INT64,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        ulong r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (ulong)(uint)raw.Parsed;
-                        }
-                        value = (long)r;
+                        value = (long)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_UINT64,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        ulong r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (ulong)(uint)raw.Parsed;
-                        }
-                        value = r;
+                        value = (ulong)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_SFIXED64,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        ulong r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (ulong)(uint)raw.Parsed;
-                        }
-                        value = (long)r;
+                        value = (long)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_FIXED64,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        ulong r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (ulong)(uint)raw.Parsed;
-                        }
-                        value = r;
+                        value = (ulong)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_INT32,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        uint r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (uint)(ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (uint)raw.Parsed;
-                        }
-                        value = (int)r;
+                        value = (int)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_UINT32,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        uint r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (uint)(ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (uint)raw.Parsed;
-                        }
-                        value = r;
+                        value = (uint)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_SFIXED32,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        uint r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (uint)(ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (uint)raw.Parsed;
-                        }
-                        value = (int)r;
+                        value = (int)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_FIXED32,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        uint r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (uint)(ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (uint)raw.Parsed;
-                        }
-                        value = r;
+                        value = (uint)raw.Parsed;
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_SINT64,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        ulong r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (ulong)(uint)raw.Parsed;
-                        }
+                        ulong r = (ulong)raw.Parsed;
                         value = (long)(r >> 1) ^ -(long)(r & 1);
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
             { ProtobufNativeType.TYPE_SINT32,
-                (ProtobufValue raw, out object value) =>
+                (ProtobufValue raw, out ProtobufParsedValue value) =>
                 {
-                    if (raw.Parsed is ulong || raw.Parsed is uint)
+                    if (!raw.Parsed.IsObject)
                     {
-                        uint r;
-                        if (raw.Parsed is ulong)
-                        {
-                            r = (uint)(ulong)raw.Parsed;
-                        }
-                        else
-                        {
-                            r = (uint)raw.Parsed;
-                        }
+                        uint r = (uint)raw.Parsed;
                         value = (int)(r >> 1) ^ -(int)(r & 1);
                         return true;
                     }
-                    value = null;
+                    value = default(ProtobufParsedValue);
                     return false;
                 }
             },
         };
-        public static bool Decode(ProtobufValue raw, ProtobufNativeType knownType, out object value)
+        public static bool Decode(ProtobufValue raw, ProtobufNativeType knownType, out ProtobufParsedValue value)
         {
-            value = null;
+            value = default(ProtobufParsedValue);
             if (raw.RawData.List == null)
             {
                 return false;
@@ -1292,7 +2364,11 @@ namespace Capstones.Net
             DecodeFuncForNativeType decodeFunc;
             if (_DecodeForNativeTypeFuncs.TryGetValue(knownType, out decodeFunc))
             {
-                return decodeFunc(raw, out value);
+                if (decodeFunc(raw, out value))
+                {
+                    value._Type = knownType;
+                    return true;
+                }
             }
             return false;
         }
@@ -1300,37 +2376,45 @@ namespace Capstones.Net
         {
             if (rslot != null && tslot != null)
             {
-                rslot.Desc.Name = tslot.Desc.Name;
+                rslot.Desc = tslot.Desc;
                 if (rslot.Values.Count > 0)
                 {
-                    if (tslot.Desc.Type.KnownType != 0 && tslot.Desc.Type.KnownType != ProtobufNativeType.TYPE_GROUP && tslot.Desc.Type.KnownType != ProtobufNativeType.TYPE_MESSAGE)
+                    var knownType = tslot.Desc.Type.KnownType;
+                    if (knownType != 0 && knownType != ProtobufNativeType.TYPE_GROUP && knownType != ProtobufNativeType.TYPE_MESSAGE)
                     {
-                        var knownType = tslot.Desc.Type.KnownType;
                         for (int j = 0; j < rslot.Values.Count; ++j)
                         {
                             var subraw = rslot.Values[j];
-                            object val;
-                            if (Decode(subraw, knownType, out val))
+                            ProtobufParsedValue newval;
+                            if (Decode(subraw, knownType, out newval))
                             {
-                                if (knownType == ProtobufNativeType.TYPE_ENUM && tslot.FirstValue.Parsed is Enum)
+                                if (knownType == ProtobufNativeType.TYPE_ENUM)
                                 {
-                                    var etype = tslot.FirstValue.Parsed.GetType();
-                                    val = Enum.ToObject(etype, val);
+                                    Type etype = tslot.FirstValue.Parsed._ObjectVal as Type;
+                                    if (etype == null)
+                                    {
+                                        var eval = tslot.FirstValue.Parsed.Get();
+                                        if (eval is Enum)
+                                        {
+                                            etype = eval.GetType();
+                                        }
+                                    }
+                                    newval._ObjectVal = etype;
                                 }
-                                subraw.Parsed = val;
+                                subraw.Parsed = newval;
                                 rslot.Values[j] = subraw;
                             }
                         }
                     }
                     else if (tslot.FirstValue.IsValid)
                     {
-                        var subtemplate = tslot.FirstValue.Parsed as ProtobufMessage;
+                        var subtemplate = tslot.FirstValue.Parsed.Message;
                         if (subtemplate != null)
                         {
                             for (int j = 0; j < rslot.Values.Count; ++j)
                             {
                                 var subraw = rslot.Values[j];
-                                var submess = subraw.Parsed as ProtobufMessage;
+                                var submess = subraw.Parsed.Message;
                                 if (submess != null)
                                 {
                                     ApplyTemplate(submess, subtemplate);
@@ -1367,7 +2451,7 @@ namespace Capstones.Net
 
     public static class ProtobufMessagePool
     {
-        public readonly static TemplateProtobufMessage FieldOptionsTemplate = new TemplateProtobufMessage()
+        public readonly static TemplateProtobufMessage FieldOptionsTemplate = new TemplateProtobufMessage("google.protobuf.FieldOptions")
         {
             //optional CType ctype = 1 [default = STRING];
             //optional bool packed = 2;
@@ -1377,16 +2461,16 @@ namespace Capstones.Net
             //optional bool weak = 10 [default=false];
             //repeated UninterpretedOption uninterpreted_option = 999;
         };
-        public readonly static TemplateProtobufMessage EnumValueDescriptorTemplate = new TemplateProtobufMessage()
+        public readonly static TemplateProtobufMessage EnumValueDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.EnumValueDescriptorProto")
         {
             { 1, "name", ProtobufNativeType.TYPE_STRING },
             { 2, "number", ProtobufNativeType.TYPE_INT32 },
             //optional EnumValueOptions options = 3;
         };
-        public readonly static TemplateProtobufMessage EnumDescriptorTemplate = new TemplateProtobufMessage()
+        public readonly static TemplateProtobufMessage EnumDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.EnumDescriptorProto")
         {
             { 1, "name", ProtobufNativeType.TYPE_STRING },
-            //repeated EnumValueDescriptorProto value = 2;
+            { 2, "value", EnumValueDescriptorTemplate },
             //optional EnumOptions options = 3;
             //repeated EnumReservedRange reserved_range = 4;
             //repeated string reserved_name = 5;
@@ -1397,7 +2481,7 @@ namespace Capstones.Net
             LABEL_REQUIRED = 2,
             LABEL_REPEATED = 3,
         }
-        public readonly static TemplateProtobufMessage FieldDescriptorTemplate = new TemplateProtobufMessage()
+        public readonly static TemplateProtobufMessage FieldDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.FieldDescriptorProto")
         {
             { 1, "name", ProtobufNativeType.TYPE_STRING },
             { 3, "number", ProtobufNativeType.TYPE_INT32 },
@@ -1410,7 +2494,7 @@ namespace Capstones.Net
             { 10, "json_name", ProtobufNativeType.TYPE_STRING },
             { 8, "options", FieldOptionsTemplate },
         };
-        public readonly static TemplateProtobufMessage MessageDescriptorTemplate = new TemplateProtobufMessage()
+        public readonly static TemplateProtobufMessage MessageDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.DescriptorProto")
         {
             { 1, "name", ProtobufNativeType.TYPE_STRING },
             { 2, "field", FieldDescriptorTemplate },
@@ -1423,13 +2507,13 @@ namespace Capstones.Net
             //repeated ReservedRange reserved_range = 9;
             { 10, "reserved_name", ProtobufNativeType.TYPE_STRING },
         };
-        public readonly static TemplateProtobufMessage ServiceDescriptorTemplate = new TemplateProtobufMessage()
+        public readonly static TemplateProtobufMessage ServiceDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.ServiceDescriptorProto")
         {
             { 1, "name", typeof(string) },
             //repeated MethodDescriptorProto method = 2;
             //optional ServiceOptions options = 3;
         };
-        public readonly static TemplateProtobufMessage DescriptorFileTemplate = new TemplateProtobufMessage()
+        public readonly static TemplateProtobufMessage DescriptorFileTemplate = new TemplateProtobufMessage("google.protobuf.FileDescriptorProto")
         {
             { 1, "name", ProtobufNativeType.TYPE_STRING },
             { 2, "package", ProtobufNativeType.TYPE_STRING },
@@ -1488,7 +2572,7 @@ namespace Capstones.Net
                 }
                 foreach (var kvp in allmessages)
                 {
-                    templates[kvp.Key] = new TemplateProtobufMessage();
+                    templates[kvp.Key] = new TemplateProtobufMessage(kvp.Key);
                 }
                 foreach (var kvp in allmessages)
                 {
@@ -1550,7 +2634,7 @@ namespace Capstones.Net
         [UnityEditor.MenuItem("Test/Dynamic Protobuf Message/Test Encode", priority = 100010)]
         public static void TestEncode()
         {
-            UnityEngine.Debug.Log(ProtobufMessagePool.MessageDescriptorTemplate.ToJson(0, null));
+            UnityEngine.Debug.Log(ProtobufMessagePool.MessageDescriptorTemplate.ToJson(0));
 
             var message = new ProtobufMessage();
             var slot = message.GetOrCreateSlot(1);
@@ -1578,7 +2662,6 @@ namespace Capstones.Net
         [UnityEditor.MenuItem("Test/Dynamic Protobuf Message/Test Decode", priority = 100020)]
         public static void TestDecode()
         {
-
             var templates = ProtobufMessagePool.ReadTemplates(new ListSegment<byte>(TestDescriptorFileData));
             foreach (var kvp in templates)
             {
