@@ -2690,15 +2690,13 @@ namespace Capstones.Net
                 if (!string.IsNullOrEmpty(slot.Desc.Name) || slot.Desc.Type.KnownType != 0)
                 {
                     sb.AppendLine();
-                    //if (slot.FirstValue.Parsed.Message is TemplateProtobufMessage)
-                    //{
-                    //    var tmessage = slot.FirstValue.Parsed.Message as TemplateProtobufMessage;
-                    //    tmessage.ToReadable(sb, indent + 1, alreadyHandledNodes);
-                    //}
-                    //else if (slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_MESSAGE)
+                    sb.Append(' ', indent * 4 + 4);
+                    if (slot.Desc.Label == ProtobufFieldLabel.LABEL_REPEATED)
+                    {
+                        sb.Append("repeated ");
+                    }
                     if (slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_MESSAGE || slot.FirstValue.Parsed.Message is TemplateProtobufMessage)
                     {
-                        sb.Append(' ', indent * 4 + 4);
                         if (!string.IsNullOrEmpty(slot.Desc.Type.MessageName))
                         {
                             sb.Append(slot.Desc.Type.MessageName);
@@ -2714,7 +2712,6 @@ namespace Capstones.Net
                     }
                     else if (slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_ENUM)
                     {
-                        sb.Append(' ', indent * 4 + 4);
                         if (!string.IsNullOrEmpty(slot.Desc.Type.MessageName))
                         {
                             sb.Append(slot.Desc.Type.MessageName);
@@ -2735,7 +2732,6 @@ namespace Capstones.Net
                         {
                             friendly = "unknown";
                         }
-                        sb.Append(' ', indent * 4 + 4);
                         sb.Append(friendly);
                     }
 
