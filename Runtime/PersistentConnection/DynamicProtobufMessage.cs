@@ -140,29 +140,13 @@ namespace Capstones.Net
         private struct OverlappedValue
         {
             [System.Runtime.InteropServices.FieldOffset(0)]
-            public bool _BooleanVal;
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public byte _ByteVal;
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public sbyte _SByteVal;
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public short _Int16Val;
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public ushort _UInt16Val;
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public int _Int32Val;
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public uint _UInt32Val;
-            [System.Runtime.InteropServices.FieldOffset(0)]
             public long _Int64Val;
             [System.Runtime.InteropServices.FieldOffset(0)]
             public ulong _UInt64Val;
             [System.Runtime.InteropServices.FieldOffset(0)]
-            public IntPtr _IntPtrVal;
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public UIntPtr _UIntPtrVal;
-            [System.Runtime.InteropServices.FieldOffset(0)]
             public float _SingleVal;
+            [System.Runtime.InteropServices.FieldOffset(4)]
+            public float _SingleValBE;
             [System.Runtime.InteropServices.FieldOffset(0)]
             public double _DoubleVal;
         }
@@ -267,6 +251,15 @@ namespace Capstones.Net
             set { Set(value); }
         }
 
+        public T GetEnum<T>() where T : struct
+        {
+            return _EnumAccessor.GetEnum<T>(ref this);
+        }
+        public void SetEnum<T>(T val) where T : struct
+        {
+            _EnumAccessor.SetEnum<T>(ref this, val);
+        }
+
         public ProtobufParsedValue(ProtobufNativeType ntype)
             : this()
         {
@@ -345,7 +338,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._BooleanVal = val;
+                    pval._Union._Int64Val = val ? -1L : 0L;
                     return true;
                 }
             }
@@ -361,7 +354,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._ByteVal;
+                    val = (byte)pval._Union._UInt64Val;
                     return true;
                 }
             }
@@ -377,7 +370,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._ByteVal = val;
+                    pval._Union._UInt64Val = val;
                     return true;
                 }
             }
@@ -393,7 +386,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._SByteVal;
+                    val = (sbyte)pval._Union._Int64Val;
                     return true;
                 }
             }
@@ -409,7 +402,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._SByteVal = val;
+                    pval._Union._Int64Val = val;
                     return true;
                 }
             }
@@ -425,7 +418,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._Int16Val;
+                    val = (short)pval._Union._Int64Val;
                     return true;
                 }
             }
@@ -441,7 +434,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._Int16Val = val;
+                    pval._Union._Int64Val = val;
                     return true;
                 }
             }
@@ -457,7 +450,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._UInt16Val;
+                    val = (ushort)pval._Union._UInt64Val;
                     return true;
                 }
             }
@@ -473,7 +466,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._UInt16Val = val;
+                    pval._Union._UInt64Val = val;
                     return true;
                 }
             }
@@ -489,7 +482,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._Int32Val;
+                    val = (int)pval._Union._Int64Val;
                     return true;
                 }
             }
@@ -505,7 +498,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._Int32Val = val;
+                    pval._Union._Int64Val = val;
                     return true;
                 }
             }
@@ -521,7 +514,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._UInt32Val;
+                    val = (uint)pval._Union._UInt64Val;
                     return true;
                 }
             }
@@ -537,7 +530,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._UInt32Val = val;
+                    pval._Union._UInt64Val = val;
                     return true;
                 }
             }
@@ -617,7 +610,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._IntPtrVal;
+                    val = (IntPtr)pval._Union._Int64Val;
                     return true;
                 }
             }
@@ -640,7 +633,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._IntPtrVal = val;
+                    pval._Union._Int64Val = (long)val;
                     return true;
                 }
             }
@@ -656,7 +649,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._UIntPtrVal;
+                    val = (UIntPtr)pval._Union._UInt64Val;
                     return true;
                 }
             }
@@ -679,7 +672,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._UIntPtrVal = val;
+                    pval._Union._UInt64Val = (ulong)val;
                     return true;
                 }
             }
@@ -695,7 +688,14 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    val = pval._Union._SingleVal;
+                    if (BitConverter.IsLittleEndian)
+                    {
+                        val = pval._Union._SingleVal;
+                    }
+                    else
+                    {
+                        val = pval._Union._SingleValBE;
+                    }
                     return true;
                 }
             }
@@ -711,7 +711,14 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    pval._Union._SingleVal = val;
+                    if (BitConverter.IsLittleEndian)
+                    {
+                        pval._Union._SingleVal = val;
+                    }
+                    else
+                    {
+                        pval._Union._SingleValBE = val;
+                    }
                     return true;
                 }
             }
@@ -883,6 +890,24 @@ namespace Capstones.Net
             public void Set<T>(ref ProtobufParsedValue pval, T val)
             {
                 Set(ref pval, (object)val);
+            }
+            public T GetEnum<T>(ref ProtobufParsedValue pval) where T : struct
+            {
+                if (!pval.IsObject)
+                {
+                    var raw = pval.UInt64;
+                    return EnumUtils.ConvertToEnum<T>(raw);
+                }
+                return default(T);
+            }
+            public void SetEnum<T>(ref ProtobufParsedValue pval, T val) where T : struct
+            {
+                if (pval._Type == 0 || pval._Type == ProtobufNativeType.TYPE_ENUM)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_ENUM;
+                    pval._ObjectVal = typeof(T);
+                    pval._Union._UInt64Val = EnumUtils.ConvertFromEnum<T>(val);
+                }
             }
             public object Get(ref ProtobufParsedValue pval)
             {
@@ -1415,6 +1440,11 @@ namespace Capstones.Net
             }
             Slots = new SlotAccessor(this);
         }
+        public ProtobufMessage(ProtobufMessage template)
+            : this()
+        {
+            ApplyTemplate(template);
+        }
         protected internal FieldSlot GetSlot(int num)
         {
             if (num <= 0)
@@ -1909,19 +1939,36 @@ namespace Capstones.Net
 
             public T As<T>()
             {
-                return _Slot.FirstValue.Parsed.Get<T>();
+                return Get<T>();
+            }
+            public T AsEnum<T>() where T : struct
+            {
+                return GetEnum<T>();
             }
             public SlotValueAccessor<T> AsList<T>()
             {
                 return new SlotValueAccessor<T>(_Slot);
             }
+            public SlotEnumAccessor<T> AsEnums<T>() where T : struct
+            {
+                return new SlotEnumAccessor<T>(_Slot);
+            }
+
             public T Get<T>()
             {
-                return As<T>();
+                return _Slot.FirstValue.Parsed.Get<T>();
             }
             public void Set<T>(T val)
             {
                 var old = _Slot.FirstValue; old.Parsed.Set<T>(val); _Slot.FirstValue = old;
+            }
+            public T GetEnum<T>() where T : struct
+            {
+                return _Slot.FirstValue.Parsed.GetEnum<T>();
+            }
+            public void SetEnum<T>(T val) where T : struct
+            {
+                var old = _Slot.FirstValue; old.Parsed.SetEnum<T>(val); _Slot.FirstValue = old;
             }
 
             public bool Boolean
@@ -2113,10 +2160,10 @@ namespace Capstones.Net
             {
                 var newVal = new ProtobufValue();
                 newVal.Parsed.Set<T>(item);
-                if (_Slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_ENUM)
-                {
-                    newVal.Parsed._ObjectVal = _Slot.Desc.Type.CLRType;
-                }
+                //if (_Slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_ENUM)
+                //{
+                //    newVal.Parsed._ObjectVal = _Slot.Desc.Type.CLRType; // maybe we donot need this?
+                //}
                 _Slot.Values.Insert(index, newVal);
             }
             public int IndexOf(T item)
@@ -2160,6 +2207,101 @@ namespace Capstones.Net
                 for (int i = 0; i < Count; ++i)
                 {
                     yield return _Slot.Values[i].Parsed.Get<T>();
+                }
+            }
+            public bool Remove(T item)
+            {
+                bool found = false;
+                for (int i = Count - 1; i >= 0; --i)
+                {
+                    if (Equals(this[i], item))
+                    {
+                        RemoveAt(i);
+                        found = true;
+                    }
+                }
+                return found;
+            }
+            public void RemoveAt(int index)
+            {
+                _Slot.Values.RemoveAt(index);
+            }
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+        }
+        public struct SlotEnumAccessor<T> : IList<T> where T : struct
+        {
+            internal FieldSlot _Slot;
+            internal SlotEnumAccessor(FieldSlot slot)
+            {
+                _Slot = slot;
+            }
+
+            public T this[int index]
+            {
+                get { return _Slot.Values[index].Parsed.GetEnum<T>(); }
+                set
+                {
+                    var old = _Slot.Values[index];
+                    old.Parsed.SetEnum<T>(value);
+                    _Slot.Values[index] = old;
+                }
+            }
+            public int Count { get { return _Slot.Values.Count; } }
+            public bool IsReadOnly { get { return false; } }
+            public void Insert(int index, T item)
+            {
+                var newVal = new ProtobufValue();
+                newVal.Parsed.SetEnum<T>(item);
+                //if (_Slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_ENUM)
+                //{
+                //    newVal.Parsed._ObjectVal = _Slot.Desc.Type.CLRType; // maybe we donot need this?
+                //}
+                _Slot.Values.Insert(index, newVal);
+            }
+            public int IndexOf(T item)
+            {
+                for (int i = 0; i < Count; ++i)
+                {
+                    if (Equals(this[i], item))
+                    {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            public void Add(T item)
+            {
+                Insert(Count, item);
+            }
+            public void Clear()
+            {
+                _Slot.Values.Clear();
+            }
+            public bool Contains(T item)
+            {
+                return IndexOf(item) >= 0;
+            }
+            public void CopyTo(T[] array, int arrayIndex)
+            {
+                for (int i = 0; i < Count && i + arrayIndex < array.Length; ++i)
+                {
+                    array[i + arrayIndex] = _Slot.Values[i].Parsed.GetEnum<T>();
+                }
+            }
+            public T[] ToArray()
+            {
+                T[] arr = new T[Count];
+                CopyTo(arr, 0);
+                return arr;
+            }
+            public IEnumerator<T> GetEnumerator()
+            {
+                for (int i = 0; i < Count; ++i)
+                {
+                    yield return _Slot.Values[i].Parsed.GetEnum<T>();
                 }
             }
             public bool Remove(T item)
@@ -2887,11 +3029,312 @@ namespace Capstones.Net
             raw.FinishBuild();
             return raw;
         }
+    }
 
-        //public static Dictionary<string, ProtobufMessage> ReadTemplates(string content)
-        //{
+    public static class ProtobufMessageWriter
+    {
+        public static int WriteVariant(ulong value, IList<byte> buffer, int offset)
+        {
+            int cnt = 0;
+            ulong rest = value;
+            while (rest >= 128)
+            {
+                var part = (byte)((rest & 0x7F) + 0x80);
+                buffer.Insert(offset + (cnt++), part);
+                rest >>= 7;
+            }
+            buffer.Insert(offset + (cnt++), (byte)rest);
+            return cnt;
+        }
+        public static int WriteFixed32(uint value, IList<byte> buffer, int offset)
+        {
+            for (int i = 0; i < 4; ++i)
+            {
+                var part = (byte)(value >> (i * 8));
+                buffer.Insert(offset + i, part);
+            }
+            return 4;
+        }
+        public static int WriteFixed64(ulong value, IList<byte> buffer, int offset)
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                var part = (byte)(value >> (i * 8));
+                buffer.Insert(offset + i, part);
+            }
+            return 8;
+        }
+        public static int WriteTag(int num, ProtobufLowLevelType ltype, IList<byte> buffer, int offset)
+        {
+            ulong tag = (ulong)num;
+            tag <<= 3;
+            tag += ((ulong)ltype) & 0x07;
+            return WriteVariant(tag, buffer, offset);
+        }
+        public static int WriteSegment(ListSegment<byte> list, IList<byte> buffer, int offset)
+        {
+            for (int i = 0; i < list.Count; ++i)
+            {
+                buffer.Insert(offset + i, list[i]);
+            }
+            return list.Count;
+        }
+        public static int WriteString(string value, IList<byte> buffer, int offset)
+        {
+            var arr = System.Text.Encoding.UTF8.GetBytes(value);
+            for (int i = 0; i < arr.Length; ++i)
+            {
+                buffer.Insert(offset + i, arr[i]);
+            }
+            return arr.Length;
+        }
+        public static int WriteRaw(ListSegment<byte> raw, IList<byte> buffer, int offset)
+        {
+            int cnt = 0;
+            if (raw.List == null)
+            {
+                cnt += WriteVariant(0, buffer, offset + cnt);
+            }
+            else
+            {
+                cnt += WriteVariant((ulong)raw.Count, buffer, offset + cnt);
+                cnt += WriteSegment(raw, buffer, offset + cnt);
+            }
+            return cnt;
+        }
+        public static int WriteVariant(ProtobufValue value, int fieldnum, ProtobufNativeType ntype, IList<byte> buffer, int offset)
+        {
+            int cnt = 0;
+            var val = value.Parsed.UInt64;
+            cnt += WriteTag(fieldnum, ProtobufLowLevelType.Varint, buffer, offset + cnt);
+            cnt += WriteVariant(val, buffer, offset + cnt);
+            return cnt;
+        }
+        public static int WriteFixed32(ProtobufValue value, int fieldnum, ProtobufNativeType ntype, IList<byte> buffer, int offset)
+        {
+            int cnt = 0;
+            var val = value.Parsed.UInt32;
+            cnt += WriteTag(fieldnum, ProtobufLowLevelType.Fixed32, buffer, offset + cnt);
+            cnt += WriteFixed32(val, buffer, offset + cnt);
+            return cnt;
+        }
+        public static int WriteFixed64(ProtobufValue value, int fieldnum, ProtobufNativeType ntype, IList<byte> buffer, int offset)
+        {
+            int cnt = 0;
+            var val = value.Parsed.UInt64;
+            cnt += WriteTag(fieldnum, ProtobufLowLevelType.Fixed64, buffer, offset + cnt);
+            cnt += WriteFixed64(val, buffer, offset + cnt);
+            return cnt;
+        }
 
-        //}
+        private delegate int EncodeFuncForNativeType(ProtobufValue value, int fieldnum, ProtobufNativeType ntype, IList<byte> buffer, int offset);
+        private static Dictionary<ProtobufNativeType, EncodeFuncForNativeType> _EncodeForNativeTypeFuncs = new Dictionary<ProtobufNativeType, EncodeFuncForNativeType>()
+        {
+            { ProtobufNativeType.TYPE_BOOL, WriteVariant },
+            { ProtobufNativeType.TYPE_BYTES,
+                (value, fieldnum, ntype, buffer, offset) =>
+                {
+                    int cnt = 0;
+                    cnt += WriteTag(fieldnum, ProtobufLowLevelType.LengthDelimited, buffer, offset + cnt);
+                    if (value.Parsed.IsObject)
+                    {
+                        var bytes = value.Parsed.Get<byte[]>();
+                        if (bytes != null)
+                        {
+                            var raw = new ListSegment<byte>(bytes);
+                            cnt += WriteRaw(raw, buffer, offset + cnt);
+                            return cnt;
+                        }
+                        var unk = value.Parsed.Get<ProtobufUnknowValue>();
+                        if (unk != null)
+                        {
+                            cnt += WriteRaw(unk.Raw, buffer, offset + cnt);
+                            return cnt;
+                        }
+                    }
+                    cnt += WriteRaw(value.RawData, buffer, offset + cnt);
+                    return cnt;
+                }
+            },
+            { ProtobufNativeType.TYPE_DOUBLE, WriteFixed64 },
+            { ProtobufNativeType.TYPE_ENUM, WriteVariant },
+            { ProtobufNativeType.TYPE_FIXED32, WriteFixed32 },
+            { ProtobufNativeType.TYPE_FIXED64, WriteFixed64 },
+            { ProtobufNativeType.TYPE_FLOAT, WriteFixed32 },
+            { ProtobufNativeType.TYPE_INT32, WriteVariant },
+            { ProtobufNativeType.TYPE_INT64, WriteVariant },
+            { ProtobufNativeType.TYPE_MESSAGE,
+                (value, fieldnum, ntype, buffer, offset) =>
+                {
+                    int cnt = 0;
+                    cnt += WriteTag(fieldnum, ProtobufLowLevelType.LengthDelimited, buffer, offset + cnt);
+                    var message = value.Parsed.Message;
+                    if (message != null)
+                    {
+                        var ccnt = WriteRaw(message, buffer, offset + cnt);
+                        cnt += WriteVariant((ulong)ccnt, buffer, offset + cnt);
+                        cnt += ccnt;
+                    }
+                    else
+                    {
+                        cnt += WriteVariant(0, buffer, offset + cnt);
+                    }
+                    return cnt;
+                }
+            },
+            { ProtobufNativeType.TYPE_SFIXED32, WriteFixed32 },
+            { ProtobufNativeType.TYPE_SFIXED64, WriteFixed64 },
+            { ProtobufNativeType.TYPE_SINT32,
+                (value, fieldnum, ntype, buffer, offset) =>
+                {
+                    int cnt = 0;
+                    var val = value.Parsed.Int32;
+                    var zval = (uint) ((val << 1) ^ (val >> 31));
+                    cnt += WriteTag(fieldnum, ProtobufLowLevelType.Varint, buffer, offset + cnt);
+                    cnt += WriteVariant(zval, buffer, offset + cnt);
+                    return cnt;
+                }
+            },
+            { ProtobufNativeType.TYPE_SINT64,
+                (value, fieldnum, ntype, buffer, offset) =>
+                {
+                    int cnt = 0;
+                    var val = value.Parsed.Int64;
+                    var zval = (ulong) ((val << 1) ^ (val >> 63));
+                    cnt += WriteTag(fieldnum, ProtobufLowLevelType.Varint, buffer, offset + cnt);
+                    cnt += WriteVariant(zval, buffer, offset + cnt);
+                    return cnt;
+                }
+            },
+            { ProtobufNativeType.TYPE_STRING,
+                (value, fieldnum, ntype, buffer, offset) =>
+                {
+                    int cnt = 0;
+                    cnt += WriteTag(fieldnum, ProtobufLowLevelType.LengthDelimited, buffer, offset + cnt);
+                    var str = value.Parsed.String;
+                    if (str != null)
+                    {
+                        var ccnt = WriteString(str, buffer, offset + cnt);
+                        cnt += WriteVariant((ulong)ccnt, buffer, offset + cnt);
+                        cnt += ccnt;
+                    }
+                    else
+                    {
+                        cnt += WriteVariant(0, buffer, offset + cnt);
+                    }
+                    return cnt;
+                }
+            },
+            { ProtobufNativeType.TYPE_UINT32, WriteVariant },
+            { ProtobufNativeType.TYPE_UINT64, WriteVariant },
+            { ProtobufNativeType.TYPE_UNKNOWN,
+                (value, fieldnum, ntype, buffer, offset) =>
+                {
+                    int cnt = 0;
+                    cnt += WriteTag(fieldnum, ProtobufLowLevelType.LengthDelimited, buffer, offset + cnt);
+                    if (value.Parsed.IsObject)
+                    {
+                        var unk = value.Parsed.Get<ProtobufUnknowValue>();
+                        if (unk != null)
+                        {
+                            cnt += WriteRaw(unk.Raw, buffer, offset + cnt);
+                            return cnt;
+                        }
+                    }
+                    cnt += WriteRaw(value.RawData, buffer, offset + cnt);
+                    return cnt;
+                }
+            },
+        };
+        public static int WriteRaw(ProtobufValue value, int fieldnum, ProtobufNativeType ntype, IList<byte> buffer, int offset)
+        {
+            int cnt = 0;
+            EncodeFuncForNativeType func;
+            if (ntype == 0 || !_EncodeForNativeTypeFuncs.TryGetValue(ntype, out func))
+            { // not templated. try default encode.
+                if (value.Parsed.IsEmpty || value.Parsed.IsObject)
+                {
+                    cnt += WriteTag(fieldnum, ProtobufLowLevelType.LengthDelimited, buffer, offset + cnt);
+                    if (value.Parsed.IsEmpty)
+                    {
+                        cnt += WriteRaw(value.RawData, buffer, offset + cnt);
+                    }
+                    else
+                    {
+                        var obj = value.Parsed.Get();
+                        if (obj is string)
+                        {
+                            var ccnt = WriteString((string)obj, buffer, offset + cnt);
+                            cnt += WriteVariant((ulong)ccnt, buffer, offset + cnt);
+                            cnt += ccnt;
+                        }
+                        else if (obj is ProtobufUnknowValue)
+                        {
+                            var raw = ((ProtobufUnknowValue)obj).Raw;
+                            cnt += WriteRaw(raw, buffer, offset + cnt);
+                        }
+                        else if (obj is byte[])
+                        {
+                            var raw = new ListSegment<byte>((byte[])obj);
+                            cnt += WriteRaw(raw, buffer, offset + cnt);
+                        }
+                        else if (obj is ProtobufMessage)
+                        {
+                            var ccnt = WriteRaw((ProtobufMessage)obj, buffer, offset + cnt);
+                            cnt += WriteVariant((ulong)ccnt, buffer, offset + cnt);
+                            cnt += ccnt;
+                        }
+                        else
+                        {
+                            cnt += WriteRaw(value.RawData, buffer, offset + cnt);
+                        }
+                    }
+                }
+                else
+                {
+                    cnt += WriteVariant(value, fieldnum, ntype, buffer, offset + cnt);
+                }
+            }
+            else
+            {
+                cnt += func(value, fieldnum, ntype, buffer, offset + cnt);
+            }
+            return cnt;
+        }
+        public static int WriteRaw(ProtobufMessage message, IList<byte> buffer, int offset)
+        {
+            int cnt = 0;
+            for (int i = 0; i < 16; ++i)
+            {
+                var slot = message._LowFields[i];
+                if (slot.Values.Count > 0)
+                {
+                    var fnum = slot.Desc.Number;
+                    var ntype = slot.Desc.Type.KnownType;
+                    for (int j = 0; j < slot.Values.Count; ++j)
+                    {
+                        cnt += WriteRaw(slot.Values[j], fnum, ntype, buffer, offset + cnt);
+                    }
+                }
+            }
+            int[] hnums = new int[message._HighFields.Count];
+            message._HighFields.Keys.CopyTo(hnums, 0);
+            Array.Sort(hnums);
+            for (int i = 0; i < hnums.Length; ++i)
+            {
+                var slot = message._HighFields[hnums[i]];
+                if (slot.Values.Count > 0)
+                {
+                    var fnum = slot.Desc.Number;
+                    var ntype = slot.Desc.Type.KnownType;
+                    for (int j = 0; j < slot.Values.Count; ++j)
+                    {
+                        cnt += WriteRaw(slot.Values[j], fnum, ntype, buffer, offset + cnt);
+                    }
+                }
+            }
+            return cnt;
+        }
     }
 
     public static class ProtobufMessagePool
@@ -3029,7 +3472,7 @@ namespace Capstones.Net
                         var field = fields[i];
                         var name = field["name"].String;
                         var num = field["number"].Int32;
-                        var ntype = field["type"].As<ProtobufNativeType>();
+                        var ntype = field["type"].AsEnum<ProtobufNativeType>();
                         var mtype = field["type_name"].String;
                         if (num > 0 && !string.IsNullOrEmpty(name))
                         {
