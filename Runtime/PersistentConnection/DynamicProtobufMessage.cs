@@ -1372,6 +1372,12 @@ namespace Capstones.Net
         TYPE_EMPTY = 0,
         TYPE_UNKNOWN = 255,
     };
+    public enum ProtobufFieldLabel
+    {
+        LABEL_OPTIONAL = 1,
+        LABEL_REQUIRED = 2,
+        LABEL_REPEATED = 3,
+    }
     public struct ProtobufHighLevelType
     {
         public ProtobufNativeType KnownType;
@@ -1397,8 +1403,8 @@ namespace Capstones.Net
         public int Number;
         public string Name;
         public ProtobufHighLevelType Type;
+        public ProtobufFieldLabel Label;
     }
-
     public class ProtobufMessage // TODO: IDictionary
     {
         protected internal class FieldSlot
@@ -1732,7 +1738,7 @@ namespace Capstones.Net
         }
 
         protected class TooLongToReanderToJsonException : Exception { }
-        protected virtual void ToJson(System.Text.StringBuilder sb, int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
+        public virtual void ToJson(System.Text.StringBuilder sb, int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
         {
             if (alreadyHandledNodes == null && (indent > 100 || sb.Length > 1024 * 1024))
             {
@@ -2416,9 +2422,142 @@ namespace Capstones.Net
         {
             return ToJson(indent, new HashSet<ProtobufMessage>());
         }
-        protected override void ToJson(System.Text.StringBuilder sb, int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
+
+        public static Dictionary<ProtobufNativeType, string> _NativeType2FriendlyType = new Dictionary<ProtobufNativeType, string>()
         {
-            if (alreadyHandledNodes != null && alreadyHandledNodes.Contains(this))
+            { ProtobufNativeType.TYPE_BOOL, "bool" },
+            { ProtobufNativeType.TYPE_BYTES, "bytes" },
+            { ProtobufNativeType.TYPE_DOUBLE, "double" },
+            { ProtobufNativeType.TYPE_ENUM, "enum" },
+            { ProtobufNativeType.TYPE_FIXED32, "fixed32" },
+            { ProtobufNativeType.TYPE_FIXED64, "fixed64" },
+            { ProtobufNativeType.TYPE_FLOAT, "float" },
+            { ProtobufNativeType.TYPE_INT32, "int32" },
+            { ProtobufNativeType.TYPE_INT64, "int64" },
+            { ProtobufNativeType.TYPE_SFIXED32, "sfixed32" },
+            { ProtobufNativeType.TYPE_SFIXED64, "sfixed64" },
+            { ProtobufNativeType.TYPE_SINT32, "sint32" },
+            { ProtobufNativeType.TYPE_SINT64, "sint64" },
+            { ProtobufNativeType.TYPE_STRING, "string" },
+            { ProtobufNativeType.TYPE_UINT32, "uint32" },
+            { ProtobufNativeType.TYPE_UINT64, "uint64" },
+        };
+        protected static new void WriteToJson(System.Text.StringBuilder sb, FieldSlot slot, int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
+        {
+            if (!string.IsNullOrEmpty(slot.Desc.Name) || slot.Desc.Type.KnownType != 0)
+            {
+                sb.Append(",");
+                { // key
+                    if (indent >= 0)
+                    {
+                        sb.AppendLine();
+                        sb.Append(' ', indent * 4 + 4);
+                    }
+                    sb.Append('"');
+                    if (slot.Desc.Name != null)
+                    {
+                        sb.Append(slot.Desc.Name);
+                    }
+                    else
+                    {
+                        sb.Append(slot.Desc.Number);
+                    }
+                    sb.Append('"');
+                    if (indent >= 0)
+                    {
+                        sb.Append(" ");
+                    }
+                    sb.Append(":");
+                    if (indent >= 0)
+                    {
+                        sb.Append(" ");
+                    }
+                }
+                { // value
+                    if (slot.FirstValue.Parsed.Message != null)
+                    { // ref to another message.
+                        if (indent >= 0)
+                        {
+                            sb.AppendLine();
+                            sb.Append(' ', indent * 4 + 4);
+                        }
+                        if (slot.Desc.Label == ProtobufFieldLabel.LABEL_REPEATED)
+                        {
+                            sb.Append("[");
+                            if (indent >= 0)
+                            {
+                                sb.Append(" ");
+                            }
+                        }
+                        var pos = sb.Length;
+
+                        var message = slot.FirstValue.Parsed.Message;
+                        message.ToJson(sb, indent < 0 ? indent : indent + 1, alreadyHandledNodes);
+                        if (indent >= 0)
+                        {
+                            sb.Remove(pos, indent * 4 + 4);
+                        }
+                        if (slot.Desc.Label == ProtobufFieldLabel.LABEL_REPEATED)
+                        {
+                            if (indent >= 0)
+                            {
+                                sb.Append(" ");
+                            }
+                            sb.Append("]");
+                        }
+                    }
+                    else
+                    {
+                        if (slot.Desc.Label == ProtobufFieldLabel.LABEL_REPEATED)
+                        {
+                            sb.Append("[");
+                            if (indent >= 0)
+                            {
+                                sb.Append(" ");
+                            }
+                        }
+                        if (slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_ENUM)
+                        {
+
+                            sb.Append("\"enum");
+                            if (slot.Desc.Type.CLRType != null)
+                            {
+                                sb.Append(" ");
+                                sb.Append(slot.Desc.Type.CLRType.FullName);
+                            }
+                            else if (!string.IsNullOrEmpty(slot.Desc.Type.MessageName))
+                            {
+                                sb.Append(" ");
+                                sb.Append(slot.Desc.Type.MessageName);
+                            }
+                            sb.Append("\"");
+                        }
+                        else
+                        {
+                            string friendly;
+                            if (!_NativeType2FriendlyType.TryGetValue(slot.Desc.Type.KnownType, out friendly))
+                            {
+                                friendly = "?";
+                            }
+                            sb.Append("\"");
+                            sb.Append(friendly);
+                            sb.Append("\"");
+                        }
+                        if (slot.Desc.Label == ProtobufFieldLabel.LABEL_REPEATED)
+                        {
+                            if (indent >= 0)
+                            {
+                                sb.Append(" ");
+                            }
+                            sb.Append("]");
+                        }
+                    }
+                }
+            }
+        }
+        public override void ToJson(System.Text.StringBuilder sb, int indent, HashSet<ProtobufMessage> alreadyHandledNodes)
+        {
+            if (alreadyHandledNodes != null && !alreadyHandledNodes.Add(this))
             {
                 if (indent >= 0)
                 {
@@ -2429,85 +2568,213 @@ namespace Capstones.Net
                 sb.Append("\"");
                 return;
             }
-            var startIndex = sb.Length;
-            base.ToJson(sb, indent, alreadyHandledNodes);
-            var endIndex = sb.Length;
-            int firstMark = -1;
-            int firstLineEnding = -1;
-            for (int i = startIndex; i < endIndex; ++i)
+            if (alreadyHandledNodes == null && (indent > 100 || sb.Length > 1024 * 1024))
             {
-                if (firstMark < 0)
-                {
-                    if (sb[i] == '{')
-                    {
-                        firstMark = i;
-                    }
-                }
-                else
-                {
-                    if (firstLineEnding < 0)
-                    {
-                        if (sb[i] == '\r' || sb[i] == '\n')
-                        {
-                            firstLineEnding = i;
-                            break;
-                        }
-                    }
-                }
+                throw new TooLongToReanderToJsonException();
             }
-            if (firstMark >= 0)
-            {
-                bool isEmpty = true;
-                for (int i = firstMark + 1; i < endIndex; ++i)
-                {
-                    if (!char.IsWhiteSpace(sb[i]) && sb[i] != '}')
-                    {
-                        isEmpty = false;
-                        break;
-                    }
-                }
-                if (firstLineEnding >= 0)
-                {
-                    for (; firstLineEnding < endIndex; ++firstLineEnding)
-                    {
-                        if (sb[firstLineEnding] != '\r' && sb[firstLineEnding] != '\n')
-                        {
-                            break;
-                        }
-                    }
-                    firstMark = firstLineEnding;
-                }
-                else
-                {
-                    ++firstMark;
-                }
 
+            { // {
                 if (indent >= 0)
                 {
-                    sb.Insert(firstMark, Environment.NewLine);
+                    sb.Append(' ', indent * 4);
                 }
-                if (!isEmpty)
-                {
-                    sb.Insert(firstMark, ",");
-                }
-                sb.Insert(firstMark, "\"");
-                sb.Insert(firstMark, Name);
-                sb.Insert(firstMark, "\"");
+                sb.Append('{');
+            }
+            if (indent >= 0)
+            {
+                sb.AppendLine();
+                sb.Append(' ', indent * 4 + 4);
+            }
+            sb.Append("\"@name\"");
+            if (indent >= 0)
+            {
+                sb.Append(" ");
+            }
+            sb.Append(":");
+            if (indent >= 0)
+            {
+                sb.Append(" ");
+            }
+            sb.Append("\"");
+            sb.Append(Name);
+            sb.Append("\"");
+
+            for (int i = 0; i < 16; ++i)
+            {
+                var slot = _LowFields[i];
+                WriteToJson(sb, slot, indent, alreadyHandledNodes);
+            }
+            int[] highnums = new int[_HighFields.Count];
+            _HighFields.Keys.CopyTo(highnums, 0);
+            Array.Sort(highnums);
+            for (int i = 0; i < highnums.Length; ++i)
+            {
+                var num = highnums[i];
+                var slot = _HighFields[num];
+                WriteToJson(sb, slot, indent, alreadyHandledNodes);
+            }
+            { // }
                 if (indent >= 0)
                 {
-                    sb.Insert(firstMark, " ");
+                    sb.AppendLine();
+                    sb.Append(' ', indent * 4);
                 }
-                sb.Insert(firstMark, ":");
-                if (indent >= 0)
+                sb.Append('}');
+            }
+            if (alreadyHandledNodes != null)
+            {
+                alreadyHandledNodes.Remove(this);
+            }
+        }
+
+        protected void CollectAll(List<TemplateProtobufMessage> list, HashSet<string> names)
+        {
+            if (names.Add(Name))
+            {
+                list.Add(this);
+                for (int i = 0; i < 16; ++i)
                 {
-                    sb.Insert(firstMark, " ");
+                    var slot = _LowFields[i];
+                    if (slot.FirstValue.Parsed.Message is TemplateProtobufMessage)
+                    {
+                        ((TemplateProtobufMessage)slot.FirstValue.Parsed.Message).CollectAll(list, names);
+                    }
                 }
-                sb.Insert(firstMark, "\"@name\"");
-                if (indent >= 0)
+                int[] highnums = new int[_HighFields.Count];
+                _HighFields.Keys.CopyTo(highnums, 0);
+                Array.Sort(highnums);
+                for (int i = 0; i < highnums.Length; ++i)
                 {
-                    sb.Insert(firstMark, " ", indent * 4 + 4);
+                    var num = highnums[i];
+                    var slot = _HighFields[num];
+                    if (slot.FirstValue.Parsed.Message is TemplateProtobufMessage)
+                    {
+                        ((TemplateProtobufMessage)slot.FirstValue.Parsed.Message).CollectAll(list, names);
+                    }
                 }
             }
+        }
+        public List<TemplateProtobufMessage> CollectAll()
+        {
+            List<TemplateProtobufMessage> list = new List<TemplateProtobufMessage>();
+            HashSet<string> names = new HashSet<string>();
+            CollectAll(list, names);
+            return list;
+        }
+        protected void ToReadable(System.Text.StringBuilder sb, int indent)
+        {
+            sb.Append(' ', indent * 4);
+            sb.Append("message ");
+            sb.Append(Name);
+            sb.AppendLine();
+            sb.Append(' ', indent * 4);
+            sb.Append("{");
+            List<FieldSlot> slots = new List<FieldSlot>();
+            for (int i = 0; i < 16; ++i)
+            {
+                var slot = _LowFields[i];
+                slots.Add(slot);
+            }
+            int[] highnums = new int[_HighFields.Count];
+            _HighFields.Keys.CopyTo(highnums, 0);
+            Array.Sort(highnums);
+            for (int i = 0; i < highnums.Length; ++i)
+            {
+                var num = highnums[i];
+                var slot = _HighFields[num];
+                slots.Add(slot);
+            }
+            for (int i = 0; i < slots.Count; ++i)
+            {
+                var slot = slots[i];
+                if (!string.IsNullOrEmpty(slot.Desc.Name) || slot.Desc.Type.KnownType != 0)
+                {
+                    sb.AppendLine();
+                    //if (slot.FirstValue.Parsed.Message is TemplateProtobufMessage)
+                    //{
+                    //    var tmessage = slot.FirstValue.Parsed.Message as TemplateProtobufMessage;
+                    //    tmessage.ToReadable(sb, indent + 1, alreadyHandledNodes);
+                    //}
+                    //else if (slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_MESSAGE)
+                    if (slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_MESSAGE || slot.FirstValue.Parsed.Message is TemplateProtobufMessage)
+                    {
+                        sb.Append(' ', indent * 4 + 4);
+                        if (!string.IsNullOrEmpty(slot.Desc.Type.MessageName))
+                        {
+                            sb.Append(slot.Desc.Type.MessageName);
+                        }
+                        else if (slot.FirstValue.Parsed.Message is TemplateProtobufMessage && !string.IsNullOrEmpty(((TemplateProtobufMessage)slot.FirstValue.Parsed.Message).Name))
+                        {
+                            sb.Append(((TemplateProtobufMessage)slot.FirstValue.Parsed.Message).Name);
+                        }
+                        else
+                        {
+                            sb.Append("message");
+                        }
+                    }
+                    else if (slot.Desc.Type.KnownType == ProtobufNativeType.TYPE_ENUM)
+                    {
+                        sb.Append(' ', indent * 4 + 4);
+                        if (!string.IsNullOrEmpty(slot.Desc.Type.MessageName))
+                        {
+                            sb.Append(slot.Desc.Type.MessageName);
+                        }
+                        else if (slot.Desc.Type.CLRType != null)
+                        {
+                            sb.Append(slot.Desc.Type.CLRType.FullName);
+                        }
+                        else
+                        {
+                            sb.Append("enum");
+                        }
+                    }
+                    else
+                    {
+                        string friendly;
+                        if (!_NativeType2FriendlyType.TryGetValue(slot.Desc.Type.KnownType, out friendly))
+                        {
+                            friendly = "unknown";
+                        }
+                        sb.Append(' ', indent * 4 + 4);
+                        sb.Append(friendly);
+                    }
+
+                    sb.Append(" ");
+                    sb.Append(string.IsNullOrEmpty(slot.Desc.Name) ? "unknown" : slot.Desc.Name);
+                    sb.Append(" = ");
+                    sb.Append(slot.Desc.Number);
+                    sb.Append(";");
+                }
+            }
+            sb.AppendLine();
+            sb.Append(' ', indent * 4);
+            sb.Append("}");
+        }
+        public string ToReadable(int indent, bool withreference)
+        {
+            if (indent < 0) indent = 0;
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            if (withreference)
+            {
+                var list = CollectAll();
+                for (int i = 0; i < list.Count; ++i)
+                {
+                    if (i > 0)
+                    {
+                        sb.AppendLine();
+                    }
+                    list[i].ToReadable(sb, indent);
+                }
+            }
+            else
+            {
+                ToReadable(sb, indent);
+            }
+            return sb.ToString();
+        }
+        public override string ToString()
+        {
+            return ToReadable(0, false);
         }
 
         public IEnumerator GetEnumerator()
@@ -3363,17 +3630,11 @@ namespace Capstones.Net
             //repeated EnumReservedRange reserved_range = 4;
             //repeated string reserved_name = 5;
         };
-        public enum FieldDescriptor_Label
-        {
-            LABEL_OPTIONAL = 1,
-            LABEL_REQUIRED = 2,
-            LABEL_REPEATED = 3,
-        }
         public readonly static TemplateProtobufMessage FieldDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.FieldDescriptorProto")
         {
             { 1, "name", ProtobufNativeType.TYPE_STRING },
             { 3, "number", ProtobufNativeType.TYPE_INT32 },
-            { 4, "label", default(FieldDescriptor_Label) },
+            { 4, "label", default(ProtobufFieldLabel) },
             { 5, "type", ProtobufNativeType.TYPE_ENUM, default(ProtobufNativeType) },
             { 6, "type_name", ProtobufNativeType.TYPE_STRING },
             { 2, "extendee", ProtobufNativeType.TYPE_STRING },
@@ -3474,11 +3735,13 @@ namespace Capstones.Net
                         var num = field["number"].Int32;
                         var ntype = field["type"].AsEnum<ProtobufNativeType>();
                         var mtype = field["type_name"].String;
+                        var label = field["label"].AsEnum<ProtobufFieldLabel>();
                         if (num > 0 && !string.IsNullOrEmpty(name))
                         {
                             var slot = template.GetOrCreateSlot(num);
                             slot.Desc.Name = name;
                             slot.Desc.Type.KnownType = ntype;
+                            slot.Desc.Label = label;
                             if (ntype == ProtobufNativeType.TYPE_MESSAGE)
                             {
                                 if (mtype != null)
@@ -3494,6 +3757,18 @@ namespace Capstones.Net
                                         slot.FirstValue = new ProtobufValue() { Parsed = refmessage };
                                     }
                                     // TODO: search in alreay loaded protocols.
+                                }
+                            }
+                            else if (ntype == ProtobufNativeType.TYPE_ENUM)
+                            {
+                                if (mtype != null)
+                                {
+                                    if (mtype.StartsWith("."))
+                                    {
+                                        mtype = mtype.Substring(1);
+                                    }
+                                    slot.Desc.Type.MessageName = mtype;
+                                    // TODO: search in enum pool.
                                 }
                             }
                         }
@@ -3522,7 +3797,7 @@ namespace Capstones.Net
         [UnityEditor.MenuItem("Test/Dynamic Protobuf Message/Test Encode", priority = 100010)]
         public static void TestEncode()
         {
-            UnityEngine.Debug.Log(ProtobufMessagePool.MessageDescriptorTemplate.ToJson(0));
+            UnityEngine.Debug.Log(ProtobufMessagePool.MessageDescriptorTemplate.ToString());
 
             var message = new ProtobufMessage();
             var slot = message.GetOrCreateSlot(1);
