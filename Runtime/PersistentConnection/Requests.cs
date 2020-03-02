@@ -97,8 +97,8 @@ namespace Capstones.Net
 
         public abstract void Dispose();
 
-        public delegate object Handler(IReqClient from, object reqobj, uint seq);
-        public delegate object Handler<T>(IReqClient from, T reqobj, uint seq);
+        public delegate object Handler(IReqClient from, uint type, object reqobj, uint seq);
+        public delegate object Handler<T>(IReqClient from, uint type, T reqobj, uint seq);
     }
 
     public class PeekedRequest : Request
@@ -130,6 +130,7 @@ namespace Capstones.Net
 
         #region Receive
         public virtual Type ReceiveType { get { return typeof(object); } }
+        public virtual uint ReceiveRawType { get; set; }
         public virtual bool CanHandleRequest { get { return false; } }
 
         protected int _IsRequestReceived;
@@ -172,9 +173,16 @@ namespace Capstones.Net
             _StartTick = Environment.TickCount;
             CreateReceiveTrack(_Parent).Track(this);
         }
-        public object TryReceive(IReqClient from, object reqobj, uint seq)
+        public object TryReceive(IReqClient from, uint type, object reqobj, uint seq)
         {
-            if (reqobj != null && ReceiveType.IsAssignableFrom(reqobj.GetType()))
+            if (ReceiveRawType != 0 && ReceiveRawType == type)
+            {
+                if (SetRequest(from, reqobj, seq))
+                {
+                    return this;
+                }
+            }
+            else if (reqobj != null && ReceiveType.IsAssignableFrom(reqobj.GetType()))
             {
                 if (SetRequest(from, reqobj, seq))
                 {
@@ -233,7 +241,7 @@ namespace Capstones.Net
                 _PendingAwaiters.Enqueue(awaiter);
             }
             [EventOrder(50)]
-            protected object OnServerReceive(IReqClient from, object req, uint seq)
+            protected object OnServerReceive(IReqClient from, uint type, object req, uint seq)
             {
                 object received = null;
                 LinkedListNode<PeekedRequest> node = _CheckingAwaiters.First;
@@ -243,7 +251,7 @@ namespace Capstones.Net
                     var cawaiter = node.Value;
                     if (received == null)
                     {
-                        received = cawaiter.TryReceive(from, req, seq);
+                        received = cawaiter.TryReceive(from, type, req, seq);
                         if (received != null || cawaiter.CheckReceiveTimeout())
                         {
                             _CheckingAwaiters.Remove(node);
@@ -268,7 +276,7 @@ namespace Capstones.Net
                 {
                     if (received == null)
                     {
-                        received = awaiter.TryReceive(from, req, seq);
+                        received = awaiter.TryReceive(from, type, req, seq);
                         if (received == null && !awaiter.CheckReceiveTimeout())
                         {
                             _CheckingAwaiters.AddLast(awaiter);
@@ -437,7 +445,7 @@ namespace Capstones.Net
         void RegHandler<T>(Request.Handler<T> handler);
         void RemoveHandler(Request.Handler handler);
         void RemoveHandler<T>(Request.Handler<T> handler);
-        void HandleRequest(IReqClient from, object reqobj, uint seq);
+        void HandleRequest(IReqClient from, uint type, object reqobj, uint seq);
         void SendResponse(IReqClient to, object response, uint seq_pingback);
 
         //event Request.Handler HandleCommonRequest;
@@ -808,6 +816,18 @@ namespace Capstones.Net
             req.StartReceive();
             return req;
         }
+        public static PeekedRequest Peek(this IReqServer server, uint type)
+        {
+            var req = new PeekedRequest(server) { ReceiveRawType = type };
+            req.StartReceive();
+            return req;
+        }
+        public static PeekedRequest Peek(this IReqServer server, uint type, int timeout)
+        {
+            var req = new PeekedRequest(server) { Timeout = timeout, ReceiveRawType = type };
+            req.StartReceive();
+            return req;
+        }
         public static PeekedRequest<T> Peek<T>(this IReqServer server)
         {
             var req = new PeekedRequest<T>(server);
@@ -842,6 +862,17 @@ namespace Capstones.Net
             }
             return request;
         }
+        public static async System.Threading.Tasks.Task<PeekedRequest> PeekAsync(this IReqServer server, uint type)
+        {
+            var mtawaiter = MainThreadAwaiter.Create();
+            var request = new PeekedRequest(server) { ReceiveRawType = type };
+            await request;
+            if (mtawaiter.ShouldWait)
+            {
+                await mtawaiter;
+            }
+            return request;
+        }
         public static async System.Threading.Tasks.Task<PeekedRequest<T>> PeekAsync<T>(this IReqServer server, int timeout)
         {
             var mtawaiter = MainThreadAwaiter.Create();
@@ -864,6 +895,17 @@ namespace Capstones.Net
             }
             return request;
         }
+        public static async System.Threading.Tasks.Task<PeekedRequest> PeekAsync(this IReqServer server, uint type, int timeout)
+        {
+            var mtawaiter = MainThreadAwaiter.Create();
+            var request = new PeekedRequest(server) { Timeout = timeout, ReceiveRawType = type };
+            await request;
+            if (mtawaiter.ShouldWait)
+            {
+                await mtawaiter;
+            }
+            return request;
+        }
         public static ReceivedRequest Receive(this IReqServer server)
         {
             var req = new ReceivedRequest(server);
@@ -873,6 +915,18 @@ namespace Capstones.Net
         public static ReceivedRequest Receive(this IReqServer server, int timeout)
         {
             var req = new ReceivedRequest(server) { Timeout = timeout };
+            req.StartReceive();
+            return req;
+        }
+        public static ReceivedRequest Receive(this IReqServer server, uint type)
+        {
+            var req = new ReceivedRequest(server) { ReceiveRawType = type };
+            req.StartReceive();
+            return req;
+        }
+        public static ReceivedRequest Receive(this IReqServer server, uint type, int timeout)
+        {
+            var req = new ReceivedRequest(server) { Timeout = timeout, ReceiveRawType = type };
             req.StartReceive();
             return req;
         }
@@ -910,6 +964,17 @@ namespace Capstones.Net
             }
             return request;
         }
+        public static async System.Threading.Tasks.Task<ReceivedRequest> ReceiveAsync(this IReqServer server, uint type)
+        {
+            var mtawaiter = MainThreadAwaiter.Create();
+            var request = new ReceivedRequest(server) { ReceiveRawType = type };
+            await request;
+            if (mtawaiter.ShouldWait)
+            {
+                await mtawaiter;
+            }
+            return request;
+        }
         public static async System.Threading.Tasks.Task<ReceivedRequest<T>> ReceiveAsync<T>(this IReqServer server, int timeout)
         {
             var mtawaiter = MainThreadAwaiter.Create();
@@ -932,6 +997,17 @@ namespace Capstones.Net
             }
             return request;
         }
+        public static async System.Threading.Tasks.Task<ReceivedRequest> ReceiveAsync(this IReqServer server, uint type, int timeout)
+        {
+            var mtawaiter = MainThreadAwaiter.Create();
+            var request = new ReceivedRequest(server) { Timeout = timeout, ReceiveRawType = type };
+            await request;
+            if (mtawaiter.ShouldWait)
+            {
+                await mtawaiter;
+            }
+            return request;
+        }
         #endregion
     }
 
@@ -939,11 +1015,11 @@ namespace Capstones.Net
     {
         protected class HandleRequestEvent : OrderedEvent<Request.Handler>
         {
-            public object CallHandlers(IReqClient from, object reqobj, uint seq)
+            public object CallHandlers(IReqClient from, uint type, object reqobj, uint seq)
             {
                 for (int i = 0; i < _InvocationList.Count; ++i)
                 {
-                    var resp = _InvocationList[i].Handler(from, reqobj, seq);
+                    var resp = _InvocationList[i].Handler(from, type, reqobj, seq);
                     if (resp != null)
                     {
                         return resp;
@@ -962,7 +1038,7 @@ namespace Capstones.Net
                 Request.Handler converted;
                 if (!_TypedHandlersMap.TryGetValue(handler, out converted))
                 {
-                    converted = (from, reqobj, seq) => handler(from, (T)reqobj, seq);
+                    converted = (from, type, reqobj, seq) => handler(from, type, (T)reqobj, seq);
                     _TypedHandlersMap[handler] = converted;
                 }
                 AddHandler(converted, order);
@@ -990,6 +1066,7 @@ namespace Capstones.Net
         }
 
         protected Dictionary<Type, HandleRequestEvent> _TypedHandlers = new Dictionary<Type, HandleRequestEvent>();
+        protected Dictionary<uint, HandleRequestEvent> _RawTypedHandlers = new Dictionary<uint, HandleRequestEvent>();
         protected HandleRequestEvent _CommonHandlers = new HandleRequestEvent();
         public void RegHandler(Request.Handler handler)
         {
@@ -1012,11 +1089,49 @@ namespace Capstones.Net
                 list.AddHandler(handler);
             }
         }
+        public void RegHandler(uint type, Request.Handler handler)
+        {
+            if (type == 0)
+            {
+                RegHandler(handler);
+            }
+            else
+            {
+                lock (_RawTypedHandlers)
+                {
+                    HandleRequestEvent list;
+                    if (!_RawTypedHandlers.TryGetValue(type, out list))
+                    {
+                        list = new HandleRequestEvent();
+                        _RawTypedHandlers[type] = list;
+                    }
+                    list.AddHandler(handler);
+                }
+            }
+        }
         public void RemoveHandler(Request.Handler handler)
         {
             lock (_CommonHandlers)
             {
                 _CommonHandlers.RemoveHandler(handler);
+            }
+        }
+        public void RemoveHandler(uint type, Request.Handler handler)
+        {
+            if (type == 0)
+            {
+                RemoveHandler(handler);
+            }
+            else
+            {
+                lock (_RawTypedHandlers)
+                {
+                    HandleRequestEvent list;
+                    if (_RawTypedHandlers.TryGetValue(type, out list))
+                    {
+                        list.RemoveHandler(handler);
+                    }
+                }
             }
         }
         public void RemoveHandler<T>(Request.Handler<T> handler)
@@ -1031,7 +1146,7 @@ namespace Capstones.Net
                 }
             }
         }
-        public void HandleRequest(IReqClient from, object reqobj, uint seq)
+        public void HandleRequest(IReqClient from, uint messagetype, object reqobj, uint seq)
         {
             object respobj = null;
             Type type = null;
@@ -1052,7 +1167,23 @@ namespace Capstones.Net
                 }
                 if (list != null)
                 {
-                    respobj = list.CallHandlers(from, reqobj, seq);
+                    respobj = list.CallHandlers(from, messagetype, reqobj, seq);
+                }
+            }
+            if (respobj == null)
+            {
+                HandleRequestEvent list;
+                lock (_RawTypedHandlers)
+                {
+                    _RawTypedHandlers.TryGetValue(messagetype, out list);
+                    if (list != null)
+                    {
+                        list = list.Clone();
+                    }
+                }
+                if (list != null)
+                {
+                    respobj = list.CallHandlers(from, messagetype, reqobj, seq);
                 }
             }
             if (respobj == null)
@@ -1062,7 +1193,7 @@ namespace Capstones.Net
                 {
                     list = _CommonHandlers.Clone();
                 }
-                respobj = list.CallHandlers(from, reqobj, seq);
+                respobj = list.CallHandlers(from, messagetype, reqobj, seq);
             }
             var resp = respobj as Request;
             if (resp != null)
@@ -1265,6 +1396,7 @@ namespace Capstones.Net
                 pingback = seq;
                 reqseq = sseq;
             }
+            bool isResponse = false;
             if (pingback != 0)
             {
                 for (int i = 0; i < _MaxCheckingReqCount; ++i)
@@ -1275,6 +1407,7 @@ namespace Capstones.Net
                     {
                         if (checking.Seq == pingback)
                         {
+                            isResponse = true;
                             checking.SetResponse(obj);
                             _CheckingReq[index] = null;
                         }
@@ -1286,9 +1419,9 @@ namespace Capstones.Net
                     }
                 }
             }
-            else
+            if (!isResponse)
             { // this is not a response. this is a request from peer.
-                HandleRequest(this, obj, reqseq);
+                HandleRequest(this, type, obj, reqseq);
             }
 
             //3. delete disposing
@@ -1497,7 +1630,7 @@ namespace Capstones.Net
             _Server = raw;
             _Server.OnUpdate += FireOnUpdate;
             _PositiveConnection = raw as IPositiveConnection;
-            _ChildHandler = (from, reqobj, seq) => { HandleRequest(from, reqobj, seq); return null; };
+            _ChildHandler = (from, type, reqobj, seq) => { HandleRequest(from, type, reqobj, seq); return null; };
         }
         public ReqServer(ObjServer raw)
             : this(raw, null)

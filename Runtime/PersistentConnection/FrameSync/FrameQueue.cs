@@ -139,7 +139,7 @@ namespace Capstones.Net.FrameSync
         }
 
         [EventOrder(10)]
-        private object OnFilterMessage(IReqClient from, object raw, uint seq)
+        private object OnFilterMessage(IReqClient from, uint type, object raw, uint seq)
         {
             return InputMessage(raw) ? null : new PredefinedMessages.Raw();
         }

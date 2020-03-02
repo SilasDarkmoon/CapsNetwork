@@ -462,7 +462,7 @@ namespace Capstones.Net
         }
 
         [EventOrder(80)]
-        protected object HandleMessage(IReqClient from, object req, uint seq)
+        protected object HandleMessage(IReqClient from, uint type, object req, uint seq)
         {
             if (req != null)
             {
