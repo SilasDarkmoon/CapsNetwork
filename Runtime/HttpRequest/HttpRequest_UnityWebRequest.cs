@@ -362,4 +362,9 @@ namespace Capstones.Net
             }
         }
     }
+
+    internal partial class HttpRequestCreator
+    {
+        protected static HttpRequestCreator _Creator_Unity = new HttpRequestCreator("unity", (url, headers, data, dest) => new HttpRequest(url, headers, data, dest));
+    }
 }

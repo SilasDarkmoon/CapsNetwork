@@ -671,4 +671,9 @@ namespace Capstones.Net
             }
         }
     }
+
+    internal partial class HttpRequestCreator
+    {
+        protected static HttpRequestCreator _Creator_Legacy = new HttpRequestCreator("legacy", (url, headers, data, dest) => new HttpRequestLegacy(url, headers, data, dest));
+    }
 }

@@ -87,6 +87,54 @@ namespace Capstones.Net
         Finished,
     }
 
+    internal partial class HttpRequestCreator
+    {
+        protected static Dictionary<string, HttpRequestCreator> _Creators;
+        protected static Dictionary<string, HttpRequestCreator> Creators
+        {
+            get
+            {
+                var creators = _Creators;
+                if (creators == null)
+                {
+                    _Creators = creators = new Dictionary<string, HttpRequestCreator>();
+                }
+                return creators;
+            }
+        }
+        public delegate HttpRequestBase CreateFunc(string url, HttpRequestData headers, HttpRequestData data, string dest);
+        public static HttpRequestBase Create(string name, string url, HttpRequestData headers, HttpRequestData data, string dest)
+        {
+            HttpRequestCreator creator;
+            if (name != null)
+            {
+                if (Creators.TryGetValue(name, out creator))
+                {
+                    return creator.Create(url, headers, data, dest);
+                }
+            }
+            return null;
+        }
+
+        public string Name { get; protected set; }
+        public CreateFunc Creator { get; protected set; }
+        public HttpRequestBase Create(string url, HttpRequestData headers, HttpRequestData data, string dest)
+        {
+            var func = Creator;
+            if (func != null)
+            {
+                return func(url, headers, data, dest);
+            }
+            return null;
+        }
+        protected HttpRequestCreator(string name, CreateFunc func)
+        {
+            Name = name;
+            Creator = func;
+            Creators[name] = this;
+        }
+    }
+
     public abstract class HttpRequestBase : CustomYieldInstruction
     {
         protected HttpRequestData _Headers = null;
@@ -237,6 +285,7 @@ namespace Capstones.Net
         public static string PreferredCompressMethod;
         public static string PreferredEncryptMethod;
         public static string PreferredPrepareMethod;
+        public static string PreferredImplement;
 
         protected void AddHeaderRaw(string key, string value)
         {
@@ -811,10 +860,23 @@ namespace Capstones.Net
 
         static HttpRequestBase()
         {
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+            PreferredImplement = "unity";
+#endif
             PreferredPrepareMethod = "default";
             RequestDataPrepareFuncs["default"] = PrepareFuncHelper.Prepare_Default;
             RequestDataPrepareFuncs["json"] = PrepareFuncHelper.Prepare_Json;
             RequestDataPrepareFuncs["form2json"] = PrepareFuncHelper.Prepare_Form2Json;
+        }
+
+        public static HttpRequestBase Create(string url, HttpRequestData headers, HttpRequestData data, string dest)
+        {
+            var req = HttpRequestCreator.Create(PreferredImplement, url, headers, data, dest);
+            if (req == null)
+            {
+                req = new HttpRequestLegacy(url, headers, data, dest);
+            }
+            return req;
         }
     }
 }

@@ -44,7 +44,7 @@ local function createRequest(uri, data, seq, timeOut)
         local rawdata = data
         local form = clr.Capstones.Net.HttpRequestData()
         local headers = clr.Capstones.Net.HttpRequestData()
-        www = clr.Capstones.Net.HttpRequest(uri, headers, form, nil)
+        www = clr.Capstones.Net.HttpRequestBase.Create(uri, headers, form, nil)
         www.Timeout = wwwTimeout * 1000
         -----------------------------------
         form.PrepareMethod = "json"
@@ -75,7 +75,7 @@ local function createRequest(uri, data, seq, timeOut)
         -- data = json.encode(data)
         local form = clr.Capstones.Net.HttpRequestData()
         local headers = clr.Capstones.Net.HttpRequestData()
-        www = clr.Capstones.Net.HttpRequest(uri, headers, form, nil)
+        www = clr.Capstones.Net.HttpRequestBase.Create(uri, headers, form, nil)
 
         if api.token then
             fulldata.t = tostring(api.token)
