@@ -49,7 +49,7 @@ namespace Capstones.Net
             {
                 if (value != _Url)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change url when connection started");
                     }
@@ -70,7 +70,7 @@ namespace Capstones.Net
             {
                 if (value != _OnReceive)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change OnReceive when connection started");
                     }
@@ -92,7 +92,7 @@ namespace Capstones.Net
                 }
                 if (value != _UpdateInterval)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change UpdateInterval when connection started");
                     }
@@ -114,7 +114,7 @@ namespace Capstones.Net
                 }
                 if (value != _EaseUpdateRatio)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change EaseUpdateRatio when connection started");
                     }
@@ -156,7 +156,7 @@ namespace Capstones.Net
             {
                 if (value != _PreDispose)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change PreDispose when connection started");
                     }
@@ -177,7 +177,7 @@ namespace Capstones.Net
             {
                 if (value != _OnUpdate)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change OnUpdate when connection started");
                     }
@@ -198,7 +198,7 @@ namespace Capstones.Net
             {
                 if (value != _OnSend)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change OnSend when connection started");
                     }
@@ -219,7 +219,7 @@ namespace Capstones.Net
             {
                 if (value != _PreStart)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change PreStart when connection started");
                     }
@@ -237,7 +237,7 @@ namespace Capstones.Net
             {
                 if (value != _WaitForBroadcastResp)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change WaitForBroadcastResp when connection started");
                     }
@@ -255,7 +255,7 @@ namespace Capstones.Net
             {
                 if (value != _PositiveMode)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change PositiveMode when connection started");
                     }
@@ -267,8 +267,8 @@ namespace Capstones.Net
             }
         }
 
-        protected volatile bool _ConnectWorkRunning;
-        protected volatile bool _ConnectWorkCanceled;
+        protected volatile bool _ConnectWorkStarted;
+        protected volatile bool _ConnectWorkFinished;
         protected Socket _Socket;
         public EndPoint RemoteEndPoint
         {
@@ -283,16 +283,20 @@ namespace Capstones.Net
         }
         protected IPEndPoint _BroadcastEP;
 
-        public bool IsConnectionAlive
+        public bool IsAlive
         {
-            get { return _ConnectWorkRunning && !_ConnectWorkCanceled; }
+            get { return !_ConnectWorkFinished; }
+        }
+        public bool IsStarted
+        {
+            get { return _ConnectWorkStarted || _ConnectWorkFinished; }
         }
         protected IEnumerator _ConnectWork;
         public void StartConnect()
         {
-            if (!IsConnectionAlive)
+            if (!IsStarted)
             {
-                _ConnectWorkRunning = true;
+                _ConnectWorkStarted = true;
                 if (_PositiveMode)
                 {
                     _ConnectWork = ConnectWork();
@@ -556,16 +560,16 @@ namespace Capstones.Net
                         _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt) });
                     }
                 }
-                if (!_ConnectWorkCanceled)
+                if (!_ConnectWorkFinished)
                 {
                     BeginReceive();
                 }
             }
             catch (Exception e)
             {
-                if (IsConnectionAlive)
+                if (IsAlive)
                 {
-                    _ConnectWorkCanceled = true;
+                    _ConnectWorkFinished = true;
                     PlatDependant.LogError(e);
                 }
             }
@@ -599,16 +603,16 @@ namespace Capstones.Net
                 {
                     _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt) });
                 }
-                if (!_ConnectWorkCanceled)
+                if (!_ConnectWorkFinished)
                 {
                     BeginReceive();
                 }
             }
             catch (Exception e)
             {
-                if (IsConnectionAlive)
+                if (IsAlive)
                 {
-                    _ConnectWorkCanceled = true;
+                    _ConnectWorkFinished = true;
                     PlatDependant.LogError(e);
                 }
             }
@@ -781,7 +785,7 @@ namespace Capstones.Net
                     {
                         BeginReceive();
                     }
-                    while (!_ConnectWorkCanceled)
+                    while (!_ConnectWorkFinished)
                     {
                         int waitinterval;
                         try
@@ -866,8 +870,8 @@ namespace Capstones.Net
             }
             finally
             {
-                _ConnectWorkRunning = false;
-                _ConnectWorkCanceled = false;
+                //_ConnectWorkStarted = false;
+                //_ConnectWorkFinished = false;
                 if (_PreDispose != null)
                 {
                     _PreDispose(this);
@@ -892,9 +896,9 @@ namespace Capstones.Net
         }
         public void Dispose(bool inFinalizer)
         {
-            if (_ConnectWorkRunning)
+            if (_ConnectWorkStarted)
             {
-                _ConnectWorkCanceled = true;
+                _ConnectWorkFinished = true;
                 if (_PositiveMode)
                 {
                     var disposable = _ConnectWork as IDisposable;

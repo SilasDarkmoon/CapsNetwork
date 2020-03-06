@@ -15,81 +15,40 @@ using PlatDependant = Capstones.UnityEngineEx.PlatDependant;
 
 namespace Capstones.Net
 {
-    //public static class ProtobufWireDataReaderAndWriter
-    //{
-    //    public static uint ReadFixed32(this Stream stream)
-    //    {
-    //        uint b1 = (uint)stream.ReadByte();
-    //        uint b2 = (uint)stream.ReadByte();
-    //        uint b3 = (uint)stream.ReadByte();
-    //        uint b4 = (uint)stream.ReadByte();
-    //        return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
-    //    }
-    //    public static ulong ReadFixed64(this Stream stream)
-    //    {
-    //        ulong b1 = (uint)stream.ReadByte();
-    //        ulong b2 = (uint)stream.ReadByte();
-    //        ulong b3 = (uint)stream.ReadByte();
-    //        ulong b4 = (uint)stream.ReadByte();
-    //        ulong b5 = (uint)stream.ReadByte();
-    //        ulong b6 = (uint)stream.ReadByte();
-    //        ulong b7 = (uint)stream.ReadByte();
-    //        ulong b8 = (uint)stream.ReadByte();
-    //        return b1 | (b2 << 8) | (b3 << 16) | (b4 << 24)
-    //               | (b5 << 32) | (b6 << 40) | (b7 << 48) | (b8 << 56);
-    //    }
-    //    public static uint ReadVarint32(this Stream input)
-    //    {
-    //        int result = 0;
-    //        int offset = 0;
-    //        for (; offset < 32; offset += 7)
-    //        {
-    //            int b = input.ReadByte();
-    //            if (b == -1)
-    //            {
-    //                throw new FormatException("TruncatedVarint");
-    //            }
-    //            result |= (b & 0x7f) << offset;
-    //            if ((b & 0x80) == 0)
-    //            {
-    //                return (uint)result;
-    //            }
-    //        }
-    //        // Keep reading up to 64 bits.
-    //        for (; offset < 64; offset += 7)
-    //        {
-    //            int b = input.ReadByte();
-    //            if (b == -1)
-    //            {
-    //                throw new FormatException("TruncatedVarint");
-    //            }
-    //            if ((b & 0x80) == 0)
-    //            {
-    //                return (uint)result;
-    //            }
-    //        }
-    //        throw new FormatException("MalformedVarint");
-    //    }
-    //    public static ulong ReadVarint64(this Stream input)
-    //    {
-    //        ulong result = 0;
-    //        int offset = 0;
-    //        for (; offset < 64; offset += 7)
-    //        {
-    //            int b = input.ReadByte();
-    //            if (b == -1)
-    //            {
-    //                throw new FormatException("TruncatedVarint");
-    //            }
-    //            result |= ((ulong)(b & 0x7f)) << offset;
-    //            if ((b & 0x80) == 0)
-    //            {
-    //                return result;
-    //            }
-    //        }
-    //        throw new FormatException("MalformedVarint");
-    //    }
-    //}
+    public class WrapperStream : Stream
+    {
+        public Stream Underlay;
+
+        public override bool CanRead { get { return Underlay.CanRead; } }
+        public override bool CanSeek { get { return Underlay.CanSeek; } }
+        public override bool CanWrite { get { return Underlay.CanWrite; } }
+        public override long Length { get { return Underlay.Length; } }
+        public override long Position
+        {
+            get { return Underlay.Position; }
+            set { Underlay.Position = value; }
+        }
+        public override void Flush()
+        {
+            Underlay.Flush();
+        }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return Underlay.Read(buffer, offset, count);
+        }
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            return Underlay.Seek(offset, origin);
+        }
+        public override void SetLength(long value)
+        {
+            Underlay.SetLength(value);
+        }
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            Underlay.Write(buffer, offset, count);
+        }
+    }
 
     /// <summary>
     /// message Message { fixed32 type = 1; fixed32 flags = 2; fixed32 seq = 3; fixed32 sseq = 4; OtherMessage raw = 5; }
@@ -98,14 +57,8 @@ namespace Capstones.Net
     {
         public static readonly DataSplitterFactory Factory = new DataSplitterFactory<ProtobufSplitter>();
 
-        private Google.Protobuf.CodedInputStream _CodedInputStream;
         private NativeBufferStream _ReadBuffer = new NativeBufferStream();
 
-        protected override void Attach(Stream input)
-        {
-            base.Attach(input);
-            _CodedInputStream = new Google.Protobuf.CodedInputStream(input, true);
-        }
         public ProtobufSplitter() { }
         public ProtobufSplitter(Stream input) : this()
         {
@@ -121,21 +74,18 @@ namespace Capstones.Net
         {
             while (true)
             { // Read Each Tag-Field
-                if (_CodedInputStream.IsAtEnd)
-                {
-                    return;
-                }
                 if (_Type == 0)
                 { // Determine the start of a message.
                     while (_Tag == 0)
                     {
                         try
                         {
-                            if (_CodedInputStream.IsAtEnd)
+                            ulong tag;
+                            if (!ProtobufEncoder.TryReadVariant(_InputStream, out tag))
                             {
                                 return;
                             }
-                            _Tag = _CodedInputStream.ReadTag();
+                            _Tag = (uint)tag;
                         }
                         catch (Google.Protobuf.InvalidProtocolBufferException e)
                         {
@@ -158,7 +108,12 @@ namespace Capstones.Net
                 { // The Next tag must follow
                     try
                     {
-                        _Tag = _CodedInputStream.ReadTag();
+                        ulong tag;
+                        if (!ProtobufEncoder.TryReadVariant(_InputStream, out tag))
+                        {
+                            return;
+                        }
+                        _Tag = (uint)tag;
                         if (_Tag == 0)
                         {
                             ResetReadBlockContext();
@@ -181,12 +136,22 @@ namespace Capstones.Net
                         if (ttype == Google.Protobuf.WireFormat.WireType.Varint)
                         {
                             ResetReadBlockContext();
-                            _Type = _CodedInputStream.ReadUInt32();
+                            ulong value;
+                            if (!ProtobufEncoder.TryReadVariant(_InputStream, out value))
+                            {
+                                return;
+                            }
+                            _Type = (uint)ProtobufEncoder.DecodeZigZag64(value);
                         }
                         else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
                         {
                             ResetReadBlockContext();
-                            _Type = _CodedInputStream.ReadFixed32();
+                            uint value;
+                            if (!ProtobufEncoder.TryReadFixed32(_InputStream, out value))
+                            {
+                                return;
+                            }
+                            _Type = value;
                         }
                     }
                     else if (_Type != 0)
@@ -195,44 +160,84 @@ namespace Capstones.Net
                         {
                             if (ttype == Google.Protobuf.WireFormat.WireType.Varint)
                             {
-                                _Flags = _CodedInputStream.ReadUInt32();
+                                ulong value;
+                                if (!ProtobufEncoder.TryReadVariant(_InputStream, out value))
+                                {
+                                    return;
+                                }
+                                _Flags = (uint)value;
                             }
                             else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
                             {
-                                _Flags = _CodedInputStream.ReadFixed32();
+                                uint value;
+                                if (!ProtobufEncoder.TryReadFixed32(_InputStream, out value))
+                                {
+                                    return;
+                                }
+                                _Flags = value;
                             }
                         }
                         else if (seq == 3)
                         {
                             if (ttype == Google.Protobuf.WireFormat.WireType.Varint)
                             {
-                                _Seq = _CodedInputStream.ReadUInt32();
+                                ulong value;
+                                if (!ProtobufEncoder.TryReadVariant(_InputStream, out value))
+                                {
+                                    return;
+                                }
+                                _Seq = (uint)value;
                             }
                             else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
                             {
-                                _Seq = _CodedInputStream.ReadFixed32();
+                                uint value;
+                                if (!ProtobufEncoder.TryReadFixed32(_InputStream, out value))
+                                {
+                                    return;
+                                }
+                                _Seq = value;
                             }
                         }
                         else if (seq == 4)
                         {
                             if (ttype == Google.Protobuf.WireFormat.WireType.Varint)
                             {
-                                _SSeq = _CodedInputStream.ReadUInt32();
+                                ulong value;
+                                if (!ProtobufEncoder.TryReadVariant(_InputStream, out value))
+                                {
+                                    return;
+                                }
+                                _SSeq = (uint)value;
                             }
                             else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
                             {
-                                _SSeq = _CodedInputStream.ReadFixed32();
+                                uint value;
+                                if (!ProtobufEncoder.TryReadFixed32(_InputStream, out value))
+                                {
+                                    return;
+                                }
+                                _SSeq = value;
                             }
                         }
                         else if (seq == 5)
                         {
                             if (ttype == Google.Protobuf.WireFormat.WireType.LengthDelimited)
                             {
-                                _Size = _CodedInputStream.ReadLength();
+                                ulong value;
+                                if (!ProtobufEncoder.TryReadVariant(_InputStream, out value))
+                                {
+                                    return;
+                                }
+                                _Size = (int)value;
                             }
                             else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
                             {
-                                _Size = (int)_CodedInputStream.ReadFixed32();
+                                uint value;
+                                if (!ProtobufEncoder.TryReadFixed32(_InputStream, out value))
+                                {
+                                    return;
+                                }
+                                _Size = (int)value;
                             }
                             else
                             {
@@ -243,13 +248,13 @@ namespace Capstones.Net
                                 if (_Size > CONST.MAX_MESSAGE_LENGTH)
                                 {
                                     PlatDependant.LogError("We got a too long message. We will drop this message and treat it as an error message.");
-                                    _CodedInputStream.SkipRawBytes(_Size);
+                                    ProtobufEncoder.SkipBytes(_InputStream, _Size);
                                     FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
                                 }
                                 else
                                 {
                                     _ReadBuffer.Clear();
-                                    _CodedInputStream.ReadRawBytes(_ReadBuffer, _Size);
+                                    ProtobufEncoder.CopyBytes(_InputStream, _ReadBuffer, _Size);
                                     FireReceiveBlock(_ReadBuffer, _Size, _Type, _Flags, _Seq, _SSeq);
                                 }
                             }
@@ -300,7 +305,7 @@ namespace Capstones.Net
         private int _Size = 0;
         private ParsingVariant _ParsingVariant = 0;
         private int _ParsingVariantIndex = 0;
-        private byte[] _ParsingVariantData = new byte[5];
+        //private byte[] _ParsingVariantData = new byte[5];
         private void ResetReadBlockContext()
         {
             _Tag = 0;
@@ -312,7 +317,7 @@ namespace Capstones.Net
             _ParsingVariant = 0;
             _ParsingVariantIndex = 0;
         }
-        public int BufferedSize { get { return (_BufferedStream == null ? 0 : _BufferedStream.BufferedSize) + _CodedInputStream.BufferedSize; } }
+        public int BufferedSize { get { return (_BufferedStream == null ? 0 : _BufferedStream.BufferedSize); } }
         public override bool TryReadBlock()
         {
             if (_BufferedStream == null)
@@ -345,7 +350,7 @@ namespace Capstones.Net
                                         else
                                         {
                                             _ReadBuffer.Clear();
-                                            _CodedInputStream.ReadRawBytes(_ReadBuffer, _Size);
+                                            ProtobufEncoder.CopyBytes(_InputStream, _ReadBuffer, _Size);
                                             FireReceiveBlock(_ReadBuffer, _Size, _Type, _Flags, _Seq, _SSeq);
                                         }
                                     }
@@ -354,14 +359,14 @@ namespace Capstones.Net
                                         var bufferedSize = BufferedSize;
                                         if (_ParsingVariantIndex + bufferedSize < _Size)
                                         { // not enough
-                                            _CodedInputStream.SkipRawBytes(bufferedSize);
+                                            ProtobufEncoder.SkipBytes(_InputStream, bufferedSize);
                                             _ParsingVariantIndex += bufferedSize;
                                             return false;
                                         }
                                         else
                                         {
                                             var skipsize = _Size - _ParsingVariantIndex;
-                                            _CodedInputStream.SkipRawBytes(skipsize);
+                                            ProtobufEncoder.SkipBytes(_InputStream, skipsize);
                                             PlatDependant.LogError("We got a too long message. We will drop this message and treat it as an error message.");
                                             FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
                                         }
@@ -377,7 +382,7 @@ namespace Capstones.Net
                                         {
                                             return false;
                                         }
-                                        _CodedInputStream.ReadFixed32();
+                                        ProtobufEncoder.ReadFixed32(_InputStream);
                                         _ParsingVariant = 0;
                                         _ParsingVariantIndex = 0;
                                     }
@@ -387,7 +392,7 @@ namespace Capstones.Net
                                         {
                                             return false;
                                         }
-                                        _CodedInputStream.ReadFixed64();
+                                        ProtobufEncoder.ReadFixed64(_InputStream);
                                         _ParsingVariant = 0;
                                         _ParsingVariantIndex = 0;
                                     }
@@ -395,8 +400,12 @@ namespace Capstones.Net
                                     {
                                         while (_ParsingVariant != 0 && BufferedSize > 0)
                                         {
-                                            _CodedInputStream.ReadRawBytes(_ParsingVariantData, 1);
-                                            var data = _ParsingVariantData[0];
+                                            int b;
+                                            if ((b = _InputStream.ReadByte()) < 0)
+                                            {
+                                                return false;
+                                            }
+                                            var data = (byte)b;
                                             if (data < 128)
                                             {
                                                 _ParsingVariant = 0;
@@ -417,8 +426,12 @@ namespace Capstones.Net
                                         {
                                             return false;
                                         }
-                                        _CodedInputStream.ReadRawBytes(_ParsingVariantData, 1);
-                                        var data = _ParsingVariantData[0];
+                                        int b;
+                                        if ((b = _InputStream.ReadByte()) < 0)
+                                        {
+                                            return false;
+                                        }
+                                        var data = (byte)b;
                                         uint partVal;
                                         if (data >= 128)
                                         {
@@ -450,14 +463,14 @@ namespace Capstones.Net
                                     var bufferedSize = BufferedSize;
                                     if (_ParsingVariantIndex + bufferedSize < _Size)
                                     { // not enough
-                                        _CodedInputStream.SkipRawBytes(bufferedSize);
+                                        ProtobufEncoder.SkipBytes(_InputStream, bufferedSize);
                                         _ParsingVariantIndex += bufferedSize;
                                         return false;
                                     }
                                     else
                                     {
                                         var skipsize = _Size - _ParsingVariantIndex;
-                                        _CodedInputStream.SkipRawBytes(skipsize);
+                                        ProtobufEncoder.SkipBytes(_InputStream, skipsize);
                                         _Size = 0;
                                         _ParsingVariant = 0;
                                         _ParsingVariantIndex = 0;
@@ -474,11 +487,11 @@ namespace Capstones.Net
                                         uint data = 0;
                                         if (_ParsingVariantIndex == -1)
                                         {
-                                            data = _CodedInputStream.ReadFixed32();
+                                            data = ProtobufEncoder.ReadFixed32(_InputStream);
                                         }
                                         else if (_ParsingVariantIndex == -2)
                                         {
-                                            data = (uint)_CodedInputStream.ReadFixed64();
+                                            data = (uint)ProtobufEncoder.ReadFixed64(_InputStream);
                                         }
                                         switch (_ParsingVariant)
                                         {
@@ -510,8 +523,12 @@ namespace Capstones.Net
                                             {
                                                 return false;
                                             }
-                                            _CodedInputStream.ReadRawBytes(_ParsingVariantData, 1);
-                                            var data = _ParsingVariantData[0];
+                                            int b;
+                                            if ((b = _InputStream.ReadByte()) < 0)
+                                            {
+                                                return false;
+                                            }
+                                            var data = (byte)b;
                                             uint partVal;
                                             if (data >= 128)
                                             {
@@ -547,6 +564,10 @@ namespace Capstones.Net
                                             {
                                                 break;
                                             }
+                                        }
+                                        if (_ParsingVariant == ParsingVariant.Type)
+                                        {
+                                            _Type = (uint)ProtobufEncoder.DecodeZigZag32(_Type);
                                         }
                                     }
                                     if (_ParsingVariant == ParsingVariant.Size)
@@ -750,11 +771,6 @@ namespace Capstones.Net
                 _ReadBuffer.Dispose();
                 _ReadBuffer = null;
             }
-            if (_CodedInputStream != null)
-            {
-                _CodedInputStream.Dispose();
-                _CodedInputStream = null;
-            }
             base.Dispose(disposing);
         }
     }
@@ -766,87 +782,44 @@ namespace Capstones.Net
 
     public class ProtobufComposer : DataComposer
     {
-        public bool VariantHeader;
-
-        private const int _CODED_STREAM_POOL_SLOT = 4;
-        private static Google.Protobuf.CodedOutputStream[] _CodedOutputStreamPool = new Google.Protobuf.CodedOutputStream[_CODED_STREAM_POOL_SLOT];
-        private static int _CodedOutputStreamPoolCnt = 0;
-
-        private static Google.Protobuf.CodedOutputStream GetCodedOutputStream()
-        {
-            var index = System.Threading.Interlocked.Decrement(ref _CodedOutputStreamPoolCnt);
-            if (index < 0)
-            {
-                System.Threading.Interlocked.Increment(ref _CodedOutputStreamPoolCnt);
-            }
-            else
-            {
-                SpinWait spin = new SpinWait();
-                while (true)
-                {
-                    var old = _CodedOutputStreamPool[index];
-                    if (old != null && System.Threading.Interlocked.CompareExchange(ref _CodedOutputStreamPool[index], null, old) == old)
-                    {
-                        return old;
-                    }
-                    spin.SpinOnce();
-                }
-            }
-            return new Google.Protobuf.CodedOutputStream((Stream)null, true);
-        }
-        private static void ReturnCodedOutputStream(Google.Protobuf.CodedOutputStream stream)
-        {
-            if (stream != null)
-            {
-                var index = System.Threading.Interlocked.Increment(ref _CodedOutputStreamPoolCnt);
-                if (index > _CODED_STREAM_POOL_SLOT)
-                {
-                    System.Threading.Interlocked.Decrement(ref _CodedOutputStreamPoolCnt);
-                }
-                else
-                {
-                    --index;
-                    SpinWait spin = new SpinWait();
-                    while (System.Threading.Interlocked.CompareExchange(ref _CodedOutputStreamPool[index], stream, null) != null) spin.SpinOnce();
-                }
-            }
-        }
+#if DEBUG_PERSIST_CONNECT || DEBUG_PERSIST_CONNECT_LOW_LEVEL
+        public bool VariantHeader = false;
+#else
+        public bool VariantHeader = true;
+#endif
 
         public override void PrepareBlock(NativeBufferStream data, uint type, uint flags, uint seq, uint sseq)
         {
             if (data != null)
             {
                 var size = data.Count;
-                var codedstream = GetCodedOutputStream();
-                codedstream.Reinit(data);
                 data.InsertMode = true;
                 data.Seek(0, SeekOrigin.Begin);
+                int wrotecnt = 0;
                 if (VariantHeader)
                 {
-                    codedstream.WriteTag(1, Google.Protobuf.WireFormat.WireType.Varint);
-                    codedstream.WriteUInt32(type);
-                    codedstream.WriteTag(2, Google.Protobuf.WireFormat.WireType.Varint);
-                    codedstream.WriteUInt32(flags);
-                    codedstream.WriteTag(3, Google.Protobuf.WireFormat.WireType.Varint);
-                    codedstream.WriteUInt32(seq);
-                    codedstream.WriteTag(4, Google.Protobuf.WireFormat.WireType.Varint);
-                    codedstream.WriteUInt32(sseq);
+                    wrotecnt += ProtobufEncoder.WriteTag(1, ProtobufLowLevelType.Varint, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteVariant(ProtobufEncoder.EncodeZigZag32((int)type), data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteTag(2, ProtobufLowLevelType.Varint, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteVariant(flags, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteTag(3, ProtobufLowLevelType.Varint, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteVariant(seq, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteTag(4, ProtobufLowLevelType.Varint, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteVariant(sseq, data, wrotecnt);
                 }
                 else
                 {
-                    codedstream.WriteTag(1, Google.Protobuf.WireFormat.WireType.Fixed32);
-                    codedstream.WriteFixed32(type);
-                    codedstream.WriteTag(2, Google.Protobuf.WireFormat.WireType.Fixed32);
-                    codedstream.WriteFixed32(flags);
-                    codedstream.WriteTag(3, Google.Protobuf.WireFormat.WireType.Fixed32);
-                    codedstream.WriteFixed32(seq);
-                    codedstream.WriteTag(4, Google.Protobuf.WireFormat.WireType.Fixed32);
-                    codedstream.WriteFixed32(sseq);
+                    wrotecnt += ProtobufEncoder.WriteTag(1, ProtobufLowLevelType.Fixed32, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteFixed32(ProtobufEncoder.EncodeZigZag32((int)type), data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteTag(2, ProtobufLowLevelType.Fixed32, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteFixed32(flags, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteTag(3, ProtobufLowLevelType.Fixed32, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteFixed32(seq, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteTag(4, ProtobufLowLevelType.Fixed32, data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteFixed32(sseq, data, wrotecnt);
                 }
-                codedstream.WriteTag(5, Google.Protobuf.WireFormat.WireType.LengthDelimited);
-                codedstream.WriteLength(size);
-                codedstream.Flush();
-                ReturnCodedOutputStream(codedstream);
+                wrotecnt += ProtobufEncoder.WriteTag(5, ProtobufLowLevelType.LengthDelimited, data, wrotecnt);
+                wrotecnt += ProtobufEncoder.WriteVariant((uint)size, data, wrotecnt);
             }
         }
     }
@@ -894,6 +867,10 @@ namespace Capstones.Net
                 return 0;
             }
             uint rv;
+            if ((rv = base.GetDataType(data)) != 0)
+            {
+                return rv;
+            }
             RegisteredTypes.TryGetValue(data.GetType(), out rv);
             return rv;
         }
@@ -924,6 +901,7 @@ namespace Capstones.Net
         }
 
         [ThreadStatic] protected static Google.Protobuf.CodedOutputStream _CodedStream;
+        [ThreadStatic] protected static NativeBufferStream _UnderlayStream;
         protected static Google.Protobuf.CodedOutputStream CodedStream
         {
             get
@@ -931,8 +909,8 @@ namespace Capstones.Net
                 var stream = _CodedStream;
                 if (stream == null)
                 {
-                    stream = new Google.Protobuf.CodedOutputStream(new NativeBufferStream(), true);
-                    _CodedStream = stream;
+                    _CodedStream = stream =
+                        new Google.Protobuf.CodedOutputStream(_UnderlayStream = new NativeBufferStream(), true);
                 }
                 return stream;
             }
@@ -948,16 +926,7 @@ namespace Capstones.Net
             if (message != null)
             {
                 var ostream = CodedStream;
-                var stream = ostream.OutputStream as NativeBufferStream;
-                if (stream == null)
-                {
-                    stream = new NativeBufferStream();
-                }
-                else
-                {
-                    stream.Clear();
-                }
-                ostream.Reinit(stream);
+                _UnderlayStream.Clear();
                 message.WriteTo(ostream);
                 ostream.Flush();
 #if DEBUG_PERSIST_CONNECT
@@ -1020,7 +989,7 @@ namespace Capstones.Net
                     }
                 }
 #endif
-                return stream;
+                return _UnderlayStream;
             }
             return null;
         }

@@ -53,7 +53,7 @@ namespace Capstones.Net
             {
                 if (value != _Port)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change port when server started");
                     }
@@ -157,7 +157,7 @@ namespace Capstones.Net
                     PlatDependant.LogError(e);
                     yield break;
                 }
-                while (!_ConnectWorkCanceled)
+                while (!_ConnectWorkFinished)
                 {
                     int waitinterval;
                     try
@@ -204,8 +204,8 @@ namespace Capstones.Net
             }
             finally
             {
-                _ConnectWorkRunning = false;
-                _ConnectWorkCanceled = false;
+                //_ConnectWorkStarted = false;
+                //_ConnectWorkCanceled = false;
                 if (_PreDispose != null)
                 {
                     _PreDispose(this);
@@ -235,11 +235,6 @@ namespace Capstones.Net
             return false;
         }
 
-        public void StartListening()
-        {
-            StartConnect();
-        }
-        public bool IsAlive { get { return IsConnectionAlive; } }
         public ServerConnection PrepareConnection()
         {
             var con = new ServerConnection(this);
@@ -255,7 +250,7 @@ namespace Capstones.Net
             con.OnConnected += onChildConnected;
             return con;
         }
-        public event ConnectedHandler OnConnected;
+        public event ConnectedToServerHandler OnConnected;
         IServerConnection IPersistentConnectionServer.PrepareConnection()
         {
             return PrepareConnection();

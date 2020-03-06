@@ -27,7 +27,7 @@ namespace Capstones.Net
             {
                 if (value != _Port)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change port when server started");
                     }
@@ -46,7 +46,7 @@ namespace Capstones.Net
             {
                 if (value != _ListenBroadcast)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change ListenBroadcast when server started");
                     }
@@ -89,15 +89,12 @@ namespace Capstones.Net
                         ep.Address = ((IPEndPoint)RemoteEP).Address;
                         ep.Port = ((IPEndPoint)RemoteEP).Port;
                         PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(ReceiveData, 0, ReceiveCount), Remote = ep });
-                    }
-                    if (!ParentServer._ConnectWorkCanceled)
-                    {
-                        BeginReceive();
+                        ParentServer._HaveDataToSend.Set();
                     }
                 }
                 catch (Exception e)
                 {
-                    if (ParentServer.IsConnectionAlive)
+                    if (ParentServer.IsAlive)
                     {
                         if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
                         {
@@ -109,9 +106,14 @@ namespace Capstones.Net
                             PlatDependant.LogError(e);
                         }
                     }
-                    return;
                 }
-                ParentServer._HaveDataToSend.Set();
+                finally
+                {
+                    if (!ParentServer._ConnectWorkFinished && LocalSocket != null)
+                    {
+                        BeginReceive();
+                    }
+                }
             }
             public void BeginReceive()
             {
@@ -175,15 +177,12 @@ namespace Capstones.Net
                     ep.Address = ((IPEndPoint)_RemoteEP).Address;
                     ep.Port = ((IPEndPoint)_RemoteEP).Port;
                     _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt), Remote = ep });
-                }
-                if (!_ConnectWorkCanceled)
-                {
-                    BeginReceive4();
+                    _HaveDataToSend.Set();
                 }
             }
             catch (Exception e)
             {
-                if (IsConnectionAlive)
+                if (IsAlive)
                 {
                     if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
                     {
@@ -195,9 +194,14 @@ namespace Capstones.Net
                         PlatDependant.LogError(e);
                     }
                 }
-                return;
             }
-            _HaveDataToSend.Set();
+            finally
+            {
+                if (!_ConnectWorkFinished && _Socket != null)
+                {
+                    BeginReceive4();
+                }
+            }
         }
         protected AsyncCallback EndReceive4Func;
         protected void EndReceive6(IAsyncResult ar)
@@ -229,15 +233,12 @@ namespace Capstones.Net
                     ep.Address = ((IPEndPoint)_RemoteEP6).Address;
                     ep.Port = ((IPEndPoint)_RemoteEP6).Port;
                     _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer6, 0, receivecnt), Remote = ep });
-                }
-                if (!_ConnectWorkCanceled)
-                {
-                    BeginReceive6();
+                    _HaveDataToSend.Set();
                 }
             }
             catch (Exception e)
             {
-                if (IsConnectionAlive)
+                if (IsAlive)
                 {
                     if (e is SocketException && ((SocketException)e).ErrorCode == 10054)
                     {
@@ -249,7 +250,13 @@ namespace Capstones.Net
                         PlatDependant.LogError(e);
                     }
                 }
-                return;
+            }
+            finally
+            {
+                if (!_ConnectWorkFinished && _Socket6 != null)
+                {
+                    BeginReceive6();
+                }
             }
         }
         protected AsyncCallback EndReceive6Func;
@@ -401,7 +408,7 @@ namespace Capstones.Net
                         bsinfo.BeginReceive();
                     }
                     int knownRemotesVersion = 0;
-                    while (!_ConnectWorkCanceled)
+                    while (!_ConnectWorkFinished)
                     {
                         int waitinterval;
                         try
@@ -510,7 +517,7 @@ namespace Capstones.Net
                     _RemoteEP6 = new IPEndPoint(IPAddress.IPv6Any, _Port);
                     BeginReceive4();
                     BeginReceive6();
-                    while (!_ConnectWorkCanceled)
+                    while (!_ConnectWorkFinished)
                     {
                         int waitinterval;
                         try
@@ -577,8 +584,8 @@ namespace Capstones.Net
             }
             finally
             {
-                _ConnectWorkRunning = false;
-                _ConnectWorkCanceled = false;
+                //_ConnectWorkStarted = false;
+                //_ConnectWorkFinished = false;
                 if (_PreDispose != null)
                 {
                     _PreDispose(this);
@@ -601,6 +608,7 @@ namespace Capstones.Net
                         if (bsinfo != null && bsinfo.LocalSocket != null)
                         {
                             bsinfo.LocalSocket.Close();
+                            bsinfo.LocalSocket = null;
                         }
                     }
                     _SocketsBroadcast = null;

@@ -346,13 +346,50 @@ namespace Capstones.Net
     public class BidirectionMemStream : Stream, IBuffered
     {
         public override bool CanRead { get { return true; } }
-        public override bool CanSeek { get { return false; } }
+        public override bool CanSeek { get { return true; } }
         public override bool CanWrite { get { return true; } }
-        public override long Length { get { return -1; } }
-        public override long Position { get { return -1; } set { } }
+        public override long Length { get { return _BufferedSize; } }
+        public override long Position { get { return 0; } set { Seek(value, SeekOrigin.Current); } }
         public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) { return -1; }
-        public override void SetLength(long value) { }
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            if (offset > (long)int.MaxValue)
+            {
+                offset = int.MaxValue;
+            }
+            else if (offset < (long)int.MinValue)
+            {
+                offset = int.MinValue;
+            }
+            if (origin == SeekOrigin.End)
+            {
+                var left = (int)-offset;
+                if (left >= 0)
+                {
+                    int bsize = Volatile.Read(ref _BufferedSize);
+                    Read(null, 0, bsize, left);
+                }
+                else
+                {
+                    int bsize = Volatile.Read(ref _BufferedSize);
+                    Read(null, 0, bsize, 0);
+                    Read(null, 0, -left);
+                }
+            }
+            else
+            {
+                if (offset > 0)
+                {
+                    Read(null, 0, (int)offset);
+                }
+                else
+                {
+                    throw new NotSupportedException();
+                }
+            }
+            return 0;
+        }
+        public override void SetLength(long value) { throw new NotSupportedException(); }
 
         private ConcurrentQueueGrowOnly<BufferInfo> _Buffer = new ConcurrentQueueGrowOnly<BufferInfo>();
         private volatile int _ReadingHeadConsumed = 0;
@@ -370,6 +407,10 @@ namespace Capstones.Net
         /// If not, the data read can be uncompleted (a part is read by this thread, and other parts are read by other threads).
         /// </remarks>
         public override int Read(byte[] buffer, int offset, int count)
+        {
+            return Read(buffer, offset, count, -1);
+        }
+        protected int Read(byte[] buffer, int offset, int count, int remainBytesInTail)
         {
             if (_Closed)
             {
@@ -435,21 +476,49 @@ namespace Capstones.Net
                     {
                         prcnt = count - rcnt;
                     }
+                    int bsize = Volatile.Read(ref _BufferedSize);
+                    if (remainBytesInTail >= 0)
+                    {
+                        if (bsize <= remainBytesInTail)
+                        {
+                            break;
+                        }
+                        prcnt = Math.Min(prcnt, bsize - remainBytesInTail);
+                    }
 
                     if (Interlocked.CompareExchange(ref _ReadingHeadConsumed, consumed + prcnt, consumed) != consumed)
                     {
                         continue; // another thread read from the buffer. this thread should try again.
                     }
 
-                    Buffer.BlockCopy(binfo.Buffer.Buffer, consumed, buffer, offset + rcnt, prcnt);
+                    bsize = _BufferedSize;
+                    int nbsize;
+                    SpinWait spin = new SpinWait();
+                    while (bsize != (nbsize = Interlocked.CompareExchange(ref _BufferedSize, bsize - prcnt, bsize)))
+                    {
+                        spin.SpinOnce();
+                        bsize = nbsize;
+                    }
+                    bsize -= rcnt;
+                    if (remainBytesInTail >= 0)
+                    {
+                        if (bsize <= remainBytesInTail)
+                        {
+                            break;
+                        }
+                    }
+
+                    if (buffer != null)
+                    {
+                        Buffer.BlockCopy(binfo.Buffer.Buffer, consumed, buffer, offset + rcnt, prcnt);
+                    }
                     if (!readlessthanbuffer)
                     { // need to dequeue.
                         Interlocked.Exchange(ref _ReadingHeadConsumed, int.MaxValue);
                         while (_Buffer.TryDequeue(out binfo))
                         {
                             binfo.Buffer.Release();
-                            _Buffer.TryPeek(out binfo);
-                            if (binfo.Count > 0)
+                            if (!_Buffer.TryPeek(out binfo) || binfo.Count > 0)
                             {
                                 break;
                             }
@@ -458,15 +527,7 @@ namespace Capstones.Net
                     }
                     rcnt += prcnt;
                 }
-                int bsize = _BufferedSize;
-                int nbsize;
-                SpinWait spin = new SpinWait();
-                while (bsize != (nbsize = Interlocked.CompareExchange(ref _BufferedSize, bsize - rcnt, bsize)))
-                {
-                    spin.SpinOnce();
-                    bsize = nbsize;
-                }
-                if (bsize > 0)
+                if (Volatile.Read(ref _BufferedSize) > 0)
                 {
                     _DataReady.Set();
                 }
@@ -487,6 +548,10 @@ namespace Capstones.Net
                     }
                     PlatDependant.LogInfo(sb);
 #endif
+                    return rcnt;
+                }
+                if (remainBytesInTail >= 0)
+                {
                     return rcnt;
                 }
             }
@@ -513,16 +578,18 @@ namespace Capstones.Net
 
                     _Buffer.Enqueue(new BufferInfo(pbuffer, scnt));
 
+                    int bsize = _BufferedSize;
+                    int nbsize;
+                    SpinWait spin = new SpinWait();
+                    while (bsize != (nbsize = Interlocked.CompareExchange(ref _BufferedSize, bsize + scnt, bsize)))
+                    {
+                        spin.SpinOnce();
+                        bsize = nbsize;
+                    }
+
                     cntwrote += scnt;
                 }
-                int bsize = _BufferedSize;
-                int nbsize;
-                SpinWait spin = new SpinWait();
-                while (bsize != (nbsize = Interlocked.CompareExchange(ref _BufferedSize, bsize + count, bsize)))
-                {
-                    spin.SpinOnce();
-                    bsize = nbsize;
-                }
+
 #if DEBUG_PERSIST_CONNECT
                 var sb = new System.Text.StringBuilder();
                 sb.Append("Write ");

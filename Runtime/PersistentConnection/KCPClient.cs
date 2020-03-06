@@ -141,9 +141,13 @@ namespace Capstones.Net
             return 0;
         }
 
-        public bool IsConnectionAlive
+        public bool IsStarted
         {
-            get { return _Connection.IsConnectionAlive; }
+            get { return _Connection.IsStarted; }
+        }
+        public bool IsAlive
+        {
+            get { return _Connection.IsAlive; }
         }
         public EndPoint RemoteEndPoint
         {
@@ -160,7 +164,7 @@ namespace Capstones.Net
             {
                 if (value != _OnReceive)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change OnReceive when connection started");
                     }
@@ -187,7 +191,7 @@ namespace Capstones.Net
             {
                 if (value != _OnUpdate)
                 {
-                    if (IsConnectionAlive)
+                    if (IsStarted)
                     {
                         PlatDependant.LogError("Cannot change OnUpdate when connection started");
                     }

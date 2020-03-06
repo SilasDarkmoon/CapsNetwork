@@ -96,8 +96,18 @@ namespace Capstones.Net
     {
         protected Dictionary<uint, Func<uint, NativeBufferStream, int, int, object>> _TypedReaders = new Dictionary<uint, Func<uint, NativeBufferStream, int, int, object>>(PredefinedMessages.PredefinedReaders);
         protected Dictionary<Type, Func<object, NativeBufferStream>> _TypedWriters = new Dictionary<Type, Func<object, NativeBufferStream>>(PredefinedMessages.PredefinedWriters);
+        protected Dictionary<Type, uint> _TypeToID = new Dictionary<Type, uint>(PredefinedMessages.PredefinedTypeToID);
 
-        public abstract uint GetDataType(object data);
+        public virtual uint GetDataType(object data)
+        {
+            if (data == null)
+            {
+                return 0;
+            }
+            uint rv;
+            _TypeToID.TryGetValue(data.GetType(), out rv);
+            return rv;
+        }
         public virtual NativeBufferStream Write(object data)
         {
             if (data == null)
@@ -149,6 +159,32 @@ namespace Capstones.Net
             { typeof(float), WriteRawFloat },
             { typeof(double), WriteRawDouble },
             { typeof(Number), WriteNumber },
+        };
+        public static Dictionary<Type, uint> PredefinedTypeToID = new Dictionary<Type, uint>()
+        {
+            { typeof(Error), Error.TypeID },
+            { typeof(byte[]), Raw.TypeID },
+            { typeof(Raw), Raw.TypeID },
+            { typeof(string), String.TypeID },
+            { typeof(String), String.TypeID },
+            { typeof(int), Integer.TypeID },
+            { typeof(uint), Integer.TypeID },
+            { typeof(long), Integer.TypeID },
+            { typeof(ulong), Integer.TypeID },
+            { typeof(IntPtr), Integer.TypeID },
+            { typeof(UIntPtr), Integer.TypeID },
+            { typeof(Integer), Integer.TypeID },
+            { typeof(float), Number.TypeID },
+            { typeof(double), Number.TypeID },
+            { typeof(Number), Number.TypeID },
+        };
+        public static Dictionary<uint, Type> PredefinedIDToType = new Dictionary<uint, Type>()
+        {
+            { Error.TypeID, typeof(Error) },
+            { Raw.TypeID, typeof(Raw) },
+            { String.TypeID, typeof(String) },
+            { Integer.TypeID, typeof(Integer) },
+            { Number.TypeID, typeof(Number) },
         };
 
         [ThreadStatic] private static NativeBufferStream _CommonWriterBuffer;

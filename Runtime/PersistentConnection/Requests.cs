@@ -445,7 +445,7 @@ namespace Capstones.Net
         void RegHandler<T>(Request.Handler<T> handler);
         void RemoveHandler(Request.Handler handler);
         void RemoveHandler<T>(Request.Handler<T> handler);
-        void HandleRequest(IReqClient from, uint type, object reqobj, uint seq);
+        object HandleRequest(IReqClient from, uint type, object reqobj, uint seq);
         void SendResponse(IReqClient to, object response, uint seq_pingback);
 
         //event Request.Handler HandleCommonRequest;
@@ -648,6 +648,32 @@ namespace Capstones.Net
         public static async System.Threading.Tasks.Task<object> SendAsync(this IReqClient client, object reqobj)
         {
             return await SendAsync(client, reqobj, -1);
+        }
+        public static async System.Threading.Tasks.Task<T> SendAsync<T>(this IReqClient client, object reqobj, int timeout)
+        {
+            var mtawaiter = MainThreadAwaiter.Create();
+            var req = client.Send(reqobj, timeout);
+            if (req == null)
+            {
+                return default(T);
+            }
+            await req;
+            if (mtawaiter.ShouldWait)
+            {
+                await mtawaiter;
+            }
+            if (typeof(T) == typeof(Request))
+            {
+                return (T)(object)req;
+            }
+            else
+            {
+                return req.GetResponse<T>();
+            }
+        }
+        public static async System.Threading.Tasks.Task<T> SendAsync<T>(this IReqClient client, object reqobj)
+        {
+            return await SendAsync<T>(client, reqobj, -1);
         }
 
         public class TickAwaiter : IAwaiter
@@ -1146,7 +1172,8 @@ namespace Capstones.Net
                 }
             }
         }
-        public void HandleRequest(IReqClient from, uint messagetype, object reqobj, uint seq)
+        [EventOrder(int.MinValue)]
+        public object HandleRequest(IReqClient from, uint messagetype, object reqobj, uint seq)
         {
             object respobj = null;
             Type type = null;
@@ -1195,7 +1222,11 @@ namespace Capstones.Net
                 }
                 respobj = list.CallHandlers(from, messagetype, reqobj, seq);
             }
-            var resp = respobj as Request;
+            return respobj;
+        }
+        public void SendResponse(IReqClient from, object response, uint seq_pingback)
+        {
+            var resp = response as Request;
             if (resp != null)
             {
                 if (resp is PeekedRequest)
@@ -1206,20 +1237,20 @@ namespace Capstones.Net
                 {
                     resp.OnDone += () =>
                     {
-                        SendResponse(from, resp.ResponseObj, seq);
+                        SendRawResponse(from, resp.ResponseObj, seq_pingback);
                     };
                 }
             }
-            else if (respobj != null)
+            else if (response != null)
             {
-                SendResponse(from, respobj, seq);
+                SendRawResponse(from, response, seq_pingback);
             }
             else
             {
-                SendResponse(from, new PredefinedMessages.Raw(), seq); // we send an empty response.
+                SendRawResponse(from, new PredefinedMessages.Raw(), seq_pingback); // we send an empty response.
             }
         }
-        public abstract void SendResponse(IReqClient to, object response, uint seq_pingback);
+        public abstract void SendRawResponse(IReqClient to, object response, uint seq_pingback);
         public abstract void Start();
         public abstract bool IsStarted { get; }
         public abstract bool IsAlive { get; }
@@ -1346,9 +1377,9 @@ namespace Capstones.Net
             req.Seq = _Channel.Write(reqobj);
             return req;
         }
-        public override void SendResponse(IReqClient to, object response, uint seq_pingback)
+        public override void SendRawResponse(IReqClient to, object response, uint seq_pingback)
         {
-            if (_Channel != null)
+            if (_Channel != null && _Channel.IsAlive)
             {
                 _Channel.Write(response, seq_pingback);
             }
@@ -1421,7 +1452,11 @@ namespace Capstones.Net
             }
             if (!isResponse)
             { // this is not a response. this is a request from peer.
-                HandleRequest(this, type, obj, reqseq);
+                var resp = HandleRequest(this, type, obj, reqseq);
+                if (pingback == 0)
+                {
+                    SendResponse(this, resp, reqseq);
+                }
             }
 
             //3. delete disposing
@@ -1558,7 +1593,7 @@ namespace Capstones.Net
             {
                 while (!_Disposed && _Channel.IsAlive)
                 {
-                    while (_Channel.TryRead() != null) ;
+                    while (!_Disposed && _Channel.IsAlive && (_Channel.TryRead() != null)) ;
                     yield return null;
                 }
             }
@@ -1630,7 +1665,7 @@ namespace Capstones.Net
             _Server = raw;
             _Server.OnUpdate += FireOnUpdate;
             _PositiveConnection = raw as IPositiveConnection;
-            _ChildHandler = (from, type, reqobj, seq) => { HandleRequest(from, type, reqobj, seq); return null; };
+            _ChildHandler = HandleRequest;
         }
         public ReqServer(ObjServer raw)
             : this(raw, null)
@@ -1664,12 +1699,12 @@ namespace Capstones.Net
             base.FireOnConnected(child);
         }
 
-        public override void SendResponse(IReqClient to, object response, uint seq_pingback)
+        public override void SendRawResponse(IReqClient to, object response, uint seq_pingback)
         {
             var client = to as ReqClient;
-            if (client != null)
+            if (client != null && client.IsAlive)
             {
-                client.SendResponse(to, response, seq_pingback);
+                client.SendRawResponse(to, response, seq_pingback);
             }
         }
 
@@ -1989,7 +2024,7 @@ namespace Capstones.Net
                     }
                 }
                 
-                if (!exconfig.GetBoolean("delaystart"))
+                if (!exconfig.Get<bool>("delaystart"))
                 {
                     client.Start();
                 }
@@ -2085,7 +2120,7 @@ namespace Capstones.Net
                     };
                 }
                 
-                if (!exconfig.GetBoolean("delaystart"))
+                if (!exconfig.Get<bool>("delaystart"))
                 {
                     server.Start();
                 }

@@ -2345,7 +2345,7 @@ namespace Capstones.Net
 
         public ProtobufMessage ApplyTemplate(ProtobufMessage template)
         {
-            return ProtobufMessageReader.ApplyTemplate(this, template);
+            return ProtobufEncoder.ApplyTemplate(this, template);
         }
     }
 
@@ -2779,7 +2779,7 @@ namespace Capstones.Net
         }
     }
 
-    public static class ProtobufMessageReader
+    public static class ProtobufEncoder
     {
         public static bool ReadFixed32(ListSegment<byte> data, out uint value, out int readbytecount)
         {
@@ -2825,13 +2825,107 @@ namespace Capstones.Net
             }
             return false;
         }
+        public static bool TryReadFixed32(System.IO.Stream stream, out uint value)
+        {
+            value = 0;
+            for (int i = 0; i < 4; ++i)
+            {
+                var b = stream.ReadByte();
+                if (b < 0)
+                {
+                    return false;
+                }
+                var part = (uint)b;
+                value += part << (8 * i);
+            }
+            return true;
+        }
+        public static uint ReadFixed32(System.IO.Stream stream)
+        {
+            uint value = 0;
+            if (!TryReadFixed32(stream, out value))
+            {
+                throw new System.IO.EndOfStreamException();
+            }
+            return value;
+        }
+        public static bool TryReadFixed64(System.IO.Stream stream, out ulong value)
+        {
+            value = 0;
+            for (int i = 0; i < 8; ++i)
+            {
+                var b = stream.ReadByte();
+                if (b < 0)
+                {
+                    return false;
+                }
+                var part = (ulong)b;
+                value += part << (8 * i);
+            }
+            return true;
+        }
+        public static ulong ReadFixed64(System.IO.Stream stream)
+        {
+            ulong value = 0;
+            if (!TryReadFixed64(stream, out value))
+            {
+                throw new System.IO.EndOfStreamException();
+            }
+            return value;
+        }
+        public static bool TryReadVariant(System.IO.Stream stream, out ulong value)
+        {
+            value = 0;
+            for (int i = 0; ; ++i)
+            {
+                var b = stream.ReadByte();
+                if (b < 0)
+                {
+                    return false;
+                }
+                ulong part = (ulong)b;
+                if (b >= 128)
+                {
+                    part &= 0x7F;
+                }
+                part <<= (7 * i);
+                value += part;
+                if (b < 128)
+                {
+                    return true;
+                }
+            }
+        }
+        public static ulong ReadVariant(System.IO.Stream stream)
+        {
+            ulong value = 0;
+            if (!TryReadVariant(stream, out value))
+            {
+                throw new System.IO.EndOfStreamException();
+            }
+            return value;
+        }
+
+        public static void DecodeTag(ulong tag, out int number, out ProtobufLowLevelType ltype)
+        {
+            number = (int)(tag >> 3);
+            ltype = (ProtobufLowLevelType)(tag & 0x7);
+        }
+#if !UNITY_ENGINE && !UNITY_5_3_OR_NEWER || NET_4_6 || NET_STANDARD_2_0
+        public static (int number, ProtobufLowLevelType ltype) DecodeTag(ulong tag)
+        {
+            int number;
+            ProtobufLowLevelType ltype;
+            DecodeTag(tag, out number, out ltype);
+            return (number, ltype);
+        }
+#endif
         public static bool ReadTag(ListSegment<byte> data, out int number, out ProtobufLowLevelType ltype, out int readbytecount)
         {
             ulong tag;
             if (ReadVariant(data, out tag, out readbytecount))
             {
-                number = (int)(tag >> 3);
-                ltype = (ProtobufLowLevelType)(tag & 0x7);
+                DecodeTag(tag, out number, out ltype);
                 return true;
             }
             number = 0;
@@ -2985,6 +3079,60 @@ namespace Capstones.Net
         {
             int readcnt;
             return ReadRaw(data, out readcnt);
+        }
+
+        /// <summary>
+        /// notice: in case of end of stream, this will not fail, but the real bytes skipped may be less than required.
+        /// </summary>
+        public static void SkipBytes(System.IO.Stream stream, int count)
+        {
+            if (stream.CanSeek)
+            {
+                stream.Seek(count, System.IO.SeekOrigin.Current);
+            }
+            else
+            {
+                var buffer = PlatDependant.CopyStreamBuffer;
+                int readcnt = 0;
+                while (readcnt < count)
+                {
+                    var pread = Math.Min(buffer.Length, count - readcnt);
+                    pread = stream.Read(buffer, 0, pread);
+                    if (pread == 0)
+                    {
+                        break;
+                    }
+                    readcnt += pread;
+                }
+            }
+        }
+
+        public static void CopyBytes(System.IO.Stream stream, System.IO.Stream tostream, int count)
+        {
+            var buffer = PlatDependant.CopyStreamBuffer;
+            int readcnt = 0;
+            while (readcnt < count)
+            {
+                var pread = Math.Min(buffer.Length, count - readcnt);
+                pread = stream.Read(buffer, 0, pread);
+                if (pread == 0)
+                {
+                    break;
+                }
+                tostream.Write(buffer, 0, pread);
+                readcnt += pread;
+            }
+        }
+
+        public static long DecodeZigZag64(ulong val)
+        {
+            var value = (long)(val >> 1) ^ -(long)(val & 1);
+            return value;
+        }
+        public static int DecodeZigZag32(uint val)
+        {
+            var value = (int)(val >> 1) ^ -(int)(val & 1);
+            return value;
         }
 
         private static HashSet<Type> _IntTypes = new HashSet<Type>()
@@ -3183,7 +3331,7 @@ namespace Capstones.Net
                     if (!raw.Parsed.IsObject)
                     {
                         ulong r = (ulong)raw.Parsed;
-                        value = (long)(r >> 1) ^ -(long)(r & 1);
+                        value = DecodeZigZag64(r);
                         return true;
                     }
                     value = default(ProtobufParsedValue);
@@ -3196,7 +3344,7 @@ namespace Capstones.Net
                     if (!raw.Parsed.IsObject)
                     {
                         uint r = (uint)raw.Parsed;
-                        value = (int)(r >> 1) ^ -(int)(r & 1);
+                        value = DecodeZigZag32(r);
                         return true;
                     }
                     value = default(ProtobufParsedValue);
@@ -3292,10 +3440,7 @@ namespace Capstones.Net
             raw.FinishBuild();
             return raw;
         }
-    }
 
-    public static class ProtobufMessageWriter
-    {
         public static int WriteVariant(ulong value, IList<byte> buffer, int offset)
         {
             int cnt = 0;
@@ -3390,6 +3535,17 @@ namespace Capstones.Net
             return cnt;
         }
 
+        public static ulong EncodeZigZag64(long val)
+        {
+            var zval = (ulong)((val << 1) ^ (val >> 63));
+            return zval;
+        }
+        public static uint EncodeZigZag32(int val)
+        {
+            var zval = (uint)((val << 1) ^ (val >> 31));
+            return zval;
+        }
+
         private delegate int EncodeFuncForNativeType(ProtobufValue value, int fieldnum, ProtobufNativeType ntype, IList<byte> buffer, int offset);
         private static Dictionary<ProtobufNativeType, EncodeFuncForNativeType> _EncodeForNativeTypeFuncs = new Dictionary<ProtobufNativeType, EncodeFuncForNativeType>()
         {
@@ -3452,7 +3608,7 @@ namespace Capstones.Net
                 {
                     int cnt = 0;
                     var val = value.Parsed.Int32;
-                    var zval = (uint) ((val << 1) ^ (val >> 31));
+                    var zval = EncodeZigZag32(val);
                     cnt += WriteTag(fieldnum, ProtobufLowLevelType.Varint, buffer, offset + cnt);
                     cnt += WriteVariant(zval, buffer, offset + cnt);
                     return cnt;
@@ -3463,7 +3619,7 @@ namespace Capstones.Net
                 {
                     int cnt = 0;
                     var val = value.Parsed.Int64;
-                    var zval = (ulong) ((val << 1) ^ (val >> 63));
+                    var zval = EncodeZigZag64(val);
                     cnt += WriteTag(fieldnum, ProtobufLowLevelType.Varint, buffer, offset + cnt);
                     cnt += WriteVariant(zval, buffer, offset + cnt);
                     return cnt;
@@ -3701,10 +3857,10 @@ namespace Capstones.Net
         }
         public static Dictionary<string, TemplateProtobufMessage> ReadTemplates(ListSegment<byte> compiledFileData)
         {
-            ProtobufMessage file = ProtobufMessageReader.ReadRaw(compiledFileData);
+            ProtobufMessage file = ProtobufEncoder.ReadRaw(compiledFileData);
             if (file != null)
             {
-                ProtobufMessageReader.ApplyTemplate(file, DescriptorFileTemplate);
+                ProtobufEncoder.ApplyTemplate(file, DescriptorFileTemplate);
                 Dictionary<string, TemplateProtobufMessage> templates = new Dictionary<string, TemplateProtobufMessage>();
                 var package = file["package"].String;
                 Dictionary<string, ProtobufMessage> allmessages = new Dictionary<string, ProtobufMessage>();
@@ -3813,7 +3969,7 @@ namespace Capstones.Net
             tsslot.Desc.Name = "floatval";
             tsslot.Desc.Type.KnownType = ProtobufNativeType.TYPE_FLOAT;
 
-            ProtobufMessageReader.ApplyTemplate(message, tmessage);
+            message.ApplyTemplate(tmessage);
 
             UnityEngine.Debug.Log(message.ToString());
         }

@@ -15,12 +15,16 @@ namespace Capstones.Net
     public delegate bool SendHandler(IPooledBuffer buffer, int cnt);
     public delegate ValueList<PooledBufferSpan> SendSerializer(object obj);
     public delegate int UpdateHandler(IPersistentConnection thiz);
-    public delegate void ConnectedHandler(IServerConnection child);
-
-    public interface IPersistentConnection
+    public delegate void ConnectedToServerHandler(IServerConnection child);
+    
+    public interface IPersistentConnectionLifetime : IDisposable
     {
         void StartConnect();
-        bool IsConnectionAlive { get; }
+        bool IsStarted { get; }
+        bool IsAlive { get; }
+    }
+    public interface IPersistentConnection : IPersistentConnectionLifetime
+    {
         EndPoint RemoteEndPoint { get; }
         ReceiveHandler OnReceive { get; set; }
         UpdateHandler OnUpdate { get; set; }
@@ -47,11 +51,9 @@ namespace Capstones.Net
         void Step();
     }
 
-    public interface IPersistentConnectionServer
+    public interface IPersistentConnectionServer : IPersistentConnectionLifetime
     {
-        void StartListening();
-        bool IsAlive { get; }
         IServerConnection PrepareConnection();
-        event ConnectedHandler OnConnected;
+        event ConnectedToServerHandler OnConnected;
     }
 }

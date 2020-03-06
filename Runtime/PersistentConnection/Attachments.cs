@@ -211,6 +211,13 @@ namespace Capstones.Net
         {
             SetAttachment((object)owner, name, attach);
         }
+        public static void SetAttachment(this IChannel owner, object attach)
+        {
+            if (attach != null)
+            {
+                SetAttachment(owner, attach.GetType().Name, attach);
+            }
+        }
         public static object GetAttachment(this IChannel owner, string name)
         {
             return GetAttachment((object)owner, name);
@@ -218,6 +225,10 @@ namespace Capstones.Net
         public static T GetAttachment<T>(this IChannel owner, string name)
         {
             return (T)GetAttachment((object)owner, name);
+        }
+        public static T GetAttachment<T>(this IChannel owner)
+        {
+            return (T)GetAttachment((object)owner, typeof(T).Name);
         }
         public static void TryDispose(object obj)
         {
@@ -282,6 +293,10 @@ namespace Capstones.Net
 
         protected int _LastTick;
         public int LastTick { get { return _LastTick; } }
+        public void RecordTick()
+        {
+            _LastTick = Environment.TickCount;
+        }
     }
 
     public class Heartbeat : RTTMeasure, IDisposable
@@ -298,6 +313,7 @@ namespace Capstones.Net
         public event Action OnDead = () => { };
         protected void OnHeartbeatDead()
         {
+            Debug.LogError("Cannot receive heartbeat response for a long time. Closing...");
             _Dead = true;
             var disposable = _Client as IDisposable;
             if (disposable != null)
@@ -427,7 +443,7 @@ namespace Capstones.Net
             }
             finally
             {
-                if (!_Disposed)
+                if (_Client.IsAlive && !_Disposed)
                 {
                     OnHeartbeatDead();
                 }

@@ -297,19 +297,26 @@ namespace Capstones.Net
             {
                 _Started = true;
             }
-            public bool IsConnectionAlive
+            public bool IsAlive
             {
                 get
                 {
                     try
                     {
-                        return _Started && Server._Connection.IsConnectionAlive;
+                        return !_Disposed && Server.IsAlive;
                     }
                     catch
                     {
                         // this means the connection is closed.
                         return false;
                     }
+                }
+            }
+            public bool IsStarted
+            {
+                get
+                {
+                    return _Started || !IsAlive;
                 }
             }
             public bool IsConnected
@@ -335,7 +342,7 @@ namespace Capstones.Net
                 {
                     if (value != _OnReceive)
                     {
-                        if (IsConnectionAlive)
+                        if (IsStarted)
                         {
                             PlatDependant.LogError("Cannot change OnReceive when connection started");
                         }
@@ -357,7 +364,7 @@ namespace Capstones.Net
                 {
                     if (value != _OnUpdate)
                     {
-                        if (IsConnectionAlive)
+                        if (IsStarted)
                         {
                             PlatDependant.LogError("Cannot change OnUpdate when connection started");
                         }
@@ -486,9 +493,13 @@ namespace Capstones.Net
 
         public bool IsAlive
         {
-            get { return _Connection.IsConnectionAlive; }
+            get { return _Connection.IsAlive; }
         }
-        public void StartListening()
+        public bool IsStarted
+        {
+            get { return _Connection.IsStarted; }
+        }
+        public void StartConnect()
         {
             _Connection.StartConnect();
         }
@@ -526,7 +537,7 @@ namespace Capstones.Net
                 OnConnected(child);
             }
         }
-        public event ConnectedHandler OnConnected;
+        public event ConnectedToServerHandler OnConnected;
 
         IServerConnection IPersistentConnectionServer.PrepareConnection()
         {

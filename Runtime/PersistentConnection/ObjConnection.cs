@@ -171,7 +171,7 @@ namespace Capstones.Net
         }
         public bool IsAlive
         {
-            get { return _Connection != null && _Connection.IsConnectionAlive; }
+            get { return _Connection != null && _Connection.IsAlive; }
         }
         public EndPoint RemoteEndPoint
         {
@@ -180,9 +180,9 @@ namespace Capstones.Net
 
         public ObjClient(IPersistentConnection connection, SerializationConfig sconfig, IDictionary<string, object> exconfig)
         {
-            _DeserializeInConnectionThread = ConfigManager.GetBoolean(exconfig, "DeserializeInConnectionThread");
-            _SerializeInConnectionThread = ConfigManager.GetBoolean(exconfig, "SerializeInConnectionThread");
-            var idletimeout = ConfigManager.GetInt32(exconfig, "IdleTimeout");
+            _DeserializeInConnectionThread = ConfigManager.Get<bool>(exconfig, "DeserializeInConnectionThread");
+            _SerializeInConnectionThread = ConfigManager.Get<bool>(exconfig, "SerializeInConnectionThread");
+            var idletimeout = ConfigManager.Get<int>(exconfig, "IdleTimeout");
             if (idletimeout != 0)
             {
                 IdleTimeout = idletimeout;
@@ -243,6 +243,7 @@ namespace Capstones.Net
                     var idletime = Environment.TickCount - _LastReceiveTick;
                     if (idletime >= timeout)
                     {
+                        PlatDependant.LogError("ObjClient Idle Timedout.");
                         Dispose();
                     }
                 }
@@ -304,7 +305,7 @@ namespace Capstones.Net
             {
                 try
                 {
-                    while (_Connection != null && _Connection.IsConnectionAlive && _Splitter.TryReadBlock())
+                    while (_Connection != null && _Connection.IsAlive && _Splitter.TryReadBlock())
                     {
                         if (_PendingRead.Obj != null)
                         {
@@ -373,7 +374,7 @@ namespace Capstones.Net
             {
                 try
                 {
-                    while (_Connection != null && _Connection.IsConnectionAlive)
+                    while (_Connection != null && _Connection.IsAlive)
                     {
                         _Splitter.ReadBlock();
                         if (_PendingRead.Obj != null)
@@ -410,7 +411,7 @@ namespace Capstones.Net
                         {
                             break;
                         }
-                        if (_Connection == null || !_Connection.IsConnectionAlive)
+                        if (_Connection == null || !_Connection.IsAlive)
                         {
                             break;
                         }
@@ -660,7 +661,7 @@ namespace Capstones.Net
         {
             if (!_Started)
             {
-                _Server.StartListening();
+                _Server.StartConnect();
                 _Started = true;
             }
         }
