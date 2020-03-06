@@ -598,7 +598,7 @@ namespace Capstones.Net
         }
 
         public struct MainThreadAwaiter
-        {
+        { // In the fact, we do not need this. If we await some task, the runtime will record SynchronizationContext.Current automatically.
             public bool ShouldWait { get; private set; }
             private IAwaiter _Awaiter;
             public void Init()
@@ -632,17 +632,12 @@ namespace Capstones.Net
 
         public static async System.Threading.Tasks.Task<object> SendAsync(this IReqClient client, object reqobj, int timeout)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var req = client.Send(reqobj, timeout);
             if (req == null)
             {
                 return null;
             }
             await req;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return req.ResponseObj;
         }
         public static async System.Threading.Tasks.Task<object> SendAsync(this IReqClient client, object reqobj)
@@ -651,17 +646,12 @@ namespace Capstones.Net
         }
         public static async System.Threading.Tasks.Task<T> SendAsync<T>(this IReqClient client, object reqobj, int timeout)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var req = client.Send(reqobj, timeout);
             if (req == null)
             {
                 return default(T);
             }
             await req;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             if (typeof(T) == typeof(Request))
             {
                 return (T)(object)req;
@@ -830,6 +820,11 @@ namespace Capstones.Net
             return new ReceiveAwaiter(req);
         }
 
+        //public class ReceiveQueue
+        //{
+        //    public ReceiveQueue
+        //}
+
         public static PeekedRequest Peek(this IReqServer server)
         {
             var req = new PeekedRequest(server);
@@ -868,68 +863,38 @@ namespace Capstones.Net
         }
         public static async System.Threading.Tasks.Task<PeekedRequest<T>> PeekAsync<T>(this IReqServer server)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new PeekedRequest<T>(server);
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<PeekedRequest> PeekAsync(this IReqServer server)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new PeekedRequest(server);
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<PeekedRequest> PeekAsync(this IReqServer server, uint type)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new PeekedRequest(server) { ReceiveRawType = type };
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<PeekedRequest<T>> PeekAsync<T>(this IReqServer server, int timeout)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new PeekedRequest<T>(server) { Timeout = timeout };
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<PeekedRequest> PeekAsync(this IReqServer server, int timeout)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new PeekedRequest(server) { Timeout = timeout };
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<PeekedRequest> PeekAsync(this IReqServer server, uint type, int timeout)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new PeekedRequest(server) { Timeout = timeout, ReceiveRawType = type };
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static ReceivedRequest Receive(this IReqServer server)
@@ -970,68 +935,38 @@ namespace Capstones.Net
         }
         public static async System.Threading.Tasks.Task<ReceivedRequest<T>> ReceiveAsync<T>(this IReqServer server)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new ReceivedRequest<T>(server);
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<ReceivedRequest> ReceiveAsync(this IReqServer server)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new ReceivedRequest(server);
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<ReceivedRequest> ReceiveAsync(this IReqServer server, uint type)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new ReceivedRequest(server) { ReceiveRawType = type };
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<ReceivedRequest<T>> ReceiveAsync<T>(this IReqServer server, int timeout)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new ReceivedRequest<T>(server) { Timeout = timeout };
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<ReceivedRequest> ReceiveAsync(this IReqServer server, int timeout)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new ReceivedRequest(server) { Timeout = timeout };
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         public static async System.Threading.Tasks.Task<ReceivedRequest> ReceiveAsync(this IReqServer server, uint type, int timeout)
         {
-            var mtawaiter = MainThreadAwaiter.Create();
             var request = new ReceivedRequest(server) { Timeout = timeout, ReceiveRawType = type };
             await request;
-            if (mtawaiter.ShouldWait)
-            {
-                await mtawaiter;
-            }
             return request;
         }
         #endregion
