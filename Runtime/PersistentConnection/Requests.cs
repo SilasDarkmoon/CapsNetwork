@@ -222,29 +222,85 @@ namespace Capstones.Net
                 RemoveReceiveTracker(_Server);
                 _Server = null;
 
-                PeekedRequest awaiter;
-                while (_PendingAwaiters.TryDequeue(out awaiter))
+                lock (_CheckingRequests)
                 {
-                    awaiter.SetReceiveError("connection closed");
+                    foreach (var crequest in _CheckingRequests)
+                    {
+                        crequest.SetReceiveError("connection closed");
+                    }
+                    _CheckingRequests.Clear();
+                    for (int i = 0; i < _CachedReceived.Length; ++i)
+                    {
+                        _CachedReceived[i] = default(CachedReceived);
+                    }
+                    _FirstCachedRequestIndex = 0;
+                    _NextCachedRequestIndex = 0;
                 }
-                foreach (var cawaiter in _CheckingAwaiters)
-                {
-                    cawaiter.SetReceiveError("connection closed");
-                }
-                _CheckingAwaiters.Clear();
             }
 
-            protected ConcurrentQueueGrowOnly<PeekedRequest> _PendingAwaiters = new ConcurrentQueueGrowOnly<PeekedRequest>();
-            protected LinkedList<PeekedRequest> _CheckingAwaiters = new LinkedList<PeekedRequest>();
-            public void Track(PeekedRequest awaiter)
+            protected LinkedList<PeekedRequest> _CheckingRequests = new LinkedList<PeekedRequest>();
+            protected struct CachedReceived
             {
-                _PendingAwaiters.Enqueue(awaiter);
+                public IReqClient From;
+                public uint Type;
+                public object Req;
+                public uint Seq;
+            }
+            protected CachedReceived[] _CachedReceived = new CachedReceived[ReqClient.MaxCheckingReqCount];
+            protected int _FirstCachedRequestIndex = 0;
+            protected int _NextCachedRequestIndex = 0;
+            public void Track(PeekedRequest request)
+            {
+                lock (_CheckingRequests)
+                {
+                    _CheckingRequests.AddLast(request);
+                    CheckCachedRequests();
+                }
             }
             [EventOrder(50)]
             protected object OnServerReceive(IReqClient from, uint type, object req, uint seq)
             {
+                lock (_CheckingRequests)
+                {
+                    while (_NextCachedRequestIndex - _FirstCachedRequestIndex >= ReqClient.MaxCheckingReqCount)
+                    {
+                        _CachedReceived[_FirstCachedRequestIndex++ % ReqClient.MaxCheckingReqCount] = default(CachedReceived);
+                    }
+                    _CachedReceived[_NextCachedRequestIndex++ % ReqClient.MaxCheckingReqCount] = new CachedReceived() { From = from, Type = type, Req = req, Seq = seq };
+                    if (_FirstCachedRequestIndex >= ReqClient.MaxCheckingReqCount)
+                    {
+                        _FirstCachedRequestIndex -= ReqClient.MaxCheckingReqCount;
+                        _NextCachedRequestIndex -= ReqClient.MaxCheckingReqCount;
+                    }
+                    return CheckCachedRequests();
+                }
+            }
+            protected object CheckCachedRequests()
+            {
+                for (int i = _FirstCachedRequestIndex; i < _NextCachedRequestIndex; ++i)
+                {
+                    var cached = _CachedReceived[i % ReqClient.MaxCheckingReqCount];
+                    var received = TryReceive(cached.From, cached.Type, cached.Req, cached.Seq);
+                    if (received != null)
+                    {
+                        while (_FirstCachedRequestIndex <= i)
+                        {
+                            _CachedReceived[_FirstCachedRequestIndex++ % ReqClient.MaxCheckingReqCount] = default(CachedReceived);
+                        }
+                        if (_FirstCachedRequestIndex >= ReqClient.MaxCheckingReqCount)
+                        {
+                            _FirstCachedRequestIndex -= ReqClient.MaxCheckingReqCount;
+                            _NextCachedRequestIndex -= ReqClient.MaxCheckingReqCount;
+                        }
+                        return received;
+                    }
+                }
+                return null;
+            }
+            protected object TryReceive(IReqClient from, uint type, object req, uint seq)
+            {
                 object received = null;
-                LinkedListNode<PeekedRequest> node = _CheckingAwaiters.First;
+                LinkedListNode<PeekedRequest> node = _CheckingRequests.First;
                 while (node != null)
                 {
                     var next = node.Next;
@@ -254,7 +310,7 @@ namespace Capstones.Net
                         received = cawaiter.TryReceive(from, type, req, seq);
                         if (received != null || cawaiter.CheckReceiveTimeout())
                         {
-                            _CheckingAwaiters.Remove(node);
+                            _CheckingRequests.Remove(node);
                         }
                         if (received != null && !cawaiter.CanHandleRequest)
                         {
@@ -265,34 +321,10 @@ namespace Capstones.Net
                     {
                         if (cawaiter.CheckReceiveTimeout())
                         {
-                            _CheckingAwaiters.Remove(node);
+                            _CheckingRequests.Remove(node);
                         }
                     }
                     node = next;
-                }
-
-                PeekedRequest awaiter;
-                while (_PendingAwaiters.TryDequeue(out awaiter))
-                {
-                    if (received == null)
-                    {
-                        received = awaiter.TryReceive(from, type, req, seq);
-                        if (received == null && !awaiter.CheckReceiveTimeout())
-                        {
-                            _CheckingAwaiters.AddLast(awaiter);
-                        }
-                        if (received != null && !awaiter.CanHandleRequest)
-                        {
-                            received = null;
-                        }
-                    }
-                    else
-                    {
-                        if (!awaiter.CheckReceiveTimeout())
-                        {
-                            _CheckingAwaiters.AddLast(awaiter);
-                        }
-                    }
                 }
 
                 return received;
@@ -820,11 +852,6 @@ namespace Capstones.Net
             return new ReceiveAwaiter(req);
         }
 
-        //public class ReceiveQueue
-        //{
-        //    public ReceiveQueue
-        //}
-
         public static PeekedRequest Peek(this IReqServer server)
         {
             var req = new PeekedRequest(server);
@@ -1295,9 +1322,9 @@ namespace Capstones.Net
             public uint Seq;
         }
 
-        protected const int _MaxCheckingReqCount = 1024;
+        public const int MaxCheckingReqCount = 1024;
         protected int _MinSeqInChecking = 0;
-        protected Request[] _CheckingReq = new Request[_MaxCheckingReqCount];
+        protected Request[] _CheckingReq = new Request[MaxCheckingReqCount];
         protected ConcurrentQueueGrowOnly<Request> _PendingReq = new ConcurrentQueueGrowOnly<Request>();
         protected ConcurrentQueueGrowOnly<uint> _DisposingReq = new ConcurrentQueueGrowOnly<uint>();
         public Capstones.Net.Request Send(object reqobj, int timeout)
@@ -1331,9 +1358,9 @@ namespace Capstones.Net
             {
                 var pseq = maxSeq = pending.Seq;
                 var ncnt = pseq - _MinSeqInChecking + 1;
-                while (ncnt > _MaxCheckingReqCount)
+                while (ncnt > MaxCheckingReqCount)
                 {
-                    var index = _MinSeqInChecking % _MaxCheckingReqCount;
+                    var index = _MinSeqInChecking % MaxCheckingReqCount;
                     var old = _CheckingReq[index];
                     if (old != null)
                     {
@@ -1345,7 +1372,7 @@ namespace Capstones.Net
                 }
 
                 {
-                    var index = pseq % _MaxCheckingReqCount;
+                    var index = pseq % MaxCheckingReqCount;
                     _CheckingReq[index] = pending;
                 }
             }
@@ -1365,9 +1392,9 @@ namespace Capstones.Net
             bool isResponse = false;
             if (pingback != 0)
             {
-                for (int i = 0; i < _MaxCheckingReqCount; ++i)
+                for (int i = 0; i < MaxCheckingReqCount; ++i)
                 {
-                    var index = (_MinSeqInChecking + i) % _MaxCheckingReqCount;
+                    var index = (_MinSeqInChecking + i) % MaxCheckingReqCount;
                     var checking = _CheckingReq[index];
                     if (checking != null && checking.Seq != 0)
                     {
@@ -1398,9 +1425,9 @@ namespace Capstones.Net
             uint dispodingindex;
             while (_DisposingReq.TryDequeue(out dispodingindex))
             {
-                if (dispodingindex >= _MinSeqInChecking && dispodingindex < _MinSeqInChecking + _MaxCheckingReqCount)
+                if (dispodingindex >= _MinSeqInChecking && dispodingindex < _MinSeqInChecking + MaxCheckingReqCount)
                 {
-                    var index = dispodingindex % _MaxCheckingReqCount;
+                    var index = dispodingindex % MaxCheckingReqCount;
                     var old = _CheckingReq[index];
                     if (old != null)
                     {
@@ -1412,9 +1439,9 @@ namespace Capstones.Net
 
             //4. check timeout
             var tick = Environment.TickCount;
-            for (int i = 0; i < _MaxCheckingReqCount; ++i)
+            for (int i = 0; i < MaxCheckingReqCount; ++i)
             {
-                var index = (_MinSeqInChecking + i) % _MaxCheckingReqCount;
+                var index = (_MinSeqInChecking + i) % MaxCheckingReqCount;
                 var checking = _CheckingReq[index];
                 if (checking != null)
                 {
@@ -1439,7 +1466,7 @@ namespace Capstones.Net
             {
                 for (; _MinSeqInChecking < maxSeq; ++_MinSeqInChecking)
                 {
-                    var index = _MinSeqInChecking % _MaxCheckingReqCount;
+                    var index = _MinSeqInChecking % MaxCheckingReqCount;
                     if (_CheckingReq[index] != null)
                     {
                         break;
@@ -1570,7 +1597,7 @@ namespace Capstones.Net
                     pending.SetError("connection closed.");
                 }
             }
-            for (int i = 0; i < _MaxCheckingReqCount; ++i)
+            for (int i = 0; i < MaxCheckingReqCount; ++i)
             {
                 pending = _CheckingReq[i];
                 _CheckingReq[i] = null;

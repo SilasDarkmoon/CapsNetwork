@@ -37,11 +37,20 @@ namespace Capstones.UnityEngineEx
         {
             public volatile bool Value;
         }
+        private struct VolatileLong
+        {
+            public long _Value;
+            public long Value
+            {
+                get { return Volatile.Read(ref _Value); }
+                set { Volatile.Write(ref _Value, value); }
+            }
+        }
 
         private volatile T[] _InnerList;
         private volatile VolatileBool[] _InnerListReadyMark; 
-        private volatile int _Low;
-        private volatile int _High;
+        private VolatileLong _Low;
+        private VolatileLong _High;
 
         public int Capacity
         {
@@ -54,28 +63,31 @@ namespace Capstones.UnityEngineEx
         {
             get
             {
-                int headLow, tailHigh;
+                long headLow, tailHigh;
                 GetHeadTailPositions(out headLow, out tailHigh);
-                return tailHigh - headLow;
+                return (int)(tailHigh - headLow);
             }
         }
-        private void GetHeadTailPositions(out int headLow, out int tailHigh)
+        private void GetHeadTailPositions(out long headLow, out long tailHigh)
         {
-            headLow = _Low;
-            tailHigh = _High;
+            var low = _Low.Value;
+            var high = _High.Value;
             SpinWait spin = new SpinWait();
 
             //we loop until the observed values are stable and sensible.  
             //This ensures that any update order by other methods can be tolerated.
             while (
                 //if low and high pointers, retry
-                headLow != _Low || tailHigh != _High
+                low != _Low.Value || high != _High.Value
                 )
             {
                 spin.SpinOnce();
-                headLow = _Low;
-                tailHigh = _High;
+                low = _Low.Value;
+                high = _High.Value;
             }
+
+            headLow = low;
+            tailHigh = high;
         }
 
         public bool IsSynchronized { get { return false; } }
@@ -85,28 +97,28 @@ namespace Capstones.UnityEngineEx
         private List<T> ToList()
         {
             //store head and tail positions in buffer, 
-            int headLow, tailHigh;
+            long headLow, tailHigh;
             GetHeadTailPositions(out headLow, out tailHigh);
             List<T> list = new List<T>();
 
             SpinWait spin = new SpinWait();
-            for (int i = tailHigh - 1; i >= headLow; --i)
+            for (var i = tailHigh - 1; i >= headLow; --i)
             {
                 var index = i % _InnerList.Length;
                 var ready = _InnerListReadyMark[index].Value;
                 var val = _InnerList[index];
-                var newlow = _Low;
+                var newlow = _Low.Value;
 
                 spin.Reset();
                 while (
-                    newlow != _Low
+                    newlow != _Low.Value
                     || i >= newlow && !ready
                     )
                 {
                     spin.SpinOnce();
                     ready = _InnerListReadyMark[index].Value;
                     val = _InnerList[index];
-                    newlow = _Low;
+                    newlow = _Low.Value;
                 }
                 if (i < newlow)
                 {
@@ -147,29 +159,29 @@ namespace Capstones.UnityEngineEx
         }
 
         /// <remarks>If we enumerate the collection when erasing an element, the list may not have erased item in the returned list.</remarks>
-        private IEnumerator<T> GetEnumerator(int headLow, int tailHigh)
+        private IEnumerator<T> GetEnumerator(long headLow, long tailHigh)
         {
             SpinWait spin = new SpinWait();
 
-            for (int i = headLow; i < tailHigh; i++)
+            for (var i = headLow; i < tailHigh; i++)
             {
                 // If the position is reserved by an Enqueue operation, but the value is not written into,
                 // spin until the value is available.
                 var index = i % _InnerList.Length;
                 var ready = _InnerListReadyMark[index].Value;
                 var val = _InnerList[index];
-                var newlow = _Low;
+                var newlow = _Low.Value;
 
                 spin.Reset();
                 while (
-                    newlow != _Low
+                    newlow != _Low.Value
                     || i >= newlow && !ready
                     )
                 {
                     spin.SpinOnce();
                     ready = _InnerListReadyMark[index].Value;
                     val = _InnerList[index];
-                    newlow = _Low;
+                    newlow = _Low.Value;
                 }
                 if (i < newlow)
                 {
@@ -180,7 +192,7 @@ namespace Capstones.UnityEngineEx
         }
         public IEnumerator<T> GetEnumerator()
         {
-            int headLow, tailHigh;
+            long headLow, tailHigh;
             GetHeadTailPositions(out headLow, out tailHigh);
             return GetEnumerator(headLow, tailHigh);
         }
@@ -197,9 +209,9 @@ namespace Capstones.UnityEngineEx
         public bool TryAdd(T item)
         {
             SpinWait spin = new SpinWait();
-            int headLow, tailHigh;
+            long headLow, tailHigh;
             GetHeadTailPositions(out headLow, out tailHigh);
-            while (tailHigh - headLow < Capacity && Interlocked.CompareExchange(ref _High, tailHigh + 1, tailHigh) != tailHigh)
+            while (tailHigh - headLow < Capacity && Interlocked.CompareExchange(ref _High._Value, tailHigh + 1, tailHigh) != tailHigh)
             {
                 //spin.SpinOnce();
                 GetHeadTailPositions(out headLow, out tailHigh);
@@ -224,9 +236,9 @@ namespace Capstones.UnityEngineEx
         public bool TryTake(out T item)
         {
             SpinWait spin = new SpinWait();
-            int headLow, tailHigh;
+            long headLow, tailHigh;
             GetHeadTailPositions(out headLow, out tailHigh);
-            while (tailHigh - headLow > 0 && Interlocked.CompareExchange(ref _Low, headLow + 1, headLow) != headLow)
+            while (tailHigh - headLow > 0 && Interlocked.CompareExchange(ref _Low._Value, headLow + 1, headLow) != headLow)
             {
                 //spin.SpinOnce();
                 GetHeadTailPositions(out headLow, out tailHigh);
@@ -261,8 +273,8 @@ namespace Capstones.UnityEngineEx
         public bool TryPeek(out T result)
         {
             SpinWait spin = new SpinWait();
-            var newlow = _Low;
-            var newhigh = _High;
+            var newlow = _Low.Value;
+            var newhigh = _High.Value;
             var index = newlow % _InnerList.Length;
             var ready = _InnerListReadyMark[index].Value;
             var val = _InnerList[index];
@@ -271,15 +283,15 @@ namespace Capstones.UnityEngineEx
             while (
                 newhigh - newlow > 0 &&
                 (
-                    newlow != _Low
-                    || newhigh != _High
+                    newlow != _Low.Value
+                    || newhigh != _High.Value
                     || !ready
                 )
             )
             {
                 spin.SpinOnce();
-                newlow = _Low;
-                newhigh = _High;
+                newlow = _Low.Value;
+                newhigh = _High.Value;
                 index = newlow % _InnerList.Length;
                 ready = _InnerListReadyMark[index].Value;
                 val = _InnerList[index];
