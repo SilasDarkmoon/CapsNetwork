@@ -820,10 +820,7 @@ namespace Capstones.Net
             return new ReceiveAwaiter(req);
         }
 
-        //public class ReceiveQueue
-        //{
-        //    public ReceiveQueue
-        //}
+        // TODO: use async Enumerator to Receive a queue of Requests
 
         public static PeekedRequest Peek(this IReqServer server)
         {
