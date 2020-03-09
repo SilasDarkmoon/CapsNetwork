@@ -313,7 +313,7 @@ namespace Capstones.Net
         public event Action OnDead = () => { };
         protected void OnHeartbeatDead()
         {
-            Debug.LogError("Cannot receive heartbeat response for a long time. Closing...");
+            PlatDependant.LogError("Cannot receive heartbeat response for a long time. Closing...");
             _Dead = true;
             var disposable = _Client as IDisposable;
             if (disposable != null)
