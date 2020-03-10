@@ -394,7 +394,7 @@ namespace Capstones.Net
                     }
                     finally
                     {
-                        if (!_Disposed)
+                        if (_Client.IsAlive && !_Disposed)
                         {
                             OnHeartbeatDead();
                         }
