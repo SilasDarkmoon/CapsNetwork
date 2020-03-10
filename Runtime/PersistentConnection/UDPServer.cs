@@ -692,7 +692,7 @@ namespace Capstones.Net
         public override bool TrySend(MessageInfo minfo)
         {
             _HaveDataToSend.Set();
-            StartConnect();
+            Start();
             return false;
         }
 

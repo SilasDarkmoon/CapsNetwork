@@ -77,14 +77,17 @@ namespace Capstones.Net
         };
     }
 
-    public interface IChannel
+    public interface IChannel : IPersistentConnectionLifetime, IServerConnectionLifetime
     {
-        void Start();
-        bool IsStarted { get; }
-        bool IsAlive { get; }
+        //void Start();
+        //bool IsStarted { get; }
+        //bool IsAlive { get; }
+
+        //event Action<IChannel> OnConnected;
+        //bool IsConnected { get; }
+        //event Action OnConnected;
 
         event Action OnUpdate;
-        event Action<IChannel> OnConnected;
         event Action OnClose;
     }
 
@@ -157,8 +160,8 @@ namespace Capstones.Net
                 }
             }
         }
-        public event Action<IChannel> OnConnected;
-        protected void FireOnConnected()
+        public event Action<IServerConnectionLifetime> OnConnected;
+        protected void FireOnConnected(IServerConnectionLifetime underlay)
         {
             if (_ServerConnection != null)
             {
@@ -213,11 +216,11 @@ namespace Capstones.Net
                 {
                     _ServerConnection.OnConnected += FireOnConnected;
                 }
-                _Connection.StartConnect();
+                _Connection.Start();
                 _Started = true;
                 if (_ServerConnection == null)
                 {
-                    FireOnConnected();
+                    FireOnConnected(null);
                 }
             }
         }
@@ -661,7 +664,7 @@ namespace Capstones.Net
         {
             if (!_Started)
             {
-                _Server.StartConnect();
+                _Server.Start();
                 _Started = true;
             }
         }
@@ -676,8 +679,8 @@ namespace Capstones.Net
             client.Start();
             return client;
         }
-        public event Action<IChannel> OnConnected;
-        protected void FireOnConnected(IChannel child)
+        public event Action<IServerConnectionLifetime> OnConnected;
+        protected void FireOnConnected(IServerConnectionLifetime child)
         {
             child.OnConnected -= FireOnConnected;
             if (OnConnected != null)
@@ -685,6 +688,7 @@ namespace Capstones.Net
                 OnConnected(child);
             }
         }
+        public bool IsConnected { get { return _Started; } }
 
         protected int OnConnectionUpdate(IPersistentConnection connection)
         {

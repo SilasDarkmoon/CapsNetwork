@@ -293,7 +293,7 @@ namespace Capstones.Net
                 return false;
             }
 
-            public void StartConnect()
+            public void Start()
             {
                 _Started = true;
             }
@@ -323,12 +323,12 @@ namespace Capstones.Net
             {
                 get { return _Connected; }
             }
-            public event Action OnConnected;
+            public event Action<IServerConnectionLifetime> OnConnected;
             protected void FireOnConnected()
             {
                 if (OnConnected != null)
                 {
-                    OnConnected();
+                    OnConnected(this);
                 }
             }
             protected ReceiveHandler _OnReceive;
@@ -499,9 +499,10 @@ namespace Capstones.Net
         {
             get { return _Connection.IsStarted; }
         }
-        public void StartConnect()
+        public bool IsConnected { get { return IsStarted; } }
+        public void Start()
         {
-            _Connection.StartConnect();
+            _Connection.Start();
         }
 
         public bool PositiveMode
@@ -517,27 +518,27 @@ namespace Capstones.Net
         public virtual ServerConnection PrepareConnection()
         {
             var con = new ServerConnection(this);
-            Action onChildConnected = null;
-            onChildConnected = () =>
-            {
-                con.OnConnected -= onChildConnected;
-                FireOnConnected(con);
-            };
-            con.OnConnected += onChildConnected;
+            con.OnConnected += OnChildConnected;
             lock (_Connections)
             {
                 _Connections.Add(con);
             }
             return con;
         }
-        protected void FireOnConnected(IServerConnection child)
+        protected void OnChildConnected(IServerConnectionLifetime child)
         {
-            if (OnConnected != null)
+            child.OnConnected -= OnChildConnected;
+            FireOnConnected(child);
+        }
+        protected void FireOnConnected(IServerConnectionLifetime child)
+        {
+            var onConnected = OnConnected;
+            if (onConnected != null)
             {
-                OnConnected(child);
+                onConnected(child);
             }
         }
-        public event ConnectedToServerHandler OnConnected;
+        public event Action<IServerConnectionLifetime> OnConnected;
 
         IServerConnection IPersistentConnectionServer.PrepareConnection()
         {

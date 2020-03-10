@@ -286,8 +286,11 @@ namespace Capstones.Net
 
         public void RecordRTT(int rtt)
         {
-            _TrackedRTT[_NextTrackedIndex++ % TrackedRTTCnt] = rtt;
-            CalculateRTT();
+            if (rtt >= 0)
+            {
+                _TrackedRTT[_NextTrackedIndex++ % TrackedRTTCnt] = rtt;
+                CalculateRTT();
+            }
             _LastTick = Environment.TickCount;
         }
 

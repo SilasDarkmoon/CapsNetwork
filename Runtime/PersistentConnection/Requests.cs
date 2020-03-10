@@ -1194,10 +1194,11 @@ namespace Capstones.Net
         public abstract void Start();
         public abstract bool IsStarted { get; }
         public abstract bool IsAlive { get; }
+        public abstract bool IsConnected { get; }
 
         public event Action OnClose = () => { };
-        public event Action<IChannel> OnConnected;
-        protected virtual void FireOnConnected(IChannel child)
+        public event Action<IServerConnectionLifetime> OnConnected;
+        protected virtual void FireOnConnected(IServerConnectionLifetime child)
         {
             if (OnConnected != null)
             {
@@ -1260,8 +1261,11 @@ namespace Capstones.Net
             : this(channel, null)
         { }
 
-        protected override void FireOnConnected(IChannel child)
+        protected bool _IsConnected;
+        public override bool IsConnected { get { return _IsConnected; } }
+        protected override void FireOnConnected(IServerConnectionLifetime child)
         {
+            _IsConnected = true;
             _Channel.OnConnected -= FireOnConnected;
             base.FireOnConnected(this);
         }
@@ -1622,6 +1626,7 @@ namespace Capstones.Net
         }
         public override bool IsStarted { get { return _Started; } }
         public override bool IsAlive { get { return !_Disposed && (!_Started || _Server.IsAlive); } }
+        public override bool IsConnected { get { return _Started; } }
 
         public ReqClient GetConnection()
         {
@@ -1633,7 +1638,7 @@ namespace Capstones.Net
             child.Start();
             return child;
         }
-        protected override void FireOnConnected(IChannel child)
+        protected override void FireOnConnected(IServerConnectionLifetime child)
         {
             child.OnConnected -= FireOnConnected;
             base.FireOnConnected(child);

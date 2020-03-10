@@ -30,10 +30,10 @@ namespace Capstones.Net
                 _Connected = true;
                 if (OnConnected != null)
                 {
-                    OnConnected();
+                    OnConnected(this);
                 }
             }
-            public event Action OnConnected;
+            public event Action<IServerConnectionLifetime> OnConnected;
             public bool IsConnected
             {
                 get { return _Connected; }
@@ -231,30 +231,36 @@ namespace Capstones.Net
         public override bool TrySend(MessageInfo minfo)
         {
             _HaveDataToSend.Set();
-            StartConnect();
+            Start();
             return false;
         }
 
         public ServerConnection PrepareConnection()
         {
             var con = new ServerConnection(this);
-            Action onChildConnected = null;
-            onChildConnected = () =>
-            {
-                con.OnConnected -= onChildConnected;
-                if (OnConnected != null)
-                {
-                    OnConnected(con);
-                }
-            };
-            con.OnConnected += onChildConnected;
+            con.OnConnected += OnChildConnected;
             return con;
         }
-        public event ConnectedToServerHandler OnConnected;
+        protected void OnChildConnected(IServerConnectionLifetime child)
+        {
+            child.OnConnected -= OnChildConnected;
+            FireOnConnected(child);
+        }
+        protected void FireOnConnected(IServerConnectionLifetime child)
+        {
+            var onConnected = OnConnected;
+            if (onConnected != null)
+            {
+                onConnected(child);
+            }
+        }
+        public event Action<IServerConnectionLifetime> OnConnected;
+
         IServerConnection IPersistentConnectionServer.PrepareConnection()
         {
             return PrepareConnection();
         }
+        public bool IsConnected { get { return IsStarted; } }
     }
 
     public static partial class ConnectionFactory

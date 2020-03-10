@@ -292,7 +292,7 @@ namespace Capstones.Net
             get { return _ConnectWorkStarted || _ConnectWorkFinished; }
         }
         protected IEnumerator _ConnectWork;
-        public void StartConnect()
+        public void Start()
         {
             if (!IsStarted)
             {

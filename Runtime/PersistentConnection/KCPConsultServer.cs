@@ -205,18 +205,17 @@ namespace Capstones.Net
         public override KCPServer.ServerConnection PrepareConnection()
         {
             var con = new ServerConnection(this, (uint)Interlocked.Increment(ref _LastConv));
-            Action onChildConnected = null;
-            onChildConnected = () =>
-            {
-                con.OnConnected -= onChildConnected;
-                FireOnConnected(con);
-            };
-            con.OnConnected += onChildConnected;
+            con.OnConnected += OnChildConnected;
             lock (_Connections)
             {
                 _Connections.Add(con);
             }
             return con;
+        }
+        protected void OnChildConnected(IServerConnectionLifetime child)
+        {
+            child.OnConnected -= OnChildConnected;
+            FireOnConnected(child);
         }
     }
 

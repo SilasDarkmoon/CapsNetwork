@@ -202,9 +202,9 @@ namespace Capstones.Net
                 }
             }
         }
-        public virtual void StartConnect()
+        public virtual void Start()
         {
-            _Connection.StartConnect();
+            _Connection.Start();
         }
         public void Send(IPooledBuffer data, int cnt)
         {
