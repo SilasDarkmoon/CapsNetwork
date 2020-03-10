@@ -1474,7 +1474,7 @@ namespace Capstones.Net
                         {
                             try
                             {
-                                while (!_Disposed) _Channel.Read();
+                                while (!_Disposed && _Channel.IsAlive) _Channel.Read();
                             }
                             finally
                             {

@@ -63,6 +63,7 @@ namespace Capstones.Net
         {
             public Socket LocalSocket;
             public EndPoint RemoteEP;
+            protected IPEndPoint BroadcastEP;
             public byte[] ReceiveData = new byte[CONST.MTU];
             public int ReceiveCount = 0;
             public IAsyncResult ReceiveResult;
@@ -70,11 +71,12 @@ namespace Capstones.Net
             protected AsyncCallback EndReceiveFunc;
             public ConcurrentQueueGrowOnly<RecvFromInfo> PendingRecvMessages = new ConcurrentQueueGrowOnly<RecvFromInfo>();
 
-            public BroadcastSocketReceiveInfo(UDPServer parent, Socket socket, EndPoint init_remote)
+            public BroadcastSocketReceiveInfo(UDPServer parent, Socket socket, IPEndPoint init_remote)
             {
                 ParentServer = parent;
                 LocalSocket = socket;
-                RemoteEP = init_remote;
+                BroadcastEP = init_remote;
+                RemoteEP = new IPEndPoint(IPAddress.Any, 0);
                 EndReceiveFunc = EndReceive;
             }
 
@@ -117,15 +119,32 @@ namespace Capstones.Net
             }
             public void BeginReceive()
             {
-                ReceiveCount = 0;
-                ReceiveResult = null;
-                try
+                while (!ParentServer._ConnectWorkFinished && LocalSocket != null)
                 {
-                    ReceiveResult = LocalSocket.BeginReceiveFrom(ReceiveData, 0, CONST.MTU, SocketFlags.None, ref RemoteEP, EndReceiveFunc, null);
-                }
-                catch (Exception e)
-                {
-                    PlatDependant.LogError(e);
+                    ReceiveCount = 0;
+                    ReceiveResult = null;
+                    try
+                    {
+                        var iep = (IPEndPoint)RemoteEP;
+                        iep.Address = BroadcastEP.Address;
+                        iep.Port = BroadcastEP.Port;
+                        ReceiveResult = LocalSocket.BeginReceiveFrom(ReceiveData, 0, CONST.MTU, SocketFlags.None, ref RemoteEP, EndReceiveFunc, null);
+                    }
+                    catch (SocketException e)
+                    {
+                        if (e.ErrorCode == 10054)
+                        {
+                            // 远程主机强迫关闭了一个现有的连接。
+                        }
+                        else
+                        {
+                            PlatDependant.LogError(e);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+                    }
                 }
             }
         }
@@ -262,28 +281,66 @@ namespace Capstones.Net
         protected AsyncCallback EndReceive6Func;
         protected void BeginReceive4()
         {
-            try
+            while (!_ConnectWorkFinished && _Socket != null)
             {
-                var cb = EndReceive4Func = EndReceive4Func ?? EndReceive4;
-                _Socket.BeginReceiveFrom(_ReceiveBuffer, 0, CONST.MTU, SocketFlags.None, ref _RemoteEP, cb, null);
-            }
-            catch (Exception e)
-            {
-                PlatDependant.LogError(e);
+                try
+                {
+                    ((IPEndPoint)_RemoteEP).Address = IPAddress.Any;
+                    ((IPEndPoint)_RemoteEP).Port = _Port;
+                    var cb = EndReceive4Func = EndReceive4Func ?? EndReceive4;
+                    _Socket.BeginReceiveFrom(_ReceiveBuffer, 0, CONST.MTU, SocketFlags.None, ref _RemoteEP, cb, null);
+                    return;
+                }
+                catch (SocketException e)
+                {
+                    if (e.ErrorCode == 10054)
+                    {
+                        // 远程主机强迫关闭了一个现有的连接。
+                    }
+                    else
+                    {
+                        PlatDependant.LogError(e);
+                    }
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
             }
         }
         protected void BeginReceive6()
         {
-            try
+            while (!_ConnectWorkFinished && _Socket6 != null)
             {
-                var cb = EndReceive6Func = EndReceive6Func ?? EndReceive6;
-                _Socket6.BeginReceiveFrom(_ReceiveBuffer6, 0, CONST.MTU, SocketFlags.None, ref _RemoteEP6, cb, null);
-            }
-            catch (Exception e)
-            {
-                PlatDependant.LogError(e);
+                try
+                {
+                    ((IPEndPoint)_RemoteEP6).Address = IPAddress.IPv6Any;
+                    ((IPEndPoint)_RemoteEP6).Port = _Port;
+                    var cb = EndReceive6Func = EndReceive6Func ?? EndReceive6;
+                    _Socket6.BeginReceiveFrom(_ReceiveBuffer6, 0, CONST.MTU, SocketFlags.None, ref _RemoteEP6, cb, null);
+                    return;
+                }
+                catch (SocketException e)
+                {
+                    if (e.ErrorCode == 10054)
+                    {
+                        // 远程主机强迫关闭了一个现有的连接。
+                    }
+                    else
+                    {
+                        PlatDependant.LogError(e);
+                    }
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
             }
         }
+
+        //https://stackoverflow.com/questions/5199026/c-sharp-async-udp-listener-socketexception
+        public const int SIO_UDP_CONNRESET = -1744830452;
+        protected static readonly byte[] SIO_UDP_CONNRESET_DATA = new byte[4];
 
         protected override IEnumerator ConnectWork()
         {
@@ -333,6 +390,11 @@ namespace Capstones.Net
                         var address4 = IPAddress.Any;
                         _Socket = new Socket(address4.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
                         _Socket.Bind(new IPEndPoint(address4, _Port));
+                        try
+                        {
+                            _Socket.IOControl((IOControlCode)SIO_UDP_CONNRESET, SIO_UDP_CONNRESET_DATA, null);
+                        }
+                        catch { }
                     }
 
 #if NET_STANDARD_2_0 || NET_4_6 || !UNITY_ENGINE && !UNITY_5_3_OR_NEWER
@@ -385,6 +447,11 @@ namespace Capstones.Net
                         var address6 = IPAddress.IPv6Any;
                         _Socket6 = new Socket(address6.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
                         _Socket6.Bind(new IPEndPoint(address6, _Port));
+                        try
+                        {
+                            _Socket6.IOControl((IOControlCode)SIO_UDP_CONNRESET, SIO_UDP_CONNRESET_DATA, null);
+                        }
+                        catch { }
                     }
                 }
                 catch (ThreadAbortException)
