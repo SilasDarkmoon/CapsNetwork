@@ -453,9 +453,16 @@ namespace Capstones.Net
 
         protected async void SendHeartbeatAsync(object heartbeat)
         {
-            var request = _Client.Send(heartbeat);
+            var request = _Client.Send(heartbeat, 1000);
             await request;
-            RecordRTT(request.RTT);
+            if (request.Error == null)
+            {
+                RecordRTT(request.RTT);
+            }
+            else
+            {
+                PlatDependant.LogError(request.Error);
+            }
         }
 
         protected bool _Disposed;

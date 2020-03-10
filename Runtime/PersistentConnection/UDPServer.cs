@@ -129,6 +129,7 @@ namespace Capstones.Net
                         iep.Address = BroadcastEP.Address;
                         iep.Port = BroadcastEP.Port;
                         ReceiveResult = LocalSocket.BeginReceiveFrom(ReceiveData, 0, CONST.MTU, SocketFlags.None, ref RemoteEP, EndReceiveFunc, null);
+                        return;
                     }
                     catch (SocketException e)
                     {
