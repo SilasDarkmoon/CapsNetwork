@@ -1305,7 +1305,8 @@ namespace Capstones.Net
         }
 
         protected const int _MaxCheckingReqCount = 1024;
-        protected long _MinSeqInChecking = 0;
+        protected long _MinSeqInChecking = 1;
+        protected long _MaxSeqInChecking = 0;
         protected Request[] _CheckingReq = new Request[_MaxCheckingReqCount];
         protected ConcurrentQueueGrowOnly<Request> _PendingReq = new ConcurrentQueueGrowOnly<Request>();
         protected ConcurrentQueueGrowOnly<uint> _DisposingReq = new ConcurrentQueueGrowOnly<uint>();
@@ -1339,27 +1340,51 @@ namespace Capstones.Net
             while (_PendingReq.TryDequeue(out pending))
             {
                 var pseq = maxSeq = pending.Seq;
-                var ncnt = pseq - _MinSeqInChecking + 1;
-                while (ncnt > _MaxCheckingReqCount)
+                if (pseq >= _MinSeqInChecking)
                 {
-                    var index = _MinSeqInChecking % _MaxCheckingReqCount;
-                    var old = _CheckingReq[index];
-                    if (old != null)
+                    var ncnt = pseq - _MinSeqInChecking + 1;
+                    while (ncnt > _MaxCheckingReqCount)
                     {
-                        old.SetError("timedout - too many checking request");
+                        var index = _MinSeqInChecking % _MaxCheckingReqCount;
+                        var old = _CheckingReq[index];
+                        if (old != null)
+                        {
+                            old.SetError("timedout - too many checking request");
+                        }
+                        _CheckingReq[index] = null;
+                        ++_MinSeqInChecking;
+                        --ncnt;
                     }
-                    _CheckingReq[index] = null;
-                    ++_MinSeqInChecking;
-                    --ncnt;
-                }
 
-                {
-                    var index = pseq % _MaxCheckingReqCount;
-                    _CheckingReq[index] = pending;
+                    {
+                        var index = pseq % _MaxCheckingReqCount;
+                        _CheckingReq[index] = pending;
+                        _MaxSeqInChecking = Math.Max(_MaxSeqInChecking, pseq);
+                    }
                 }
             }
 
-            //2. check resp.
+            //2. delete disposing
+            uint dispodingindex;
+            while (_DisposingReq.TryDequeue(out dispodingindex))
+            {
+                if (dispodingindex >= _MinSeqInChecking && dispodingindex <= _MaxSeqInChecking)
+                {
+                    var index = dispodingindex % _MaxCheckingReqCount;
+                    var old = _CheckingReq[index];
+                    if (old != null)
+                    {
+                        old.SetError("canceled");
+                    }
+                    _CheckingReq[index] = null;
+                    if (dispodingindex == _MinSeqInChecking)
+                    {
+                        ++_MinSeqInChecking;
+                    }
+                }
+            }
+
+            //3. check resp.
             uint pingback, reqseq;
             if (_Channel.IsServer)
             {
@@ -1374,24 +1399,28 @@ namespace Capstones.Net
             bool isResponse = false;
             if (pingback != 0)
             {
-                for (int i = 0; i < _MaxCheckingReqCount; ++i)
+                for (long i = _MinSeqInChecking; i <= _MaxSeqInChecking; ++i)
                 {
-                    var index = (_MinSeqInChecking + i) % _MaxCheckingReqCount;
+                    var index = i % _MaxCheckingReqCount;
                     var checking = _CheckingReq[index];
-                    if (checking != null && checking.Seq != 0)
+                    if (checking != null)
                     {
                         if (checking.Seq == pingback)
                         {
                             isResponse = true;
                             checking.SetResponse(obj);
-                            _CheckingReq[index] = null;
                         }
                         else if (checking.Seq < pingback)
                         { // the newer request is back, so we let older request timeout.
                             checking.SetError("timedout - newer request is done");
-                            _CheckingReq[index] = null;
+                        }
+                        else
+                        {
+                            break;
                         }
                     }
+                    _CheckingReq[index] = null;
+                    ++_MinSeqInChecking;
                 }
             }
             if (!isResponse)
@@ -1403,27 +1432,11 @@ namespace Capstones.Net
                 }
             }
 
-            //3. delete disposing
-            uint dispodingindex;
-            while (_DisposingReq.TryDequeue(out dispodingindex))
-            {
-                if (dispodingindex >= _MinSeqInChecking && dispodingindex < _MinSeqInChecking + _MaxCheckingReqCount)
-                {
-                    var index = dispodingindex % _MaxCheckingReqCount;
-                    var old = _CheckingReq[index];
-                    if (old != null)
-                    {
-                        old.SetError("canceled");
-                    }
-                    _CheckingReq[index] = null;
-                }
-            }
-
             //4. check timeout
             var tick = Environment.TickCount;
-            for (int i = 0; i < _MaxCheckingReqCount; ++i)
+            for (long i = _MinSeqInChecking; i <= _MaxSeqInChecking; ++i)
             {
-                var index = (_MinSeqInChecking + i) % _MaxCheckingReqCount;
+                var index = i % _MaxCheckingReqCount;
                 var checking = _CheckingReq[index];
                 if (checking != null)
                 {
@@ -1438,23 +1451,34 @@ namespace Capstones.Net
                         {
                             checking.SetError("timedout");
                             _CheckingReq[index] = null;
+                            if (i == _MinSeqInChecking)
+                            {
+                                ++_MinSeqInChecking;
+                            }
                         }
+                    }
+                }
+                else
+                {
+                    if (i == _MinSeqInChecking)
+                    {
+                        ++_MinSeqInChecking;
                     }
                 }
             }
 
-            //5 shrink
-            if (maxSeq != 0)
-            {
-                for (; _MinSeqInChecking < maxSeq; ++_MinSeqInChecking)
-                {
-                    var index = _MinSeqInChecking % _MaxCheckingReqCount;
-                    if (_CheckingReq[index] != null)
-                    {
-                        break;
-                    }
-                }
-            }
+            ////5 shrink - No need
+            //if (maxSeq != 0)
+            //{
+            //    for (; _MinSeqInChecking < maxSeq; ++_MinSeqInChecking)
+            //    {
+            //        var index = _MinSeqInChecking % _MaxCheckingReqCount;
+            //        if (_CheckingReq[index] != null)
+            //        {
+            //            break;
+            //        }
+            //    }
+            //}
 
             //// we donot need the buffered obj, instead, we handle it directly in this callback. // outter caller will do this.
             //while (_Channel.TryRead() != null) ;
