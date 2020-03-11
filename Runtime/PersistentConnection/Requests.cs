@@ -638,10 +638,11 @@ namespace Capstones.Net
                 return null;
             }
             await req;
-            if (req.Error != null)
-            {
-                PlatDependant.LogError(req.Error);
-            }
+            //// let outter caller handle the error.
+            //if (req.Error != null)
+            //{
+            //    PlatDependant.LogError(req.Error);
+            //}
             return req.ResponseObj;
         }
         public static async System.Threading.Tasks.Task<object> SendAsync(this IReqClient client, object reqobj)
@@ -656,10 +657,11 @@ namespace Capstones.Net
                 return default(T);
             }
             await req;
-            if (req.Error != null)
-            {
-                PlatDependant.LogError(req.Error);
-            }
+            //// let outter caller handle the error.
+            //if (req.Error != null)
+            //{
+            //    PlatDependant.LogError(req.Error);
+            //}
             if (typeof(T) == typeof(Request))
             {
                 return (T)(object)req;

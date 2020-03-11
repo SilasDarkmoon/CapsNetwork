@@ -246,7 +246,8 @@ namespace Capstones.Net
                     var idletime = Environment.TickCount - _LastReceiveTick;
                     if (idletime >= timeout)
                     {
-                        PlatDependant.LogError("ObjClient Idle Timedout.");
+                        //// let outter caller handle the error. (in OnClose)
+                        //PlatDependant.LogError("ObjClient Idle Timedout.");
                         Dispose();
                     }
                 }
