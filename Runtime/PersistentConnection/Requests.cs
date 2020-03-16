@@ -1189,7 +1189,7 @@ namespace Capstones.Net
             }
             else
             {
-                SendRawResponse(from, new PredefinedMessages.Raw(), seq_pingback); // we send an empty response.
+                SendRawResponse(from, PredefinedMessages.Empty, seq_pingback); // we send an empty response.
             }
         }
         public abstract void SendRawResponse(IReqClient to, object response, uint seq_pingback);

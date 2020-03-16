@@ -141,7 +141,7 @@ namespace Capstones.Net.FrameSync
         [EventOrder(10)]
         private object OnFilterMessage(IReqClient from, uint type, object raw, uint seq)
         {
-            return InputMessage(raw) ? null : new PredefinedMessages.Raw();
+            return InputMessage(raw) ? null : PredefinedMessages.NoResponse;
         }
 
 #region In Main Thread

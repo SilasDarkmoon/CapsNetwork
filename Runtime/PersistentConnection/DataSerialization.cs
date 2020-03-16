@@ -664,5 +664,10 @@ namespace Capstones.Net
             public const uint TypeID = unchecked((uint)-5);
             public double Message;
         }
+
+        private static Raw _Empty = new Raw();
+        public static Raw Empty { get { return _Empty; } }
+        private static object _NoResponse = new object();
+        public static object NoResponse { get { return _Empty; } }
     }
 }

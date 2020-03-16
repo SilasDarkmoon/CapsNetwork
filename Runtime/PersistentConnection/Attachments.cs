@@ -372,7 +372,7 @@ namespace Capstones.Net
                                 }
                                 if (heartbeat == null)
                                 {
-                                    heartbeat = new PredefinedMessages.Raw();
+                                    heartbeat = PredefinedMessages.Empty;
                                 }
                                 SendHeartbeatAsync(heartbeat);
                             }
@@ -424,7 +424,7 @@ namespace Capstones.Net
                         }
                         if (heartbeat == null)
                         {
-                            heartbeat = new PredefinedMessages.Raw();
+                            heartbeat = PredefinedMessages.Empty;
                         }
                         SendHeartbeatAsync(heartbeat);
                     }
