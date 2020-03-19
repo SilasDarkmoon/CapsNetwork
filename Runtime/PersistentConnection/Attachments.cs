@@ -461,6 +461,7 @@ namespace Capstones.Net
             await request;
             if (request.Error == null)
             {
+                //Debug.LogError($"Heartbeat response received {Environment.TickCount}");
                 RecordRTT(request.RTT);
             }
             else
