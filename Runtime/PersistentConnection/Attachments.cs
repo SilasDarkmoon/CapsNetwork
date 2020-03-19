@@ -438,8 +438,9 @@ namespace Capstones.Net
                         interval = 1000;
                     }
                     yield return new WaitForSecondsRealtime(interval / 1000f);
-                    if (Timeout > 0 && Environment.TickCount > _LastTick + Timeout)
+                    if (Timeout > 0 && Environment.TickCount - _LastTick > Timeout)
                     {
+                        Debug.LogError($"Heartbeat Timedout. Current{Environment.TickCount}, Last{_LastTick}.");
                         break;
                     }
                 }
