@@ -352,7 +352,7 @@ namespace Capstones.Net
             else
 #endif
             {
-                PlatDependant.RunBackground(prog =>
+                PlatDependant.RunBackgroundLongTime(prog =>
                 {
                     try
                     {
@@ -440,7 +440,9 @@ namespace Capstones.Net
                     yield return new WaitForSecondsRealtime(interval / 1000f);
                     if (Timeout > 0 && Environment.TickCount - _LastTick > Timeout)
                     {
-                        Debug.LogError($"Heartbeat Timedout. Current{Environment.TickCount}, Last{_LastTick}.");
+#if DEBUG_PVP
+                        PlatDependant.LogError($"Heartbeat Timedout. Current{Environment.TickCount}, Last{_LastTick}.");
+#endif
                         break;
                     }
                 }
@@ -461,7 +463,9 @@ namespace Capstones.Net
             await request;
             if (request.Error == null)
             {
-                //Debug.LogError($"Heartbeat response received {Environment.TickCount}");
+#if DEBUG_PVP
+                PlatDependant.LogInfo($"Heartbeat response received {Environment.TickCount}");
+#endif
                 RecordRTT(request.RTT);
             }
             else

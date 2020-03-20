@@ -223,15 +223,15 @@ namespace Capstones.Net
                             sb.Append(Environment.TickCount);
                             sb.Append(" KCP Server Recv ");
                             sb.Append(recvcnt);
-                            for (int i = 0; i < recvcnt; ++i)
-                            {
-                                if (i % 32 == 0)
-                                {
-                                    sb.AppendLine();
-                                }
-                                sb.Append(_RecvBuffer[i].ToString("X2"));
-                                sb.Append(" ");
-                            }
+                            //for (int i = 0; i < recvcnt; ++i)
+                            //{
+                            //    if (i % 32 == 0)
+                            //    {
+                            //        sb.AppendLine();
+                            //    }
+                            //    sb.Append(_RecvBuffer[i].ToString("X2"));
+                            //    sb.Append(" ");
+                            //}
                             PlatDependant.LogInfo(sb);
                         }
 #endif
@@ -266,15 +266,15 @@ namespace Capstones.Net
                             sb.Append(Environment.TickCount);
                             sb.Append(" KCP Server Feed ");
                             sb.Append(cnt);
-                            for (int i = 0; i < cnt; ++i)
-                            {
-                                if (i % 32 == 0)
-                                {
-                                    sb.AppendLine();
-                                }
-                                sb.Append(data[i].ToString("X2"));
-                                sb.Append(" ");
-                            }
+                            //for (int i = 0; i < cnt; ++i)
+                            //{
+                            //    if (i % 32 == 0)
+                            //    {
+                            //        sb.AppendLine();
+                            //    }
+                            //    sb.Append(data[i].ToString("X2"));
+                            //    sb.Append(" ");
+                            //}
                             PlatDependant.LogInfo(sb);
                         }
 #endif

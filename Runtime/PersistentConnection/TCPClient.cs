@@ -215,7 +215,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    PlatDependant.RunBackground(prog =>
+                    PlatDependant.RunBackgroundLongTime(prog =>
                     {
                         var work = ConnectWork();
                         while (work.MoveNext()) ;

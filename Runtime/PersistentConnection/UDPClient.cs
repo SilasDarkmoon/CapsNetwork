@@ -303,7 +303,7 @@ namespace Capstones.Net
                 }
                 else
                 {
-                    PlatDependant.RunBackground(prog =>
+                    PlatDependant.RunBackgroundLongTime(prog =>
                     {
                         var work = ConnectWork();
                         while (work.MoveNext()) ;
@@ -439,15 +439,15 @@ namespace Capstones.Net
                     sb.Append(Environment.TickCount);
                     sb.Append(" UDPClient Sending ");
                     sb.Append(cnt);
-                    for (int i = 0; i < cnt; ++i)
-                    {
-                        if (i % 32 == 0)
-                        {
-                            sb.AppendLine();
-                        }
-                        sb.Append(data.Buffer[i].ToString("X2"));
-                        sb.Append(" ");
-                    }
+                    //for (int i = 0; i < cnt; ++i)
+                    //{
+                    //    if (i % 32 == 0)
+                    //    {
+                    //        sb.AppendLine();
+                    //    }
+                    //    sb.Append(data.Buffer[i].ToString("X2"));
+                    //    sb.Append(" ");
+                    //}
                     PlatDependant.LogInfo(sb);
                 }
 #endif
@@ -587,15 +587,15 @@ namespace Capstones.Net
                     var sb = new System.Text.StringBuilder();
                     sb.Append("UDPClient Receiving ");
                     sb.Append(receivecnt);
-                    for (int i = 0; i < receivecnt; ++i)
-                    {
-                        if (i % 32 == 0)
-                        {
-                            sb.AppendLine();
-                        }
-                        sb.Append(_ReceiveBuffer[i].ToString("X2"));
-                        sb.Append(" ");
-                    }
+                    //for (int i = 0; i < receivecnt; ++i)
+                    //{
+                    //    if (i % 32 == 0)
+                    //    {
+                    //        sb.AppendLine();
+                    //    }
+                    //    sb.Append(_ReceiveBuffer[i].ToString("X2"));
+                    //    sb.Append(" ");
+                    //}
                     PlatDependant.LogInfo(sb);
                 }
 #endif

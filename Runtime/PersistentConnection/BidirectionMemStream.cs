@@ -533,21 +533,6 @@ namespace Capstones.Net
                 }
                 if (rcnt > 0)
                 {
-#if DEBUG_PERSIST_CONNECT
-                    var sb = new System.Text.StringBuilder();
-                    sb.Append("Read ");
-                    sb.Append(rcnt);
-                    for (int i = 0; i < rcnt; ++i)
-                    {
-                        if (i % 32 == 0)
-                        {
-                            sb.AppendLine();
-                        }
-                        sb.Append(buffer[offset + i].ToString("X2"));
-                        sb.Append(" ");
-                    }
-                    PlatDependant.LogInfo(sb);
-#endif
                     return rcnt;
                 }
                 if (remainBytesInTail >= 0)
@@ -590,21 +575,6 @@ namespace Capstones.Net
                     cntwrote += scnt;
                 }
 
-#if DEBUG_PERSIST_CONNECT
-                var sb = new System.Text.StringBuilder();
-                sb.Append("Write ");
-                sb.Append(count);
-                for (int i = 0; i < count; ++i)
-                {
-                    if (i % 32 == 0)
-                    {
-                        sb.AppendLine();
-                    }
-                    sb.Append(buffer[offset + i].ToString("X2"));
-                    sb.Append(" ");
-                }
-                PlatDependant.LogInfo(sb);
-#endif
             }
             _DataReady.Set();
         }

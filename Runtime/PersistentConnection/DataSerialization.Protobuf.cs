@@ -783,7 +783,7 @@ namespace Capstones.Net
     public class ProtobufComposer : DataComposer
     {
 #if DEBUG_PERSIST_CONNECT || DEBUG_PERSIST_CONNECT_LOW_LEVEL
-        public bool VariantHeader = false;
+        public bool VariantHeader = true;
 #else
         public bool VariantHeader = true;
 #endif
@@ -810,7 +810,7 @@ namespace Capstones.Net
                 else
                 {
                     wrotecnt += ProtobufEncoder.WriteTag(1, ProtobufLowLevelType.Fixed32, data, wrotecnt);
-                    wrotecnt += ProtobufEncoder.WriteFixed32(ProtobufEncoder.EncodeZigZag32((int)type), data, wrotecnt);
+                    wrotecnt += ProtobufEncoder.WriteFixed32(type, data, wrotecnt);
                     wrotecnt += ProtobufEncoder.WriteTag(2, ProtobufLowLevelType.Fixed32, data, wrotecnt);
                     wrotecnt += ProtobufEncoder.WriteFixed32(flags, data, wrotecnt);
                     wrotecnt += ProtobufEncoder.WriteTag(3, ProtobufLowLevelType.Fixed32, data, wrotecnt);
@@ -933,60 +933,60 @@ namespace Capstones.Net
                 {
                     var sb = new System.Text.StringBuilder();
                     sb.Append("Encode ");
-                    sb.Append(stream.Count);
+                    sb.Append(_UnderlayStream.Count);
                     sb.Append(" of type ");
                     sb.Append(GetDataType(data));
                     sb.Append(" (");
                     sb.Append(data.GetType().Name);
                     sb.Append(")");
-                    for (int i = 0; i < stream.Count; ++i)
-                    {
-                        if (i % 32 == 0)
-                        {
-                            sb.AppendLine();
-                        }
-                        sb.Append(stream[i].ToString("X2"));
-                        sb.Append(" ");
-                    }
+                    //for (int i = 0; i < _UnderlayStream.Count; ++i)
+                    //{
+                    //    if (i % 32 == 0)
+                    //    {
+                    //        sb.AppendLine();
+                    //    }
+                    //    sb.Append(_UnderlayStream[i].ToString("X2"));
+                    //    sb.Append(" ");
+                    //}
                     PlatDependant.LogInfo(sb);
-                    object decodeback = null;
-                    try
-                    {
-                        decodeback = Read(GetDataType(data), stream, 0, stream.Count);
-                    }
-                    catch (Exception e)
-                    {
-                        PlatDependant.LogError(e);
-                    }
-                    if (!Equals(data, decodeback))
-                    {
-                        PlatDependant.LogError("Data changed when trying to decode back.");
+                    //object decodeback = null;
+                    //try
+                    //{
+                    //    decodeback = Read(GetDataType(data), _UnderlayStream, 0, _UnderlayStream.Count);
+                    //}
+                    //catch (Exception e)
+                    //{
+                    //    PlatDependant.LogError(e);
+                    //}
+                    //if (!Equals(data, decodeback))
+                    //{
+                    //    PlatDependant.LogError("Data changed when trying to decode back.");
 
-                        var memstream = new MemoryStream();
-                        var codecnew = new Google.Protobuf.CodedOutputStream(memstream);
-                        message.WriteTo(codecnew);
-                        codecnew.Flush();
-                        var bytes = memstream.ToArray();
-                        sb.Clear();
-                        sb.Append("Test Encode ");
-                        sb.Append(bytes.Length);
-                        sb.Append(" of type ");
-                        sb.Append(GetDataType(data));
-                        sb.Append(" (");
-                        sb.Append(data.GetType().Name);
-                        sb.Append(")");
-                        for (int i = 0; i < bytes.Length; ++i)
-                        {
-                            if (i % 32 == 0)
-                            {
-                                sb.AppendLine();
-                            }
-                            sb.Append(bytes[i].ToString("X2"));
-                            sb.Append(" ");
-                        }
-                        PlatDependant.LogError(sb);
-                        codecnew.Dispose();
-                    }
+                    //    var memstream = new MemoryStream();
+                    //    var codecnew = new Google.Protobuf.CodedOutputStream(memstream);
+                    //    message.WriteTo(codecnew);
+                    //    codecnew.Flush();
+                    //    var bytes = memstream.ToArray();
+                    //    sb.Clear();
+                    //    sb.Append("Test Encode ");
+                    //    sb.Append(bytes.Length);
+                    //    sb.Append(" of type ");
+                    //    sb.Append(GetDataType(data));
+                    //    sb.Append(" (");
+                    //    sb.Append(data.GetType().Name);
+                    //    sb.Append(")");
+                    //    for (int i = 0; i < bytes.Length; ++i)
+                    //    {
+                    //        if (i % 32 == 0)
+                    //        {
+                    //            sb.AppendLine();
+                    //        }
+                    //        sb.Append(bytes[i].ToString("X2"));
+                    //        sb.Append(" ");
+                    //    }
+                    //    PlatDependant.LogError(sb);
+                    //    codecnew.Dispose();
+                    //}
                 }
 #endif
                 return _UnderlayStream;

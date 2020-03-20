@@ -772,7 +772,7 @@ namespace Capstones.Net
                 if (!_ChechkingStarted)
                 {
                     _ChechkingStarted = true;
-                    PlatDependant.RunBackground(CheckCompletion);
+                    PlatDependant.RunBackgroundLongTime(CheckCompletion);
                 }
             }
 
@@ -1508,7 +1508,7 @@ namespace Capstones.Net
                     else
 #endif
                     {
-                        PlatDependant.RunBackground(prog =>
+                        PlatDependant.RunBackgroundLongTime(prog =>
                         {
                             try
                             {
