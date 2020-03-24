@@ -442,8 +442,10 @@ namespace Capstones.Net
     public interface IReqServer : IChannel
     {
         void RegHandler(Request.Handler handler);
+        void RegHandler(uint type, Request.Handler handler);
         void RegHandler<T>(Request.Handler<T> handler);
         void RemoveHandler(Request.Handler handler);
+        void RemoveHandler(uint type, Request.Handler handler);
         void RemoveHandler<T>(Request.Handler<T> handler);
         object HandleRequest(IReqClient from, uint type, object reqobj, uint seq);
         void SendResponse(IReqClient to, object response, uint seq_pingback);
@@ -1038,6 +1040,10 @@ namespace Capstones.Net
         protected HandleRequestEvent _CommonHandlers = new HandleRequestEvent();
         public void RegHandler(Request.Handler handler)
         {
+            if (handler == null)
+            {
+                return;
+            }
             lock (_CommonHandlers)
             {
                 _CommonHandlers.AddHandler(handler);
@@ -1045,6 +1051,10 @@ namespace Capstones.Net
         }
         public void RegHandler<T>(Request.Handler<T> handler)
         {
+            if (handler == null)
+            {
+                return;
+            }
             lock (_TypedHandlers)
             {
                 var type = typeof(T);
@@ -1059,6 +1069,10 @@ namespace Capstones.Net
         }
         public void RegHandler(uint type, Request.Handler handler)
         {
+            if (handler == null)
+            {
+                return;
+            }
             if (type == 0)
             {
                 RegHandler(handler);
@@ -1079,9 +1093,19 @@ namespace Capstones.Net
         }
         public void RemoveHandler(Request.Handler handler)
         {
-            lock (_CommonHandlers)
+            if (handler == null)
             {
-                _CommonHandlers.RemoveHandler(handler);
+                lock (_CommonHandlers)
+                {
+                    _CommonHandlers.RemoveAll();
+                }
+            }
+            else
+            {
+                lock (_CommonHandlers)
+                {
+                    _CommonHandlers.RemoveHandler(handler);
+                }
             }
         }
         public void RemoveHandler(uint type, Request.Handler handler)
@@ -1094,23 +1118,41 @@ namespace Capstones.Net
             {
                 lock (_RawTypedHandlers)
                 {
-                    HandleRequestEvent list;
-                    if (_RawTypedHandlers.TryGetValue(type, out list))
+                    if (handler == null)
                     {
-                        list.RemoveHandler(handler);
+                        _RawTypedHandlers.Remove(type);
+                    }
+                    else
+                    {
+                        HandleRequestEvent list;
+                        if (_RawTypedHandlers.TryGetValue(type, out list))
+                        {
+                            list.RemoveHandler(handler);
+                        }
                     }
                 }
             }
         }
         public void RemoveHandler<T>(Request.Handler<T> handler)
         {
-            lock (_TypedHandlers)
+            if (handler == null)
             {
-                var type = typeof(T);
-                HandleRequestEvent list;
-                if (_TypedHandlers.TryGetValue(type, out list))
+                lock (_TypedHandlers)
                 {
-                    list.RemoveHandler(handler);
+                    var type = typeof(T);
+                    _TypedHandlers.Remove(type);
+                }
+            }
+            else
+            {
+                lock (_TypedHandlers)
+                {
+                    var type = typeof(T);
+                    HandleRequestEvent list;
+                    if (_TypedHandlers.TryGetValue(type, out list))
+                    {
+                        list.RemoveHandler(handler);
+                    }
                 }
             }
         }
