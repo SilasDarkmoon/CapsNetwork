@@ -18,6 +18,20 @@ using System.Collections.Concurrent;
 
 namespace Capstones.UnityEngineEx
 {
+    public struct VolatileBool
+    {
+        public volatile bool Value;
+    }
+    public struct VolatileLong
+    {
+        public long _Value;
+        public long Value
+        {
+            get { return Volatile.Read(ref _Value); }
+            set { Volatile.Write(ref _Value, value); }
+        }
+    }
+
     /// <summary>
     /// 一个环形数组实现的队列。如果已满则入队会失败。
     /// 优点是避免了GC分配，适用于各种缓存池。
@@ -32,20 +46,6 @@ namespace Capstones.UnityEngineEx
         }
         public ConcurrentQueueFixedSize() : this(DEFAULT_CAPACITY)
         { }
-
-        private struct VolatileBool
-        {
-            public volatile bool Value;
-        }
-        private struct VolatileLong
-        {
-            public long _Value;
-            public long Value
-            {
-                get { return Volatile.Read(ref _Value); }
-                set { Volatile.Write(ref _Value, value); }
-            }
-        }
 
         private volatile T[] _InnerList;
         private volatile VolatileBool[] _InnerListReadyMark; 
@@ -1216,12 +1216,6 @@ namespace Capstones.UnityEngineEx
                 }
             }
         }
-
-        struct VolatileBool
-        {
-            public volatile bool _value;
-        }
-
     }
 
 #if UNITY_INCLUDE_TESTS
