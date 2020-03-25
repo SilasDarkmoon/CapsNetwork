@@ -557,7 +557,7 @@ namespace Capstones.UnityEngineEx
                 part.Clear();
                 for (int i = 0; i < SEGMENT_SIZE; ++i)
                 {
-                    states[i] = curr._state[i]._value;
+                    states[i] = curr._state[i].Value;
                     values[i] = curr._array[i];
                 }
 
@@ -928,7 +928,7 @@ namespace Capstones.UnityEngineEx
                 System.Diagnostics.Debug.Assert(_high < SEGMENT_SIZE - 1);
                 _high++;
                 _array[_high] = value;
-                _state[_high]._value = true;
+                _state[_high].Value = true;
             }
 
             /// <summary>
@@ -1028,7 +1028,7 @@ namespace Capstones.UnityEngineEx
                     if (newhigh <= SEGMENT_SIZE - 1)
                     {
                         _array[newhigh] = value;
-                        _state[newhigh]._value = true;
+                        _state[newhigh].Value = true;
                     }
 
                     //if this thread takes up the last slot in the segment, then this thread is responsible
@@ -1063,7 +1063,7 @@ namespace Capstones.UnityEngineEx
                         //if the specified value is not available (this spot is taken by a push operation,
                         // but the value is not written into yet), then spin
                         SpinWait spinLocal = new SpinWait();
-                        while (!_state[lowLocal]._value)
+                        while (!_state[lowLocal].Value)
                         {
                             spinLocal.SpinOnce();
                         }
@@ -1119,7 +1119,7 @@ namespace Capstones.UnityEngineEx
                 for (int i = 0; i < _array.Length; ++i)
                 {
                     _array[i] = default(T);
-                    _state[i]._value = false;
+                    _state[i].Value = false;
                 }
                 _next = null;
                 _low = 0;
@@ -1157,7 +1157,7 @@ namespace Capstones.UnityEngineEx
                     if (lowLocal > High)
                         return false;
                     SpinWait spin = new SpinWait();
-                    while (!_state[lowLocal]._value)
+                    while (!_state[lowLocal].Value)
                     {
                         spin.SpinOnce();
                     }
