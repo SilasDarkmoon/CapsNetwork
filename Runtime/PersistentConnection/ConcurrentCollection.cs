@@ -325,7 +325,7 @@ namespace Capstones.UnityEngineEx
         /// </summary>
         public ConcurrentQueueGrowOnly()
         {
-            _head = _tail = _freetail = new Segment(0, this);
+            _head = _tail = _freetail = new Segment(1, this);
         }
 
         /// <summary>
@@ -334,7 +334,7 @@ namespace Capstones.UnityEngineEx
         /// <param name="collection">A collection from which to copy elements.</param>
         private void InitializeFromCollection(IEnumerable<T> collection)
         {
-            Segment localTail = new Segment(0, this);//use this local variable to avoid the extra volatile read/write. this is safe because it is only called from ctor
+            Segment localTail = new Segment(1, this);//use this local variable to avoid the extra volatile read/write. this is safe because it is only called from ctor
             _head = localTail;
 
             int index = 0;
@@ -517,16 +517,7 @@ namespace Capstones.UnityEngineEx
                 //current head is empty and it is NOT the last segment,
                 //it means another thread is growing new segment 
                 {
-                    SpinWait spin = new SpinWait();
-                    while (head.IsEmpty)
-                    {
-                        if (head.Next == null)
-                            return true;
-
-                        spin.SpinOnce();
-                        head = _head;
-                    }
-                    return false;
+                    return _Count <= 0;
                 }
             }
         }
@@ -581,7 +572,7 @@ namespace Capstones.UnityEngineEx
                 {
                     var next = curr.Next;
                     long nextindex = 0;
-                    if (next != null && (nextindex = next._index) != curindex + 1)
+                    if (next != null && !next._is_free && (nextindex = next._index) != curindex + 1)
                     {
                         curr = head;
                         curindex = headindex;
@@ -614,7 +605,7 @@ namespace Capstones.UnityEngineEx
                         }
                         list.AddRange(part);
 
-                        if (next == null || curr == tail)
+                        if (next == null || next._is_free || curr == tail)
                         {
                             break;
                         }
@@ -889,7 +880,7 @@ namespace Capstones.UnityEngineEx
             private volatile int _high;
 
             //internal int _ref_cnt;
-            private volatile bool _next_is_free;
+            internal volatile bool _is_free;
 
             private volatile ConcurrentQueueGrowOnly<T> _source;
 
@@ -899,7 +890,7 @@ namespace Capstones.UnityEngineEx
             internal Segment(long index, ConcurrentQueueGrowOnly<T> source)
             {
                 //_ref_cnt = 1;
-                _next_is_free = true;
+                _is_free = true;
                 _array = new T[SEGMENT_SIZE];
                 _state = new VolatileBool[SEGMENT_SIZE]; //all initialized to false
                 _high = -1;
@@ -913,9 +904,8 @@ namespace Capstones.UnityEngineEx
             /// </summary>
             internal Segment Next
             {
-                get { return _next_is_free ? null : _next; }
+                get { return _next; }
             }
-
 
             /// <summary>
             /// return true if the current segment is empty (doesn't have any element available to dequeue, 
@@ -953,6 +943,7 @@ namespace Capstones.UnityEngineEx
             {
                 System.Diagnostics.Debug.Assert(_high >= SEGMENT_SIZE - 1);
                 Segment newSegment = new Segment(_index + 1, _source); //_index is Int64, we don't need to worry about overflow
+                newSegment._is_free = false;
                 _next = newSegment;
                 return newSegment;
             }
@@ -975,7 +966,12 @@ namespace Capstones.UnityEngineEx
                         spin.SpinOnce();
                         freetail = _source._freetail;
                     }
-                    newSegment._index = freetail._index + 1; //_index is Int64, we don't need to worry about overflow
+                    long previndex = 0;
+                    while ((previndex = Volatile.Read(ref freetail._index)) == 0)
+                    {
+                        spin.SpinOnce();
+                    }
+                    Volatile.Write(ref newSegment._index, previndex + 1); //_index is Int64, we don't need to worry about overflow
                     freetail._next = newSegment;
 
                     spin.Reset();
@@ -986,8 +982,8 @@ namespace Capstones.UnityEngineEx
                 }
 
                 System.Diagnostics.Debug.Assert(_source._tail == this);
+                next._is_free = false;
                 _source._tail = next;
-                _next_is_free = false;
             }
 
 
@@ -1003,6 +999,10 @@ namespace Capstones.UnityEngineEx
             {
                 //quickly check if _high is already over the boundary, if so, bail out
                 if (_high >= SEGMENT_SIZE - 1)
+                {
+                    return false;
+                }
+                if (_is_free)
                 {
                     return false;
                 }
@@ -1114,12 +1114,13 @@ namespace Capstones.UnityEngineEx
             internal void Recycle()
             {
                 // cleanup this.
+                _is_free = true;
+                Volatile.Write(ref _index, 0);
                 for (int i = 0; i < _array.Length; ++i)
                 {
                     _array[i] = default(T);
                     _state[i]._value = false;
                 }
-                _next_is_free = true;
                 _next = null;
                 _low = 0;
                 _high = -1;
@@ -1132,7 +1133,12 @@ namespace Capstones.UnityEngineEx
                     spin.SpinOnce();
                     freetail = _source._freetail;
                 }
-                this._index = freetail._index + 1;
+                long previndex = 0;
+                while ((previndex = Volatile.Read(ref freetail._index)) == 0)
+                {
+                    spin.SpinOnce();
+                }
+                Volatile.Write(ref _index, previndex + 1);
                 freetail._next = this;
             }
 #pragma warning restore 0420
