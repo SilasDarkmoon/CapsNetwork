@@ -326,6 +326,7 @@ namespace Capstones.UnityEngineEx
         public ConcurrentQueueGrowOnly()
         {
             _head = _tail = _freetail = new Segment(1, this);
+            _head._is_free = false;
         }
 
         /// <summary>
@@ -336,6 +337,7 @@ namespace Capstones.UnityEngineEx
         {
             Segment localTail = new Segment(1, this);//use this local variable to avoid the extra volatile read/write. this is safe because it is only called from ctor
             _head = localTail;
+            _head._is_free = false;
 
             int index = 0;
             foreach (T element in collection)
