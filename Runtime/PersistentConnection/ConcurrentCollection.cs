@@ -774,7 +774,20 @@ namespace Capstones.UnityEngineEx
             while (true)
             {
                 Segment tail = _tail;
-                if (tail.TryAppend(item))
+                bool success = false;
+                Interlocked.Increment(ref tail._use_cnt);
+                try
+                {
+                    if (tail == _tail && !tail._is_free)
+                    {
+                        success = tail.TryAppend(item);
+                    }
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref tail._use_cnt);
+                }
+                if (success)
                 {
                     Interlocked.Increment(ref _Count);
                     return;
@@ -797,17 +810,36 @@ namespace Capstones.UnityEngineEx
         /// successfully; otherwise, false.</returns>
         public bool TryDequeue(out T result)
         {
+            result = default(T);
+            SpinWait spin = new SpinWait();
             while (!IsEmpty)
             {
                 Segment head = _head;
-                if (head.TryRemove(out result))
+                bool success = false;
+                bool shouldRecycle = false;
+                Interlocked.Increment(ref head._use_cnt);
+                try
+                {
+                    if (head == _head && !head._is_free)
+                    {
+                        success = head.TryRemove(out result, out shouldRecycle);
+                    }
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref head._use_cnt);
+                }
+                if (success)
                 {
                     Interlocked.Decrement(ref _Count);
+                    if (shouldRecycle)
+                    {
+                        head.Recycle();
+                    }
                     return true;
                 }
-                //since method IsEmpty spins, we don't need to spin in the while loop
+                spin.SpinOnce();
             }
-            result = default(T);
             return false;
         }
 
@@ -821,19 +853,30 @@ namespace Capstones.UnityEngineEx
         /// <returns>true if and object was returned successfully; otherwise, false.</returns>
         public bool TryPeek(out T result)
         {
+            result = default(T);
+            SpinWait spin = new SpinWait();
             while (!IsEmpty)
             {
                 Segment head = _head;
-                if (head.TryPeek(out result))
+                bool success = false;
+                Interlocked.Increment(ref head._use_cnt);
+                try
                 {
-                    if (head == _head)
+                    if (head == _head && !head._is_free)
                     {
-                        return true;
+                        success = head.TryPeek(out result);
                     }
                 }
-                //since method IsEmpty spins, we don't need to spin in the while loop
+                finally
+                {
+                    Interlocked.Decrement(ref head._use_cnt);
+                }
+                if (success)
+                {
+                    return true;
+                }
+                spin.SpinOnce();
             }
-            result = default(T);
             return false;
         }
 
@@ -883,6 +926,7 @@ namespace Capstones.UnityEngineEx
 
             //internal int _ref_cnt;
             internal volatile bool _is_free;
+            internal volatile int _use_cnt;
 
             private volatile ConcurrentQueueGrowOnly<T> _source;
 
@@ -968,6 +1012,7 @@ namespace Capstones.UnityEngineEx
                         spin.SpinOnce();
                         freetail = _source._freetail;
                     }
+                    spin.Reset();
                     long previndex = 0;
                     while ((previndex = Volatile.Read(ref freetail._index)) == 0)
                     {
@@ -1001,10 +1046,6 @@ namespace Capstones.UnityEngineEx
             {
                 //quickly check if _high is already over the boundary, if so, bail out
                 if (_high >= SEGMENT_SIZE - 1)
-                {
-                    return false;
-                }
-                if (_is_free)
                 {
                     return false;
                 }
@@ -1053,8 +1094,9 @@ namespace Capstones.UnityEngineEx
             /// <param name="result">The result.</param>
             /// <param name="head">The head.</param>
             /// <returns>return false only if the current segment is empty</returns>
-            internal bool TryRemove(out T result)
+            internal bool TryRemove(out T result, out bool shouldRecycle)
             {
+                shouldRecycle = false;
                 SpinWait spin = new SpinWait();
                 int lowLocal = Low, highLocal = High;
                 while (lowLocal <= highLocal)
@@ -1090,16 +1132,19 @@ namespace Capstones.UnityEngineEx
                             //while the *current* thread is doing *this* Dequeue operation, and finds that it needs to 
                             //dispose the current (and ONLY) segment. Then we need to wait till thread A finishes its 
                             //Grow operation, this is the reason of having the following while loop
-                            spinLocal = new SpinWait();
+                            spinLocal.Reset();
                             Segment next;
-                            while ((next = _next) == null)
+                            while ((next = _next) == null || next._is_free)
                             {
                                 spinLocal.SpinOnce();
                             }
                             System.Diagnostics.Debug.Assert(_source._head == this);
                             _source._head = next;
 
-                            Recycle();
+                            _is_free = true;
+                            shouldRecycle = true;
+                            // Recycle();
+                            // let the caller to do recycle.
                         }
                         return true;
                     }
@@ -1116,7 +1161,12 @@ namespace Capstones.UnityEngineEx
             internal void Recycle()
             {
                 // cleanup this.
-                _is_free = true;
+                //_is_free = true;
+                SpinWait spin = new SpinWait();
+                while (_use_cnt > 0)
+                {
+                    spin.SpinOnce();
+                }
                 Volatile.Write(ref _index, 0);
                 for (int i = 0; i < _array.Length; ++i)
                 {
@@ -1128,13 +1178,14 @@ namespace Capstones.UnityEngineEx
                 _high = -1;
 
                 // recycle this.
-                SpinWait spin = new SpinWait();
+                spin.Reset();
                 var freetail = _source._freetail;
                 while (Interlocked.CompareExchange(ref _source._freetail, this, freetail) != freetail)
                 {
                     spin.SpinOnce();
                     freetail = _source._freetail;
                 }
+                spin.Reset();
                 long previndex = 0;
                 while ((previndex = Volatile.Read(ref freetail._index)) == 0)
                 {
