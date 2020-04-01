@@ -303,7 +303,8 @@ function api.result(request,isMyTimedout)
                     else
                         if tab.type == 0 then
                             failed = true
-                            msg = clr.transstr("i_Internationalization_Core_" .. tab.tips) or tab.tips or clr.transstr('server_refuse', failed)
+                            msg = clr.transstr(tab.tips) or tab.tips or clr.transstr('server_refuse', failed)
+                            msg = msg .. "\n" .. tab.traceIdentifier
                         end
                         request.val = tab.d
                         request.event = tab.e
