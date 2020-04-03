@@ -1,12 +1,13 @@
 {
-    "name": "CapsNetwork",
+    "name": "CapsNetworkEditor",
     "references": [
-        "ResManagerEntry",
-        "ResManager",
-        "Unity.Collections.Concurrent",
-        "JsonObject"
+        "GUID:e4507b120e8b74e46b9f2cc5098da2e2",
+        "GUID:f19c5c6eff4d2334b831595591988c72",
+        "GUID:a6e830199b8cdf24e8bb2fc58b176ea8"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

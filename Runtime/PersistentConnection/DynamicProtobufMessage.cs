@@ -1405,7 +1405,7 @@ namespace Capstones.Net
         public ProtobufHighLevelType Type;
         public ProtobufFieldLabel Label;
     }
-    public class ProtobufMessage // TODO: IDictionary
+    public class ProtobufMessage // TODO: IDictionary, ICloneable
     {
         protected internal class FieldSlot
         {
@@ -2342,6 +2342,14 @@ namespace Capstones.Net
                 return new SlotValueAccessor(slot);
             }
         }
+        public SlotValueAccessor this[int fieldindex]
+        {
+            get
+            {
+                FieldSlot slot = GetSlot(fieldindex);
+                return new SlotValueAccessor(slot);
+            }
+        }
 
         public ProtobufMessage ApplyTemplate(ProtobufMessage template)
         {
@@ -2397,6 +2405,11 @@ namespace Capstones.Net
             var val = new ProtobufValue(knownType);
             val.Parsed.Set(templateValue);
             slot.FirstValue = val;
+        }
+        public void Add(int fieldno, ProtobufFieldLabel label)
+        {
+            var slot = GetOrCreateSlot(fieldno);
+            slot.Desc.Label = label;
         }
 
         protected bool _BuildFinished;
@@ -3778,6 +3791,7 @@ namespace Capstones.Net
         {
             { 1, "name", ProtobufNativeType.TYPE_STRING },
             { 2, "value", EnumValueDescriptorTemplate },
+            { 2, ProtobufFieldLabel.LABEL_REPEATED },
             //optional EnumOptions options = 3;
             //repeated EnumReservedRange reserved_range = 4;
             //repeated string reserved_name = 5;
@@ -3799,14 +3813,19 @@ namespace Capstones.Net
         {
             { 1, "name", ProtobufNativeType.TYPE_STRING },
             { 2, "field", FieldDescriptorTemplate },
+            { 2, ProtobufFieldLabel.LABEL_REPEATED },
             { 6, "extension", FieldDescriptorTemplate },
+            { 6, ProtobufFieldLabel.LABEL_REPEATED },
             //{ 3, "nested_type", MessageDescriptorTemplate },
+            { 3, ProtobufFieldLabel.LABEL_REPEATED },
             { 4, "enum_type", EnumDescriptorTemplate },
+            { 4, ProtobufFieldLabel.LABEL_REPEATED },
             //repeated ExtensionRange extension_range = 5;
             //repeated OneofDescriptorProto oneof_decl = 8;
             //optional MessageOptions options = 7;
             //repeated ReservedRange reserved_range = 9;
             { 10, "reserved_name", ProtobufNativeType.TYPE_STRING },
+            { 10, ProtobufFieldLabel.LABEL_REPEATED },
         };
         public readonly static TemplateProtobufMessage ServiceDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.ServiceDescriptorProto")
         {
@@ -3819,15 +3838,27 @@ namespace Capstones.Net
             { 1, "name", ProtobufNativeType.TYPE_STRING },
             { 2, "package", ProtobufNativeType.TYPE_STRING },
             { 3, "dependency", ProtobufNativeType.TYPE_STRING },
+            { 3, ProtobufFieldLabel.LABEL_REPEATED },
             { 10, "public_dependency", ProtobufNativeType.TYPE_INT32 },
+            { 10, ProtobufFieldLabel.LABEL_REPEATED },
             { 11, "weak_dependency", ProtobufNativeType.TYPE_INT32 },
+            { 11, ProtobufFieldLabel.LABEL_REPEATED },
             { 4, "message_type", MessageDescriptorTemplate },
+            { 4, ProtobufFieldLabel.LABEL_REPEATED },
             { 5, "enum_type", EnumDescriptorTemplate },
-            { 6, "service", ServiceDescriptorTemplate},
-            { 7, "extension", FieldDescriptorTemplate},
+            { 5, ProtobufFieldLabel.LABEL_REPEATED },
+            { 6, "service", ServiceDescriptorTemplate },
+            { 6, ProtobufFieldLabel.LABEL_REPEATED },
+            { 7, "extension", FieldDescriptorTemplate },
+            { 7, ProtobufFieldLabel.LABEL_REPEATED },
             // optional FileOptions options = 8;
             // optional SourceCodeInfo source_code_info = 9;
             { 12, "syntax", ProtobufNativeType.TYPE_STRING },
+        };
+        public readonly static TemplateProtobufMessage FileDescriptorSetTemplate = new TemplateProtobufMessage("google.protobuf.FileDescriptorSet")
+        {
+            { 1, "file", DescriptorFileTemplate },
+            { 1, ProtobufFieldLabel.LABEL_REPEATED },
         };
         static ProtobufMessagePool()
         {
@@ -3855,22 +3886,38 @@ namespace Capstones.Net
                 GetMessages(sub, childpre, messages);
             }
         }
-        public static Dictionary<string, TemplateProtobufMessage> ReadTemplates(ListSegment<byte> compiledFileData)
+        private static bool ApplyFileOrFileSetTemplate(ProtobufMessage file)
         {
-            ProtobufMessage file = ProtobufEncoder.ReadRaw(compiledFileData);
-            if (file != null)
+            bool isset = true;
+            if (file._HighFields.Count != 0)
+            {
+                isset = false;
+            }
+            for (int i = 1; i < 16; ++i)
+            {
+                var slot = file._LowFields[i];
+                if (slot.Values.Count > 0)
+                {
+                    isset = false;
+                    break;
+                }
+            }
+            if (isset)
+            {
+                ProtobufEncoder.ApplyTemplate(file, FileDescriptorSetTemplate);
+            }
+            else
             {
                 ProtobufEncoder.ApplyTemplate(file, DescriptorFileTemplate);
+            }
+            return isset;
+        }
+        public static Dictionary<string, TemplateProtobufMessage> ReadTemplates(ListSegment<byte> compiledFileData)
+        {
+            var allmessages = ReadTemplateDescs(compiledFileData);
+            if (allmessages != null)
+            {
                 Dictionary<string, TemplateProtobufMessage> templates = new Dictionary<string, TemplateProtobufMessage>();
-                var package = file["package"].String;
-                Dictionary<string, ProtobufMessage> allmessages = new Dictionary<string, ProtobufMessage>();
-                var messages = file["message_type"].Messages;
-                var rootpre = package + ".";
-                for (int i = 0; i < messages.Count; ++i)
-                {
-                    var message = messages[i];
-                    GetMessages(message, rootpre, allmessages);
-                }
                 foreach (var kvp in allmessages)
                 {
                     templates[kvp.Key] = new TemplateProtobufMessage(kvp.Key);
@@ -3935,6 +3982,42 @@ namespace Capstones.Net
             }
             return null;
         }
+        public static Dictionary<string, ProtobufMessage> ReadTemplateDescs(ListSegment<byte> compiledFileData)
+        {
+            ProtobufMessage set = ProtobufEncoder.ReadRaw(compiledFileData);
+            if (set != null)
+            {
+                ProtobufMessage[] files;
+                if (ApplyFileOrFileSetTemplate(set))
+                {
+                    files = set["file"].Messages.ToArray();
+                }
+                else
+                {
+                    files = new ProtobufMessage[] { set };
+                }
+                Dictionary<string, ProtobufMessage> templates = new Dictionary<string, ProtobufMessage>();
+                for (int k = 0; k < files.Length; ++k)
+                {
+                    var file = files[k];
+                    var package = file["package"].String;
+                    Dictionary<string, ProtobufMessage> allmessages = new Dictionary<string, ProtobufMessage>();
+                    var messages = file["message_type"].Messages;
+                    var rootpre = package + ".";
+                    for (int i = 0; i < messages.Count; ++i)
+                    {
+                        var message = messages[i];
+                        GetMessages(message, rootpre, allmessages);
+                    }
+                    foreach (var kvp in allmessages)
+                    {
+                        templates[kvp.Key] = kvp.Value;
+                    }
+                }
+                return templates;
+            }
+            return null;
+        }
 
         // TODO: enum pool
         // TODO: predefined enum pool
@@ -3949,6 +4032,8 @@ namespace Capstones.Net
         [UnityEditor.MenuItem("Test/Dynamic Protobuf Message/Test Encode", priority = 100010)]
         public static void TestEncode()
         {
+            UnityEditor.AssetDatabase.OpenAsset(UnityEditor.AssetDatabase.LoadMainAssetAtPath(ResManager.__ASSET__), ResManager.__LINE__);
+
             UnityEngine.Debug.Log(ProtobufMessagePool.MessageDescriptorTemplate.ToString());
 
             var message = new ProtobufMessage();
@@ -3977,6 +4062,10 @@ namespace Capstones.Net
         [UnityEditor.MenuItem("Test/Dynamic Protobuf Message/Test Decode", priority = 100020)]
         public static void TestDecode()
         {
+            UnityEditor.AssetDatabase.OpenAsset(UnityEditor.AssetDatabase.LoadMainAssetAtPath(ResManager.__ASSET__), ResManager.__LINE__);
+
+            UnityEditor.EditorUtility.OpenWithDefaultApp(new System.Diagnostics.StackTrace(0, true).GetFrame(0).GetFileName());
+
             var templates = ProtobufMessagePool.ReadTemplates(new ListSegment<byte>(TestDescriptorFileData));
             foreach (var kvp in templates)
             {
