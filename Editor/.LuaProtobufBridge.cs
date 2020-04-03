@@ -7,6 +7,54 @@ using Capstones.UnityEngineEx;
 using Capstones.LuaExt;
 using Capstones.LuaLib;
 using Capstones.LuaWrap;
+using lua = Capstones.LuaLib.LuaCoreLib;
+using lual = Capstones.LuaLib.LuaAuxLib;
+using luae = Capstones.LuaLib.LuaLibEx;
+
+namespace Capstones.LuaLib
+{
+    public static partial class LuaHubEx
+    {
+        private static void InitLuaProtobufBridge(IntPtr l)
+        {
+            l.newtable();
+            l.pushcfunction(ProtoDelCreateMessage);
+            l.SetField(-2, "new");
+            l.SetGlobal("proto");
+        }
+
+        public static readonly lua.CFunction ProtoDelCreateMessage = new lua.CFunction(ProtoFuncCreateMessage);
+        [AOT.MonoPInvokeCallback(typeof(lua.CFunction))]
+        public static int ProtoFuncCreateMessage(IntPtr l)
+        {
+            var argcnt = l.gettop();
+            string name = null;
+            if (argcnt >= 1)
+            {
+                name = l.GetString(1);
+            }
+            if (argcnt >= 2 && l.istable(2))
+            {
+                l.pushvalue(2);
+            }
+            else
+            {
+                l.newtable();
+            }
+            l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+            l.pushlightuserdata(Capstones.LuaExt.LuaProtobufBridge._ProtobufTrans.r);
+            l.settable(-3);
+            if (!string.IsNullOrEmpty(name))
+            {
+                l.PushString(name);
+                l.SetField(-2, Capstones.LuaExt.LuaProtobufBridge.LS_messageName);
+            }
+            return 1;
+        }
+
+        private static LuaFramework.FurtherInit _InitLuaProtobufBridge = new LuaFramework.FurtherInit(InitLuaProtobufBridge);
+    }
+}
 
 namespace Capstones.LuaExt
 {
@@ -131,7 +179,7 @@ namespace Capstones.LuaExt
             return rv;
         }
 
-        private sealed class ProtobufTrans : SelfHandled, Capstones.LuaLib.ILuaTrans
+        internal sealed class ProtobufTrans : SelfHandled, Capstones.LuaLib.ILuaTrans
         {
             public bool ShouldCache { get { return false; } }
 
@@ -193,7 +241,7 @@ namespace Capstones.LuaExt
                 SetDataRaw(l, index, val);
             }
         }
-        private static ProtobufTrans _ProtobufTrans = new ProtobufTrans();
+        internal static ProtobufTrans _ProtobufTrans = new ProtobufTrans();
 
         public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubValueTypePrecompiled<T> where T : new()
         {
