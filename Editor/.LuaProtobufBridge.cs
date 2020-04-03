@@ -8,7 +8,7 @@ using Capstones.LuaExt;
 using Capstones.LuaLib;
 using Capstones.LuaWrap;
 
-namespace Capstones.Net
+namespace Capstones.LuaExt
 {
     public static partial class LuaProtobufBridge
     {

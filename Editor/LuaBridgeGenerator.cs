@@ -499,7 +499,7 @@ namespace Capstones.UnityEditorEx.Net
                                     sbfile.AppendLine("using Capstones.LuaLib;");
                                     sbfile.AppendLine("using Capstones.LuaWrap;");
                                     sbfile.AppendLine("");
-                                    sbfile.AppendLine("namespace Capstones.Net");
+                                    sbfile.AppendLine("namespace Capstones.LuaExt");
                                     sbfile.AppendLine("{");
                                     sbfile.AppendLine("    public static partial class LuaProtobufBridge");
                                     sbfile.AppendLine("    {");
@@ -656,11 +656,11 @@ namespace Capstones.UnityEditorEx.Net
                                         }
                                         else
                                         {
-                                            sw.Write("        private static Capstones.LuaLib.LuaTypeHub.TypeHubCreator<Capstones.Net.LuaProtobufBridge.TypeHubProtocolPrecompiled<");
+                                            sw.Write("        private static Capstones.LuaLib.LuaTypeHub.TypeHubCreator<Capstones.LuaExt.LuaProtobufBridge.TypeHubProtocolPrecompiled<");
                                             sw.Write(minfo.FullCSharpName);
                                             sw.Write(">> ___tp_");
                                             sw.Write(typepart);
-                                            sw.Write(" = new LuaTypeHub.TypeHubCreator<Capstones.Net.LuaProtobufBridge.TypeHubProtocolPrecompiled<");
+                                            sw.Write(" = new LuaTypeHub.TypeHubCreator<Capstones.LuaExt.LuaProtobufBridge.TypeHubProtocolPrecompiled<");
                                             sw.Write(minfo.FullCSharpName);
                                             sw.Write(">>(typeof(");
                                             sw.Write(minfo.FullCSharpName);
@@ -681,7 +681,7 @@ namespace Capstones.UnityEditorEx.Net
                                             sw.Write(" val)");
                                             sw.WriteLine();
                                             sw.WriteLine("        {");
-                                            sw.Write("            val = Capstones.Net.LuaProtobufBridge.TypeHubProtocolPrecompiled<");
+                                            sw.Write("            val = Capstones.LuaExt.LuaProtobufBridge.TypeHubProtocolPrecompiled<");
                                             sw.Write(minfo.FullCSharpName);
                                             sw.Write(">.GetLuaChecked(l, index);");
                                             sw.WriteLine();
@@ -705,7 +705,7 @@ namespace Capstones.UnityEditorEx.Net
                 sw.WriteLine("using Capstones.LuaLib;");
                 sw.WriteLine("using Capstones.LuaWrap;");
                 sw.WriteLine("");
-                sw.WriteLine("namespace Capstones.Net");
+                sw.WriteLine("namespace Capstones.LuaExt");
                 sw.WriteLine("{");
                 sw.WriteLine("    public static partial class LuaProtobufBridge");
                 sw.WriteLine("    {");
