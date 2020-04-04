@@ -635,14 +635,14 @@ namespace Capstones.UnityEditorEx.Net
                         if (name == "Interval" || name == "interval")
                         {
                             sw.Write("            OperationType.FuncGetFrameSyncTickInterval = obj => (int)((");
-                            sw.Write(beginInfo.FullCSharpName);
+                            sw.Write(tickInfo.FullCSharpName);
                             sw.Write(")obj).Interval;");
                             sw.WriteLine();
                         }
                         if (name == "Time" || name == "time")
                         {
                             sw.Write("            OperationType.FuncGetFrameSyncTickTime = obj => (int)((");
-                            sw.Write(beginInfo.FullCSharpName);
+                            sw.Write(tickInfo.FullCSharpName);
                             sw.Write(")obj).Time;");
                             sw.WriteLine();
                         }
