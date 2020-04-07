@@ -716,6 +716,44 @@ namespace Capstones.UnityEditorEx.Net
                 sw.WriteLine("    }");
                 sw.WriteLine("}");
             }
+
+            // Write LuaPrecompile Blacklist
+            Func<string, string> GetMemberListName = null;
+            GetMemberListName = mname =>
+            {
+                if (mname.StartsWith("."))
+                {
+                    mname = mname.Substring(1);
+                }
+                CapsNetworkEditor.ProtocolInfo info;
+                if (!allmessagesinallfiles.TryGetValue(mname, out info))
+                {
+                    return CapsNetworkEditor.ToCSharpName(mname);
+                }
+                else
+                {
+                    if (!info.IsNested)
+                    {
+                        return info.FullCSharpName;
+                    }
+                    var sindex = info.FullCSharpName.LastIndexOf('.');
+                    if (sindex < 0)
+                    {
+                        return info.FullCSharpName;
+                    }
+                    var parent = info.FullCSharpName.Substring(0, sindex);
+                    var child = info.FullCSharpName.Substring(sindex + 1);
+                    return GetMemberListName(parent) + "+" + child;
+                }
+            };
+            using (var sw = PlatDependant.OpenWriteText(outputdir + "LuaPrecompile/MemberList.txt"))
+            {
+                foreach (var kvp in allmessagesinallfiles)
+                {
+                    sw.Write("--type ");
+                    sw.WriteLine(GetMemberListName(kvp.Key));
+                }
+            }
         }
     }
 }
