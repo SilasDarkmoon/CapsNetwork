@@ -693,7 +693,7 @@ namespace Capstones.UnityEditorEx.Net
 #if MOD_CAPSLUA_V2
             LuaBridgeGenerator.Generate_Lua_Data_Bridge();
 #endif
-
+            AssetDatabase.Refresh();
         }
     }
 }
