@@ -15,7 +15,36 @@ namespace Capstones.UnityEditorEx.Net
         [MenuItem("Net/Generate C# from Protobuf", priority = 100010)]
         public static void Generate_CS_From_Protobuf()
         {
-            if (EditorUtility.DisplayDialog("提示", "该功能需要:\nLinux subsystem on Windows 10.\n&& Ubuntu distribute installed.\n&& installed make .etc and make and installed protoc", "准备好了", "还没有准备好"))
+#if UNITY_EDITOR_WIN
+            var curfile = CapsEditorUtils.__FILE__;
+            var protoc = System.IO.Path.GetDirectoryName(curfile).Replace('/', '\\') + @"\..\~Tools~\protoc.exe";
+            var workingdir = System.IO.Path.GetFullPath(".");
+            var protosrcs = CapsModEditor.FindAssetsInMods("Protocols/Src/Combined.proto");
+            foreach (var srcfile in protosrcs)
+            {
+                var srcdir = System.IO.Path.GetDirectoryName(srcfile);
+                var protodir = System.IO.Path.GetDirectoryName(srcdir);
+                if (System.IO.Directory.Exists(protodir + "/Compiled"))
+                {
+                    System.IO.Directory.Delete(protodir + "/Compiled", true);
+                }
+                var files = PlatDependant.GetAllFiles(srcdir);
+                foreach (var file in files)
+                {
+                    if (file.EndsWith(".proto"))
+                    {
+                        var part = file.Substring(srcdir.Length, file.Length - srcdir.Length - ".proto".Length);
+                        var dest = protodir + "/Compiled" + part + ".pb";
+                        var destdir = System.IO.Path.GetDirectoryName(dest);
+                        System.IO.Directory.CreateDirectory(destdir);
+                        System.Diagnostics.ProcessStartInfo si = new System.Diagnostics.ProcessStartInfo(protoc, "-I./" + srcdir.Replace('\\', '/') + " --csharp_out=./" + destdir.Replace('\\', '/') + " ./" + file.Replace('\\', '/') + " -o./" + dest.Replace('\\', '/'));
+                        si.WorkingDirectory = workingdir;
+                        CapsEditorUtils.ExecuteProcess(si);
+                    }
+                }
+            }
+#else
+            if (EditorUtility.DisplayDialog("提示", "该功能需要:\nmake and installed protoc", "准备好了", "还没有准备好"))
             {
                 var workingdir = System.IO.Path.GetFullPath(".");
                 var protosrcs = CapsModEditor.FindAssetsInMods("Protocols/Src/Combined.proto");
@@ -43,6 +72,7 @@ namespace Capstones.UnityEditorEx.Net
                     }
                 }
             }
+#endif
         }
 
         public class AttributeInfo
