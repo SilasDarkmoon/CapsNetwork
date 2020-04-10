@@ -278,6 +278,10 @@ namespace Capstones.UnityEditorEx.Net
                                     {
                                         string typename;
                                         var ftype = field["type"].AsEnum<ProtobufNativeType>();
+                                        if (ftype == ProtobufNativeType.TYPE_STRING)
+                                        {
+                                            return "\"\"";
+                                        }
                                         if (fieldType2CSName.TryGetValue(ftype, out typename))
                                         {
                                             if (typename != null)
@@ -356,7 +360,7 @@ namespace Capstones.UnityEditorEx.Net
                                                         break;
                                                     }
                                                 case ProtobufNativeType.TYPE_STRING:
-                                                    sbfile.AppendLine("l.GetString(-1);");
+                                                    sbfile.AppendLine("l.GetString(-1) ?? \"\";");
                                                     break;
                                                 case ProtobufNativeType.TYPE_GROUP: // currently unhandled.
                                                 default:
@@ -399,10 +403,10 @@ namespace Capstones.UnityEditorEx.Net
                                             var mtype = field["type_name"].String;
                                             sbfile.AppendLine("                    data." + fname + ".Add(new " + GetCSharpMessageName(mtype) + "());");
                                         }
-                                        else if (ftype == ProtobufNativeType.TYPE_STRING)
-                                        {
-                                            sbfile.AppendLine("                    data." + fname + ".Add(\"\");");
-                                        }
+                                        //else if (ftype == ProtobufNativeType.TYPE_STRING)
+                                        //{
+                                        //    sbfile.AppendLine("                    data." + fname + ".Add(\"\");");
+                                        //}
                                         else if (ftype == ProtobufNativeType.TYPE_BYTES)
                                         {
                                             sbfile.AppendLine("                    data." + fname + ".Add(EmptyBuffer);");
