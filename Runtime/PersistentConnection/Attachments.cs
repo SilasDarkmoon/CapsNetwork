@@ -459,7 +459,7 @@ namespace Capstones.Net
 
         protected async void SendHeartbeatAsync(object heartbeat)
         {
-            var request = _Client.Send(heartbeat, 1000);
+            var request = _Client.Send(heartbeat, 10000);
             await request;
             if (request.Error == null)
             {
