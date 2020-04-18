@@ -1,3 +1,4 @@
+#define DONOT_CHECK_OUT_OF_ORDER_TIMEOUT
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -1456,7 +1457,9 @@ namespace Capstones.Net
                         }
                         else if (checking.Seq < pingback)
                         { // the newer request is back, so we let older request timeout.
+#if !DONOT_CHECK_OUT_OF_ORDER_TIMEOUT
                             checking.SetError("timedout - newer request is done");
+#endif
                         }
                         else
                         {
@@ -1615,7 +1618,7 @@ namespace Capstones.Net
             }
         }
 
-        #region IDisposable Support
+#region IDisposable Support
         public bool LeaveOpen = false;
         protected override void OnDispose()
         {
@@ -1661,7 +1664,7 @@ namespace Capstones.Net
                 }
             }
         }
-        #endregion
+#endregion
     }
 
     public class ReqServer : ReqHandler, IPositiveConnection, IDisposable
@@ -1721,7 +1724,7 @@ namespace Capstones.Net
             }
         }
 
-        #region IDisposable Support
+#region IDisposable Support
         public bool LeaveOpen = false;
         protected override void OnDispose()
         {
@@ -1735,9 +1738,9 @@ namespace Capstones.Net
             }
             _Server = null;
         }
-        #endregion
+#endregion
 
-        #region IPositiveConnection
+#region IPositiveConnection
         protected IPositiveConnection _PositiveConnection;
         public bool PositiveMode
         {
@@ -1764,7 +1767,7 @@ namespace Capstones.Net
                 _PositiveConnection.Step();
             }
         }
-        #endregion
+#endregion
     }
 
     public static class UriUtilities

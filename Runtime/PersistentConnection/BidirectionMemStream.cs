@@ -1,4 +1,6 @@
-﻿using System;
+﻿#define MULTITHREAD_SLOW_AND_SAFE
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -343,6 +345,7 @@ namespace Capstones.Net
         public IPooledBuffer Buffer;
         public int Count;
     }
+
     public class BidirectionMemStream : Stream, IBuffered
     {
         public override bool CanRead { get { return true; } }
@@ -353,6 +356,10 @@ namespace Capstones.Net
         public override void Flush() { }
         public override long Seek(long offset, SeekOrigin origin)
         {
+#if MULTITHREAD_SLOW_AND_SAFE
+            lock (_Buffer)
+            { 
+#endif
             if (offset > (long)int.MaxValue)
             {
                 offset = int.MaxValue;
@@ -388,10 +395,17 @@ namespace Capstones.Net
                 }
             }
             return 0;
-        }
+ #if MULTITHREAD_SLOW_AND_SAFE
+            }
+#endif
+       }
         public override void SetLength(long value) { throw new NotSupportedException(); }
 
+#if MULTITHREAD_SLOW_AND_SAFE
+        private ConcurrentQueue<BufferInfo> _Buffer = new ConcurrentQueue<BufferInfo>();
+#else
         private ConcurrentQueueGrowOnly<BufferInfo> _Buffer = new ConcurrentQueueGrowOnly<BufferInfo>();
+#endif
         private volatile int _ReadingHeadConsumed = 0;
         private AutoResetEvent _DataReady = new AutoResetEvent(false);
         private volatile bool _Closed = false;
@@ -400,7 +414,20 @@ namespace Capstones.Net
         public int Timeout { get { return _Timeout; } set { _Timeout = value; } }
 
         private int _BufferedSize = 0;
-        public int BufferedSize { get { return _BufferedSize; } }
+        public int BufferedSize
+        {
+            get
+            {
+#if MULTITHREAD_SLOW_AND_SAFE
+            lock (_Buffer)
+            { 
+#endif
+                return _BufferedSize;
+#if MULTITHREAD_SLOW_AND_SAFE
+            }
+#endif
+            }
+        }
 
         /// <remarks>
         /// this is thread safe. But it is strongly recommended to read in only one thread.
@@ -460,6 +487,10 @@ namespace Capstones.Net
                     _DataReady.Set();
                     return 0;
                 }
+#if MULTITHREAD_SLOW_AND_SAFE
+            lock (_Buffer)
+            { 
+#endif
                 BufferInfo binfo;
                 int rcnt = 0;
                 while (rcnt < count && _Buffer.TryPeek(out binfo))
@@ -539,6 +570,9 @@ namespace Capstones.Net
                 {
                     return rcnt;
                 }
+#if MULTITHREAD_SLOW_AND_SAFE
+            }
+#endif
             }
         }
         /// <remarks>
@@ -547,6 +581,10 @@ namespace Capstones.Net
         /// </remarks>
         public override void Write(byte[] buffer, int offset, int count)
         {
+#if MULTITHREAD_SLOW_AND_SAFE
+            lock (_Buffer)
+            { 
+#endif
             if (count > 0)
             {
                 int cntwrote = 0;
@@ -577,6 +615,9 @@ namespace Capstones.Net
 
             }
             _DataReady.Set();
+#if MULTITHREAD_SLOW_AND_SAFE
+            }
+#endif
         }
 
         protected override void Dispose(bool disposing)

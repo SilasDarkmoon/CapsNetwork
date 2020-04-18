@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define RETRY_AFTER_SOCKET_FAILURE
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -567,14 +568,50 @@ namespace Capstones.Net
             }
             catch (Exception e)
             {
+#if RETRY_AFTER_SOCKET_FAILURE
+                PlatDependant.LogError(e);
+                RetryAfterReceiveFailure();
+#else
                 if (IsAlive)
                 {
                     _ConnectWorkFinished = true;
                     PlatDependant.LogError(e);
                 }
+#endif
             }
             _HaveDataToSend.Set();
         }
+
+#if RETRY_AFTER_SOCKET_FAILURE
+        protected async void RetryAfterReceiveFailure()
+        {
+            int start = Environment.TickCount;
+            do
+            {
+                await System.Threading.Tasks.Task.Delay(100);
+                try
+                {
+                    if (!_ConnectWorkFinished)
+                    {
+                        BeginReceive();
+                    }
+                    return;
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
+            }
+            while (Environment.TickCount - start <= 10000);
+
+            if (IsAlive)
+            {
+                _ConnectWorkFinished = true;
+                PlatDependant.LogError("Cannot retry receive after a long time.");
+            }
+        }
+#endif
+
         protected AsyncCallback EndReceiveFromFunc;
         protected void EndReceive(IAsyncResult ar)
         {
@@ -610,11 +647,16 @@ namespace Capstones.Net
             }
             catch (Exception e)
             {
+#if RETRY_AFTER_SOCKET_FAILURE
+                PlatDependant.LogError(e);
+                RetryAfterReceiveFailure();
+#else
                 if (IsAlive)
                 {
                     _ConnectWorkFinished = true;
                     PlatDependant.LogError(e);
                 }
+#endif
             }
             _HaveDataToSend.Set();
         }
