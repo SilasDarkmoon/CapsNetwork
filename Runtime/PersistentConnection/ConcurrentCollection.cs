@@ -1,3 +1,5 @@
+#define MULTITHREAD_SLOW_AND_SAFE
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -307,6 +309,10 @@ namespace Capstones.UnityEngineEx
         }
     }
 
+#if MULTITHREAD_SLOW_AND_SAFE
+    public class ConcurrentQueueGrowOnly<T> : ConcurrentQueue<T>
+    { }
+#else
     /// <summary>
     /// 在现有ConcurrentQueue的基础上，加入了Segment回收重用的机制。
     /// 可以有效地减少GC分配。
@@ -1270,6 +1276,7 @@ namespace Capstones.UnityEngineEx
             }
         }
     }
+#endif
 
 #if UNITY_INCLUDE_TESTS
     public static class ConcurrentCollectionTest
