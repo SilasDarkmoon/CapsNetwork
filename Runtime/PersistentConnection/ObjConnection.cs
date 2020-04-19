@@ -163,6 +163,7 @@ namespace Capstones.Net
         public event Action<IServerConnectionLifetime> OnConnected;
         protected void FireOnConnected(IServerConnectionLifetime underlay)
         {
+            _LastReceiveTick = Environment.TickCount;
             if (_ServerConnection != null)
             {
                 _ServerConnection.OnConnected -= FireOnConnected;
