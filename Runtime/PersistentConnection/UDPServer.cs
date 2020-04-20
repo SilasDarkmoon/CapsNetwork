@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -747,12 +748,22 @@ namespace Capstones.Net
                 {
                     try
                     {
+#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+                        knowSocket.SendTo(data.Buffer, 0, cnt, SocketFlags.None, ep);
+                        if (onComplete != null)
+                        {
+                            onComplete(true);
+                        }
+                        data.Release();
+                        return;
+#else
                         var info = GetSendAsyncInfoFromPool();
                         info.Data = data;
                         info.Socket = knowSocket;
                         info.OnComplete = onComplete;
                         knowSocket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
                         return;
+#endif
                     }
                     catch (Exception e)
                     {
@@ -768,12 +779,22 @@ namespace Capstones.Net
                     {
                         try
                         {
+#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+                            _Socket6.SendTo(data.Buffer, 0, cnt, SocketFlags.None, ep);
+                            if (onComplete != null)
+                            {
+                                onComplete(true);
+                            }
+                            data.Release();
+                            return;
+#else
                             var info = GetSendAsyncInfoFromPool();
                             info.Data = data;
                             info.Socket = _Socket6;
                             info.OnComplete = onComplete;
                             _Socket6.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
                             return;
+#endif
                         }
                         catch (Exception e)
                         {
@@ -787,12 +808,22 @@ namespace Capstones.Net
                     {
                         try
                         {
+#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+                            _Socket.SendTo(data.Buffer, 0, cnt, SocketFlags.None, ep);
+                            if (onComplete != null)
+                            {
+                                onComplete(true);
+                            }
+                            data.Release();
+                            return;
+#else
                             var info = GetSendAsyncInfoFromPool();
                             info.Data = data;
                             info.Socket = _Socket;
                             info.OnComplete = onComplete;
                             _Socket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
                             return;
+#endif
                         }
                         catch (Exception e)
                         {
