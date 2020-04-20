@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -293,12 +294,22 @@ namespace Capstones.Net
             {
                 try
                 {
+#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+                    _Socket.Send(data.Buffer, 0, cnt, SocketFlags.None);
+                    if (onComplete != null)
+                    {
+                        onComplete(true);
+                    }
+                    data.Release();
+                    return;
+#else
                     var info = UDPClient.GetSendAsyncInfoFromPool();
                     info.Data = data;
                     info.Socket = _Socket;
                     info.OnComplete = onComplete;
                     _Socket.BeginSend(data.Buffer, 0, cnt, SocketFlags.None, info.OnAsyncCallback, null);
                     return;
+#endif
                 }
                 catch (Exception e)
                 {

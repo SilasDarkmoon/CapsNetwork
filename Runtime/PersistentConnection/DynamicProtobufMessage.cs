@@ -3099,6 +3099,9 @@ namespace Capstones.Net
         /// </summary>
         public static void SkipBytes(System.IO.Stream stream, int count)
         {
+#if DEBUG_PVP
+            PlatDependant.LogError("Skip " + count + " bytes in stream, there maybe some mistake.");
+#endif
             if (stream.CanSeek)
             {
                 stream.Seek(count, System.IO.SeekOrigin.Current);

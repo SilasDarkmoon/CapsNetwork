@@ -264,7 +264,7 @@ namespace Capstones.Net
         protected internal AutoResetEvent _WaitForObjRead = new AutoResetEvent(false);
         protected void ReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq)
         {
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+#if DEBUG_PVP
             PlatDependant.LogError(Environment.TickCount.ToString() + $" Receive(size{size} type{type} seq{seq} sseq{sseq})");
 #endif
             _LastReceiveTick = Environment.TickCount;
@@ -479,7 +479,7 @@ namespace Capstones.Net
                 // type
                 var rw = _SerConfig.ReaderWriter;
                 var type = rw.GetDataType(obj);
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
+#if DEBUG_PVP
                 PlatDependant.LogError(Environment.TickCount.ToString() + $" Write(type{type} seq{seq} sseq{sseq})");
 #endif
                 // write obj
