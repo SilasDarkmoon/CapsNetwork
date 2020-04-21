@@ -1272,7 +1272,7 @@ namespace Capstones.Net
         {
             if (!_Disposed)
             {
-                _Disposed = true;
+                Volatile.Write(ref _Disposed, true);
                 OnDispose();
                 OnClose();
             }
@@ -1301,6 +1301,7 @@ namespace Capstones.Net
             _Channel.OnReceiveObj += OnChannelReceive;
             _Channel.OnConnected += FireOnConnected;
             _Channel.OnUpdate += FireOnUpdate;
+            _Channel.OnClose += Dispose;
         }
         public ReqClient(ObjClient channel)
             : this(channel, null)
@@ -1361,6 +1362,10 @@ namespace Capstones.Net
             {
                 return null;
             }
+            if (Volatile.Read(ref _Disposed))
+            {
+                return null;
+            }
             var req = new Request(this, reqobj);
             req.Timeout = timeout;
             _PendingReq.Enqueue(req);
@@ -1377,7 +1382,7 @@ namespace Capstones.Net
         protected int _Timeout = -1;
         public int Timeout { get { return _Timeout; } set { _Timeout = value; } }
 
-        public void OnChannelReceive(object obj, uint type, uint seq, uint sseq)
+        protected void ManagePendingRequests()
         {
             //1. add _pending
             Request pending;
@@ -1428,6 +1433,47 @@ namespace Capstones.Net
                     }
                 }
             }
+        }
+        protected void CheckRequestsTimeout()
+        {
+            var tick = Environment.TickCount;
+            for (long i = _MinSeqInChecking; i <= _MaxSeqInChecking; ++i)
+            {
+                var index = i % _MaxCheckingReqCount;
+                var checking = _CheckingReq[index];
+                if (checking != null)
+                {
+                    var timeout = checking.Timeout;
+                    if (timeout < 0)
+                    {
+                        timeout = _Timeout;
+                    }
+                    if (timeout >= 0)
+                    {
+                        if (tick - checking.StartTick >= timeout)
+                        {
+                            checking.SetError("timedout");
+                            _CheckingReq[index] = null;
+                            if (i == _MinSeqInChecking)
+                            {
+                                ++_MinSeqInChecking;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (i == _MinSeqInChecking)
+                    {
+                        ++_MinSeqInChecking;
+                    }
+                }
+            }
+        }
+        public void OnChannelReceive(object obj, uint type, uint seq, uint sseq)
+        {
+            // 1. add _pending; 2. delete disposing
+            ManagePendingRequests();
 
             //3. check resp.
             uint pingback, reqseq;
@@ -1480,39 +1526,7 @@ namespace Capstones.Net
             }
 
             //4. check timeout
-            var tick = Environment.TickCount;
-            for (long i = _MinSeqInChecking; i <= _MaxSeqInChecking; ++i)
-            {
-                var index = i % _MaxCheckingReqCount;
-                var checking = _CheckingReq[index];
-                if (checking != null)
-                {
-                    var timeout = checking.Timeout;
-                    if (timeout < 0)
-                    {
-                        timeout = _Timeout;
-                    }
-                    if (timeout >= 0)
-                    {
-                        if (tick - checking.StartTick >= timeout)
-                        {
-                            checking.SetError("timedout");
-                            _CheckingReq[index] = null;
-                            if (i == _MinSeqInChecking)
-                            {
-                                ++_MinSeqInChecking;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (i == _MinSeqInChecking)
-                    {
-                        ++_MinSeqInChecking;
-                    }
-                }
-            }
+            CheckRequestsTimeout();
 
             ////5 shrink - No need
             //if (maxSeq != 0)
@@ -1606,9 +1620,28 @@ namespace Capstones.Net
         {
             try
             {
+                int checkTimeoutTick = Environment.TickCount;
                 while (!_Disposed && _Channel.IsAlive)
                 {
-                    while (!_Disposed && _Channel.IsAlive && (_Channel.TryRead() != null)) ;
+                    bool haveDataRead = false;
+                    while (!_Disposed && _Channel.IsAlive && (_Channel.TryRead() != null))
+                    {
+                        haveDataRead = true;
+                    }
+                    if (haveDataRead)
+                    {
+                        checkTimeoutTick = Environment.TickCount;
+                    }
+                    else
+                    {
+                        var tick = Environment.TickCount;
+                        if (tick - checkTimeoutTick > 1000)
+                        {
+                            ManagePendingRequests();
+                            CheckRequestsTimeout();
+                            checkTimeoutTick = tick;
+                        }
+                    }
                     yield return null;
                 }
             }

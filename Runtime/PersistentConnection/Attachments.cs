@@ -409,7 +409,7 @@ namespace Capstones.Net
             try
             {
                 _LastTick = Environment.TickCount;
-                while (_Client.IsAlive && !_Disposed)
+                while (_Client != null && _Client.IsAlive && !_Disposed)
                 {
                     if (_Client.IsStarted)
                     {
@@ -449,7 +449,7 @@ namespace Capstones.Net
             }
             finally
             {
-                if (_Client.IsAlive && !_Disposed)
+                if (_Client != null && _Client.IsAlive && !_Disposed)
                 {
                     OnHeartbeatDead();
                 }
