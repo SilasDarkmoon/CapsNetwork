@@ -1,5 +1,8 @@
 ﻿#define RETRY_AFTER_SOCKET_FAILURE
-#define SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+#if UNITY_IOS && !UNITY_EDITOR
+//#define SOCKET_SEND_USE_BLOCKING_INSTEAD_OF_ASYNC
+#define SOCKET_SEND_EXPLICIT_ORDER
+#endif
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -379,13 +382,34 @@ namespace Capstones.Net
             public Socket Socket;
             public Action<bool> OnComplete;
             public AsyncCallback OnAsyncCallback;
+            public bool IsBinded;
+#if SOCKET_SEND_EXPLICIT_ORDER
+            public AutoResetEvent AsyncSendWaitHandle;
+#else
+            public Semaphore AsyncSendWaitHandle;
+#endif
 
             public void EndSend(IAsyncResult ar)
             {
+                if (AsyncSendWaitHandle != null)
+                {
+#if SOCKET_SEND_EXPLICIT_ORDER
+                    AsyncSendWaitHandle.Set();
+#else
+                    AsyncSendWaitHandle.Release();
+#endif
+                }
                 bool success = false;
                 try
                 {
-                    Socket.EndSendTo(ar);
+                    if (IsBinded)
+                    {
+                        Socket.EndSend(ar);
+                    }
+                    else
+                    {
+                        Socket.EndSendTo(ar);
+                    }
                     success = true;
                 }
                 catch (Exception e)
@@ -422,9 +446,16 @@ namespace Capstones.Net
                 info.Data = null;
                 info.Socket = null;
                 info.OnComplete = null;
+                info.AsyncSendWaitHandle = null;
+                info.IsBinded = false;
                 _SendAsyncInfo.Enqueue(info);
             }
         }
+#if SOCKET_SEND_EXPLICIT_ORDER
+        protected AutoResetEvent _AsyncSendWaitHandle = new AutoResetEvent(true);
+#else
+        protected Semaphore _AsyncSendWaitHandle = new Semaphore(4, 4);
+#endif
         /// <summary>
         /// This should be called in connection thread. Real send data to server. The sending will NOT be done immediately, and we should NOT reuse data before onComplete.
         /// </summary>
@@ -435,33 +466,15 @@ namespace Capstones.Net
         {
             if (data != null)
             {
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-                {
-                    var sb = new System.Text.StringBuilder();
-                    sb.Append(Environment.TickCount);
-                    sb.Append(" UDPClient Sending ");
-                    sb.Append(cnt);
-                    //for (int i = 0; i < cnt; ++i)
-                    //{
-                    //    if (i % 32 == 0)
-                    //    {
-                    //        sb.AppendLine();
-                    //    }
-                    //    sb.Append(data.Buffer[i].ToString("X2"));
-                    //    sb.Append(" ");
-                    //}
-                    PlatDependant.LogInfo(sb);
-                }
-#endif
                 data.AddRef();
                 _LastSendTick = System.Environment.TickCount;
                 if (_Socket != null)
                 {
+#if SOCKET_SEND_USE_BLOCKING_INSTEAD_OF_ASYNC
                     try
                     {
                         if (_BroadcastEP != null)
                         {
-#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
                             _Socket.SendTo(data.Buffer, 0, cnt, SocketFlags.None, _BroadcastEP);
                             if (onComplete != null)
                             {
@@ -469,18 +482,9 @@ namespace Capstones.Net
                             }
                             data.Release();
                             return;
-#else
-                            var info = GetSendAsyncInfoFromPool();
-                            info.Data = data;
-                            info.Socket = _Socket;
-                            info.OnComplete = onComplete;
-                            _Socket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, _BroadcastEP, info.OnAsyncCallback, null);
-                            return;
-#endif
                         }
                         else
                         {
-#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
                             _Socket.Send(data.Buffer, 0, cnt, SocketFlags.None);
                             if (onComplete != null)
                             {
@@ -488,20 +492,46 @@ namespace Capstones.Net
                             }
                             data.Release();
                             return;
-#else
-                            var info = GetSendAsyncInfoFromPool();
-                            info.Data = data;
-                            info.Socket = _Socket;
-                            info.OnComplete = onComplete;
-                            _Socket.BeginSend(data.Buffer, 0, cnt, SocketFlags.None, info.OnAsyncCallback, null);
-                            return;
-#endif
                         }
                     }
                     catch (Exception e)
                     {
                         PlatDependant.LogError(e);
                     }
+#else
+                    SendAsyncInfo info = null;
+                    try
+                    {
+                        _AsyncSendWaitHandle.WaitOne();
+                        info = GetSendAsyncInfoFromPool();
+                        info.AsyncSendWaitHandle = _AsyncSendWaitHandle;
+                        info.Data = data;
+                        info.Socket = _Socket;
+                        info.OnComplete = onComplete;
+                        if (_BroadcastEP != null)
+                        {
+                            info.IsBinded = false;
+                            _Socket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, _BroadcastEP, info.OnAsyncCallback, null);
+                            return;
+                        }
+                        else
+                        {
+                            info.IsBinded = true;
+                            _Socket.BeginSend(data.Buffer, 0, cnt, SocketFlags.None, info.OnAsyncCallback, null);
+                            return;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+#if SOCKET_SEND_EXPLICIT_ORDER
+                        _AsyncSendWaitHandle.Set();
+#else
+                        _AsyncSendWaitHandle.Release();
+#endif
+                        ReturnSendAsyncInfoToPool(info);
+                    }
+#endif
                 }
                 if (onComplete != null)
                 {
@@ -639,24 +669,6 @@ namespace Capstones.Net
             try
             {
                 var receivecnt = _Socket.EndReceive(ar);
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-                if (receivecnt > 0)
-                {
-                    var sb = new System.Text.StringBuilder();
-                    sb.Append("UDPClient Receiving ");
-                    sb.Append(receivecnt);
-                    //for (int i = 0; i < receivecnt; ++i)
-                    //{
-                    //    if (i % 32 == 0)
-                    //    {
-                    //        sb.AppendLine();
-                    //    }
-                    //    sb.Append(_ReceiveBuffer[i].ToString("X2"));
-                    //    sb.Append(" ");
-                    //}
-                    PlatDependant.LogInfo(sb);
-                }
-#endif
                 if (receivecnt > 0)
                 {
                     _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt) });

@@ -1,4 +1,6 @@
-﻿#define SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+﻿#if UNITY_IOS && !UNITY_EDITOR
+#define SOCKET_SEND_EXPLICIT_ORDER
+#endif
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -281,6 +283,11 @@ namespace Capstones.Net
             Send(data, data.Length);
         }
 
+#if SOCKET_SEND_EXPLICIT_ORDER
+        protected AutoResetEvent _AsyncSendWaitHandle = new AutoResetEvent(true);
+#else
+        protected Semaphore _AsyncSendWaitHandle = new Semaphore(4, 4);
+#endif
         /// <summary>
         /// This should be called in connection thread. Real send data to server. The sending will NOT be done immediately, and we should NOT reuse data before onComplete.
         /// </summary>
@@ -292,9 +299,9 @@ namespace Capstones.Net
             data.AddRef();
             if (_Socket != null)
             {
+#if SOCKET_SEND_USE_BLOCKING_INSTEAD_OF_ASYNC
                 try
                 {
-#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
                     _Socket.Send(data.Buffer, 0, cnt, SocketFlags.None);
                     if (onComplete != null)
                     {
@@ -302,19 +309,36 @@ namespace Capstones.Net
                     }
                     data.Release();
                     return;
-#else
-                    var info = UDPClient.GetSendAsyncInfoFromPool();
-                    info.Data = data;
-                    info.Socket = _Socket;
-                    info.OnComplete = onComplete;
-                    _Socket.BeginSend(data.Buffer, 0, cnt, SocketFlags.None, info.OnAsyncCallback, null);
-                    return;
-#endif
                 }
                 catch (Exception e)
                 {
                     PlatDependant.LogError(e);
                 }
+#else
+                UDPClient.SendAsyncInfo info = null;
+                try
+                {
+                    _AsyncSendWaitHandle.WaitOne();
+                    info = UDPClient.GetSendAsyncInfoFromPool();
+                    info.AsyncSendWaitHandle = _AsyncSendWaitHandle;
+                    info.Data = data;
+                    info.Socket = _Socket;
+                    info.OnComplete = onComplete;
+                    info.IsBinded = true;
+                    _Socket.BeginSend(data.Buffer, 0, cnt, SocketFlags.None, info.OnAsyncCallback, null);
+                    return;
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+#if SOCKET_SEND_EXPLICIT_ORDER
+                    _AsyncSendWaitHandle.Set();
+#else
+                    _AsyncSendWaitHandle.Release();
+#endif
+                    UDPClient.ReturnSendAsyncInfoToPool(info);
+                }
+#endif
             }
             if (onComplete != null)
             {

@@ -1,4 +1,6 @@
-﻿#define SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
+﻿#if UNITY_IOS && !UNITY_EDITOR
+#define SOCKET_SEND_USE_BLOCKING_INSTEAD_OF_ASYNC
+#endif
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -746,9 +748,9 @@ namespace Capstones.Net
                 }
                 if (knowSocket != null)
                 {
+#if SOCKET_SEND_USE_BLOCKING_INSTEAD_OF_ASYNC
                     try
                     {
-#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
                         knowSocket.SendTo(data.Buffer, 0, cnt, SocketFlags.None, ep);
                         if (onComplete != null)
                         {
@@ -756,80 +758,91 @@ namespace Capstones.Net
                         }
                         data.Release();
                         return;
-#else
-                        var info = GetSendAsyncInfoFromPool();
-                        info.Data = data;
-                        info.Socket = knowSocket;
-                        info.OnComplete = onComplete;
-                        knowSocket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
-                        return;
-#endif
                     }
                     catch (Exception e)
                     {
                         PlatDependant.LogError(e);
                     }
+#else
+                    SendAsyncInfo info = null;
+                    try
+                    {
+                        _AsyncSendWaitHandle.WaitOne();
+                        info = GetSendAsyncInfoFromPool();
+                        info.AsyncSendWaitHandle = _AsyncSendWaitHandle;
+                        info.Data = data;
+                        info.Socket = knowSocket;
+                        info.OnComplete = onComplete;
+                        info.IsBinded = false;
+                        knowSocket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
+                        return;
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+#if SOCKET_SEND_EXPLICIT_ORDER
+                        _AsyncSendWaitHandle.Set();
+#else
+                        _AsyncSendWaitHandle.Release();
+#endif
+                        ReturnSendAsyncInfoToPool(info);
+                    }
+#endif
                 }
             }
             else
             {
+                Socket socket;
                 if (ep.AddressFamily == AddressFamily.InterNetworkV6)
                 {
-                    if (_Socket6 != null)
-                    {
-                        try
-                        {
-#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
-                            _Socket6.SendTo(data.Buffer, 0, cnt, SocketFlags.None, ep);
-                            if (onComplete != null)
-                            {
-                                onComplete(true);
-                            }
-                            data.Release();
-                            return;
-#else
-                            var info = GetSendAsyncInfoFromPool();
-                            info.Data = data;
-                            info.Socket = _Socket6;
-                            info.OnComplete = onComplete;
-                            _Socket6.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
-                            return;
-#endif
-                        }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(e);
-                        }
-                    }
+                    socket = _Socket6;
                 }
                 else
                 {
-                    if (_Socket != null)
+                    socket = _Socket;
+                }
+                if (socket != null)
+                {
+#if SOCKET_SEND_USE_BLOCKING_INSTEAD_OF_ASYNC
+                    try
                     {
-                        try
+                        socket.SendTo(data.Buffer, 0, cnt, SocketFlags.None, ep);
+                        if (onComplete != null)
                         {
-#if SOCKET_USE_BLOCKING_INSTEAD_OF_ASYNC
-                            _Socket.SendTo(data.Buffer, 0, cnt, SocketFlags.None, ep);
-                            if (onComplete != null)
-                            {
-                                onComplete(true);
-                            }
-                            data.Release();
-                            return;
-#else
-                            var info = GetSendAsyncInfoFromPool();
-                            info.Data = data;
-                            info.Socket = _Socket;
-                            info.OnComplete = onComplete;
-                            _Socket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
-                            return;
-#endif
+                            onComplete(true);
                         }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(e);
-                        }
+                        data.Release();
+                        return;
                     }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+                    }
+#else
+                    SendAsyncInfo info = null;
+                    try
+                    {
+                        _AsyncSendWaitHandle.WaitOne();
+                        info = GetSendAsyncInfoFromPool();
+                        info.AsyncSendWaitHandle = _AsyncSendWaitHandle;
+                        info.Data = data;
+                        info.Socket = socket;
+                        info.OnComplete = onComplete;
+                        info.IsBinded = false;
+                        socket.BeginSendTo(data.Buffer, 0, cnt, SocketFlags.None, ep, info.OnAsyncCallback, null);
+                        return;
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+#if SOCKET_SEND_EXPLICIT_ORDER
+                        _AsyncSendWaitHandle.Set();
+#else
+                        _AsyncSendWaitHandle.Release();
+#endif
+                        ReturnSendAsyncInfoToPool(info);
+                    }
+#endif
                 }
             }
             if (onComplete != null)
