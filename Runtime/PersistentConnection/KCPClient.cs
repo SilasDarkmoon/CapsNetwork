@@ -51,7 +51,11 @@ namespace Capstones.Net
 
             _Connection.UpdateInterval = 10;
             _Connection.PreDispose = _con => DisposeSelf();
-            _Connection.OnReceive = (data, cnt, sender) => _KCP.Input(data, cnt);
+            _Connection.OnReceive = (data, cnt, sender) =>
+            {
+                _KCP.Input(data, cnt);
+                ReceiveFromKCP();
+            };
             _Connection.OnSend = (data, cnt) =>
             {
                 if (cnt > CONST.MTU)
@@ -82,14 +86,7 @@ namespace Capstones.Net
             _Connection.OnUpdate = _con =>
             {
                 _KCP.Update((uint)Environment.TickCount);
-                int recvcnt = _KCP.Receive(_RecvBuffer, CONST.MTU);
-                if (_OnReceive != null)
-                {
-                    if (recvcnt > 0)
-                    {
-                        _OnReceive(_RecvBuffer, recvcnt, _Connection.RemoteEndPoint);
-                    }
-                }
+                ReceiveFromKCP();
                 if (_OnUpdate != null)
                 {
                     return _OnUpdate(this);
@@ -99,6 +96,39 @@ namespace Capstones.Net
                     return int.MinValue;
                 }
             };
+        }
+        protected virtual void ReceiveFromKCP()
+        {
+            int recvcnt;
+            while ((recvcnt = _KCP.Receive(_RecvBuffer, CONST.MTU)) > 0)
+            {
+                if (_OnReceive != null)
+                {
+                    _OnReceive(_RecvBuffer, recvcnt, _Connection.RemoteEndPoint);
+                }
+            }
+            if (recvcnt == -3)
+            {
+                PlatDependant.LogError("Receive from kcp error - buffer is too small.");
+                byte[] buffer;
+                for (int i = 2; ; ++i)
+                {
+                    buffer = new byte[CONST.MTU * 2];
+                    recvcnt = _KCP.Receive(buffer, buffer.Length);
+                    if (recvcnt > 0)
+                    {
+                        if (_OnReceive != null)
+                        {
+                            _OnReceive(buffer, recvcnt, _Connection.RemoteEndPoint);
+                        }
+                        break;
+                    }
+                    else if (recvcnt != 0 && recvcnt != -3)
+                    {
+                        PlatDependant.LogError("Receive from kcp error - code " + recvcnt);
+                    }
+                }
+            }
         }
 
         private void DisposeSelf()

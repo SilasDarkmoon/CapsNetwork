@@ -44,7 +44,15 @@ namespace Capstones.Net
                         {
                             if (EP != null && EP.Equals(ep))
                             { // this means the ack-packet or something else.
-                                return _KCP.Input(data, cnt) == 0;
+                                if (_KCP.Input(data, cnt) == 0)
+                                {
+                                    ReceiveFromKCP();
+                                    return true;
+                                }
+                                else
+                                {
+                                    return false;
+                                }
                             }
                             else
                             { // client should provide a guid for new connection
@@ -82,6 +90,7 @@ namespace Capstones.Net
                                     pinfo.Release();
                                     _Connected = true;
                                     FireOnConnected();
+                                    ReceiveFromKCP();
                                     return true;
                                 }
                                 else
@@ -99,6 +108,7 @@ namespace Capstones.Net
                                         { // check the ep changed?
                                             EP = ep;
                                         }
+                                        ReceiveFromKCP();
                                         return true;
                                     }
                                     else
@@ -132,7 +142,15 @@ namespace Capstones.Net
                             }
 
                             // Feed the data.
-                            return _KCP.Input(data, cnt) == 0;
+                            if (_KCP.Input(data, cnt) == 0)
+                            {
+                                ReceiveFromKCP();
+                                return true;
+                            }
+                            else
+                            {
+                                return false;
+                            }
                         }
                         else
                         { // this packet is for other connection.
@@ -150,7 +168,8 @@ namespace Capstones.Net
                 if (_Conv == 0)
                 {
                     _KCP.Update((uint)Environment.TickCount);
-                    _KCP.Receive(_RecvBuffer, CONST.MTU);
+                    //_KCP.Receive(_RecvBuffer, CONST.MTU); // what is it used for?
+                    ReceiveFromKCP();
 
                     if (_OnUpdate != null)
                     {
@@ -212,7 +231,7 @@ namespace Capstones.Net
             }
             return con;
         }
-        protected void OnChildConnected(IServerConnectionLifetime child)
+        protected new void OnChildConnected(IServerConnectionLifetime child)
         {
             child.OnConnected -= OnChildConnected;
             FireOnConnected(child);

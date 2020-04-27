@@ -214,32 +214,7 @@ namespace Capstones.Net
                 // 3, receive
                 if (_Started)
                 {
-                    int recvcnt;
-                    while ((recvcnt = _KCP.Receive(_RecvBuffer, CONST.MTU)) > 0)
-                    {
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-                        {
-                            var sb = new System.Text.StringBuilder();
-                            sb.Append(Environment.TickCount);
-                            sb.Append(" KCP Server Recv ");
-                            sb.Append(recvcnt);
-                            //for (int i = 0; i < recvcnt; ++i)
-                            //{
-                            //    if (i % 32 == 0)
-                            //    {
-                            //        sb.AppendLine();
-                            //    }
-                            //    sb.Append(_RecvBuffer[i].ToString("X2"));
-                            //    sb.Append(" ");
-                            //}
-                            PlatDependant.LogInfo(sb);
-                        }
-#endif
-                        if (_OnReceive != null)
-                        {
-                            _OnReceive(_RecvBuffer, recvcnt, _Info.EP);
-                        }
-                    }
+                    ReceiveFromKCP();
                 }
                 if (_OnUpdate != null)
                 {
@@ -248,6 +223,39 @@ namespace Capstones.Net
                 else
                 {
                     return int.MinValue;
+                }
+            }
+            protected void ReceiveFromKCP()
+            {
+                int recvcnt;
+                while ((recvcnt = _KCP.Receive(_RecvBuffer, CONST.MTU)) > 0)
+                {
+                    if (_OnReceive != null)
+                    {
+                        _OnReceive(_RecvBuffer, recvcnt, EP);
+                    }
+                }
+                if (recvcnt == -3)
+                {
+                    PlatDependant.LogError("Receive from kcp error - buffer is too small.");
+                    byte[] buffer;
+                    for (int i = 2; ; ++i)
+                    {
+                        buffer = new byte[CONST.MTU * 2];
+                        recvcnt = _KCP.Receive(buffer, buffer.Length);
+                        if (recvcnt > 0)
+                        {
+                            if (_OnReceive != null)
+                            {
+                                _OnReceive(buffer, recvcnt, EP);
+                            }
+                            break;
+                        }
+                        else if (recvcnt != 0 && recvcnt != -3)
+                        {
+                            PlatDependant.LogError("Receive from kcp error - code " + recvcnt);
+                        }
+                    }
                 }
             }
             protected internal virtual bool Feed(byte[] data, int cnt, IPEndPoint ep)
@@ -287,6 +295,7 @@ namespace Capstones.Net
                             _Connected = true;
                             FireOnConnected();
                         }
+                        ReceiveFromKCP();
                         return true;
                     }
                 }

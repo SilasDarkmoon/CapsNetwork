@@ -175,25 +175,6 @@ namespace Capstones.Net
             try
             {
                 var receivecnt = _Socket.EndReceiveFrom(ar, ref _RemoteEP);
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-                if (receivecnt > 0)
-                {
-                    var sb = new System.Text.StringBuilder();
-                    sb.Append(Environment.TickCount);
-                    sb.Append(" UDPServer Receiving (IPv4) ");
-                    sb.Append(receivecnt);
-                    //for (int i = 0; i < receivecnt; ++i)
-                    //{
-                    //    if (i % 32 == 0)
-                    //    {
-                    //        sb.AppendLine();
-                    //    }
-                    //    sb.Append(_ReceiveBuffer[i].ToString("X2"));
-                    //    sb.Append(" ");
-                    //}
-                    PlatDependant.LogInfo(sb);
-                }
-#endif
                 if (receivecnt > 0)
                 {
                     var ep = GetIPEndPointFromPool();
@@ -519,7 +500,7 @@ namespace Capstones.Net
                                 for (int i = 0; i < aremotes.Length - 100; ++i)
                                 {
                                     var remote = aremotes[i];
-                                    if (remote.LastTick + 15000 <= curTick)
+                                    if (curTick - remote.LastTick > 15000)
                                     {
                                         remotes.Remotes.Remove(remote.Address);
                                     }
