@@ -1,5 +1,3 @@
-#define MULTITHREAD_SLOW_AND_SAFE
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
