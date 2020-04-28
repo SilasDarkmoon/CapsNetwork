@@ -86,9 +86,12 @@ namespace Capstones.Net
                     _KCP.NoDelay(1, 10, 2, 1);
                     _Connection.HoldSending = false;
 
-                    for (int i = 4; i < cnt; ++i)
+                    if (cnt > 4)
                     {
-                        buffer[i - 4] = buffer[i];
+                        for (int i = 4; i < cnt; ++i)
+                        {
+                            buffer[i - 4] = buffer[i];
+                        }
                     }
                     cnt -= 4;
                 }

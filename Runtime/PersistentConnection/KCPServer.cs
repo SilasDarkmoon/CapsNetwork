@@ -230,9 +230,12 @@ namespace Capstones.Net
                 int recvcnt;
                 while ((recvcnt = _KCP.Receive(_RecvBuffer, CONST.MTU)) > 0)
                 {
-                    if (_OnReceive != null)
+                    if (_Conv != 0)
                     {
-                        _OnReceive(_RecvBuffer, recvcnt, EP);
+                        if (_OnReceive != null)
+                        {
+                            _OnReceive(_RecvBuffer, recvcnt, EP);
+                        }
                     }
                 }
                 if (recvcnt == -3)
@@ -245,9 +248,12 @@ namespace Capstones.Net
                         recvcnt = _KCP.Receive(buffer, buffer.Length);
                         if (recvcnt > 0)
                         {
-                            if (_OnReceive != null)
+                            if (_Conv != 0)
                             {
-                                _OnReceive(buffer, recvcnt, EP);
+                                if (_OnReceive != null)
+                                {
+                                    _OnReceive(buffer, recvcnt, EP);
+                                }
                             }
                             break;
                         }
