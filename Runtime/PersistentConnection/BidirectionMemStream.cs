@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define DISABLE_PERSIST_CONNECT_BUFFER_POOL
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -130,6 +131,9 @@ namespace Capstones.Net
 
         private static void ReturnRawBufferToPool(byte[] buffer)
         {
+#if DISABLE_PERSIST_CONNECT_BUFFER_POOL
+            return;
+#endif
             if (buffer != null)
             {
                 var len = buffer.Length;
@@ -140,7 +144,7 @@ namespace Capstones.Net
                     {
                         if (!_DebugPool.Add(buffer))
                         {
-                            Debug.LogError("Returned Twice!!!");
+                            PlatDependant.LogError("Returned Twice!!!");
                         }
                     }
 #endif
@@ -164,7 +168,7 @@ namespace Capstones.Net
                             {
                                 if (!_DebugPool.Add(buffer))
                                 {
-                                    Debug.LogError("Returned Twice!!! (Large)");
+                                    PlatDependant.LogError("Returned Twice!!! (Large)");
                                 }
                             }
 #endif
@@ -177,10 +181,16 @@ namespace Capstones.Net
         }
         private static byte[] GetRawBufferFromPool()
         {
+#if DISABLE_PERSIST_CONNECT_BUFFER_POOL
+            return new byte[CONST.MTU];
+#endif
             return GetRawBufferFromPool(0);
         }
         private static byte[] GetRawBufferFromPool(int minsize)
         {
+#if DISABLE_PERSIST_CONNECT_BUFFER_POOL
+            return new byte[minsize];
+#endif
             if (minsize < _BufferDefaultSize)
             {
                 minsize = _BufferDefaultSize;
@@ -238,6 +248,9 @@ namespace Capstones.Net
         private static ConcurrentQueueFixedSize<PooledBuffer> _WrapperPool = new ConcurrentQueueFixedSize<PooledBuffer>();
         private static PooledBuffer GetWrapperFromPool()
         {
+#if DISABLE_PERSIST_CONNECT_BUFFER_POOL
+            return new PooledBuffer();
+#endif
             PooledBuffer wrapper;
             if (!_WrapperPool.TryDequeue(out wrapper))
             {
@@ -249,6 +262,9 @@ namespace Capstones.Net
         }
         private static void ReturnWrapperToPool(PooledBuffer wrapper)
         {
+#if DISABLE_PERSIST_CONNECT_BUFFER_POOL
+            return;
+#endif
             if (wrapper != null)
             {
                 Interlocked.Exchange(ref wrapper.RefCount, 0);
@@ -393,7 +409,7 @@ namespace Capstones.Net
                 }
             }
             return 0;
- #if MULTITHREAD_SLOW_AND_SAFE
+#if MULTITHREAD_SLOW_AND_SAFE
             }
 #endif
        }
