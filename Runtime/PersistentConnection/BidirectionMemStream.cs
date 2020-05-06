@@ -1,4 +1,4 @@
-﻿#define DISABLE_PERSIST_CONNECT_BUFFER_POOL
+﻿//#define DISABLE_PERSIST_CONNECT_BUFFER_POOL
 using System;
 using System.Collections;
 using System.Collections.Generic;
