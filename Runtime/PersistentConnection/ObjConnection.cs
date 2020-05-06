@@ -479,9 +479,6 @@ namespace Capstones.Net
                 // type
                 var rw = _SerConfig.ReaderWriter;
                 var type = rw.GetDataType(obj);
-#if DEBUG_PVP
-                PlatDependant.LogError(Environment.TickCount.ToString() + $" Write(type{type} seq{seq} sseq{sseq})");
-#endif
                 // write obj
                 var stream = rw.Write(obj);
                 if (stream != null)
@@ -498,6 +495,9 @@ namespace Capstones.Net
                     // send
                     _Stream.Write(stream, 0, stream.Count);
                 }
+#if DEBUG_PVP
+                PlatDependant.LogError(Environment.TickCount.ToString() + $" Write(size{stream.Count} type{type} seq{seq} sseq{sseq})");
+#endif
             }
             else
             { // if we directly send the obj to the connection thread, we need to clone it. So it seems to be better to serialize it here.

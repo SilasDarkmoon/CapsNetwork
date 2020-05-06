@@ -177,6 +177,9 @@ namespace Capstones.Net
                 var receivecnt = _Socket.EndReceiveFrom(ar, ref _RemoteEP);
                 if (receivecnt > 0)
                 {
+#if DEBUG_PVP
+                    PlatDependant.LogInfo("UDP Server Receive " + receivecnt + " bytes from " + _RemoteEP);
+#endif
                     var ep = GetIPEndPointFromPool();
                     ep.Address = ((IPEndPoint)_RemoteEP).Address;
                     ep.Port = ((IPEndPoint)_RemoteEP).Port;
@@ -682,23 +685,6 @@ namespace Capstones.Net
 
         public void SendRaw(IPooledBuffer data, int cnt, IPEndPoint ep, Action<bool> onComplete)
         {
-#if DEBUG_PERSIST_CONNECT_LOW_LEVEL
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.Append("UDPServer Sending ");
-                sb.Append(cnt);
-                //for (int i = 0; i < cnt; ++i)
-                //{
-                //    if (i % 32 == 0)
-                //    {
-                //        sb.AppendLine();
-                //    }
-                //    sb.Append(data.Buffer[i].ToString("X2"));
-                //    sb.Append(" ");
-                //}
-                PlatDependant.LogInfo(sb);
-            }
-#endif
             data.AddRef();
             if (_ListenBroadcast)
             {
@@ -784,6 +770,35 @@ namespace Capstones.Net
                 }
                 if (socket != null)
                 {
+#if DEBUG_PVP
+                    PlatDependant.LogCSharpStackTraceEnabled = true;
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append("UDPServer Sending ");
+                    sb.Append(cnt);
+                    sb.Append(" bytes to ");
+                    sb.Append(ep);
+                    //for (int i = 0; i < cnt; ++i)
+                    //{
+                    //    if (i % 16 == 0)
+                    //    {
+                    //        sb.AppendLine();
+                    //    }
+                    //    else
+                    //    {
+                    //        if (i % 4 == 0)
+                    //        {
+                    //            sb.Append(" ");
+                    //        }
+                    //        if (i % 8 == 0)
+                    //        {
+                    //            sb.Append(" ");
+                    //        }
+                    //    }
+                    //    sb.Append(data.Buffer[i].ToString("X2"));
+                    //    sb.Append(" ");
+                    //}
+                    PlatDependant.LogInfo(sb);
+#endif
 #if SOCKET_SEND_USE_BLOCKING_INSTEAD_OF_ASYNC
                     try
                     {

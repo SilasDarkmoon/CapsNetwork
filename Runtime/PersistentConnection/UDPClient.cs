@@ -464,6 +464,34 @@ namespace Capstones.Net
         /// <param name="onComplete">this will be called in some other thread.</param>
         public void SendRaw(IPooledBuffer data, int cnt, Action<bool> onComplete)
         {
+#if DEBUG_PVP
+            PlatDependant.LogCSharpStackTraceEnabled = true;
+            var sb = new System.Text.StringBuilder();
+            sb.Append("UDP Client Send ");
+            sb.Append(cnt);
+            sb.Append(" bytes:");
+            //for (int i = 0; i < cnt; ++i)
+            //{
+            //    if (i % 16 == 0)
+            //    {
+            //        sb.AppendLine();
+            //    }
+            //    else
+            //    {
+            //        if (i % 4 == 0)
+            //        {
+            //            sb.Append(" ");
+            //        }
+            //        if (i % 8 == 0)
+            //        {
+            //            sb.Append(" ");
+            //        }
+            //    }
+            //    sb.Append(data.Buffer[i].ToString("X2"));
+            //    sb.Append(" ");
+            //}
+            UnityEngineEx.PlatDependant.LogInfo(sb);
+#endif
             if (data != null)
             {
                 data.AddRef();
@@ -671,6 +699,9 @@ namespace Capstones.Net
                 var receivecnt = _Socket.EndReceive(ar);
                 if (receivecnt > 0)
                 {
+#if DEBUG_PVP
+                    PlatDependant.LogInfo("UDP Receive " + receivecnt + " bytes");
+#endif
                     _PendingRecvMessages.Enqueue(new RecvFromInfo() { Buffers = BufferPool.GetPooledBufferList(_ReceiveBuffer, 0, receivecnt) });
                 }
                 if (!_ConnectWorkFinished)
@@ -971,6 +1002,10 @@ namespace Capstones.Net
         }
         public void Dispose(bool inFinalizer)
         {
+#if DEBUG_PVP
+            PlatDependant.LogCSharpStackTraceEnabled = true;
+            PlatDependant.LogInfo("UDP Client Disposed!");
+#endif
             if (_ConnectWorkStarted)
             {
                 _ConnectWorkFinished = true;

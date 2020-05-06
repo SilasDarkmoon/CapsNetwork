@@ -115,6 +115,32 @@ namespace Capstones.Net
         }
         private void Receive(byte[] buffer, int offset, int count)
         {
+#if DEBUG_PVP
+            PlatDependant.LogCSharpStackTraceEnabled = true;
+            var sb = new System.Text.StringBuilder();
+            sb.Append("Stream Receive " + count + " bytes");
+            for (int i = 0; i < count; ++i)
+            {
+                if (i % 16 == 0)
+                {
+                    sb.AppendLine();
+                }
+                else
+                {
+                    if (i % 4 == 0)
+                    {
+                        sb.Append(" ");
+                    }
+                    if (i % 8 == 0)
+                    {
+                        sb.Append(" ");
+                    }
+                }
+                sb.Append(buffer[i + offset].ToString("X2"));
+                sb.Append(" ");
+            }
+            UnityEngineEx.PlatDependant.LogInfo(sb);
+#endif
             base.Write(buffer, offset, count);
             if (!DonotNotifyReceive)
             {

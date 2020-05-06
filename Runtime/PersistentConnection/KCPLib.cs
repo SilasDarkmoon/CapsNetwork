@@ -75,6 +75,35 @@ namespace Capstones.Net
             }
             public int Input(byte[] data, int size)
             {
+#if DEBUG_PVP
+                var sb = new System.Text.StringBuilder();
+                sb.Append("KCP Input ");
+                sb.Append(size);
+                sb.Append(" bytes to ");
+                sb.Append(_Handle);
+                //sb.Append(":");
+                //for (int i = 0; i < size; ++i)
+                //{
+                //    if (i % 16 == 0)
+                //    {
+                //        sb.AppendLine();
+                //    }
+                //    else
+                //    {
+                //        if (i % 4 == 0)
+                //        {
+                //            sb.Append(" ");
+                //        }
+                //        if (i % 8 == 0)
+                //        {
+                //            sb.Append(" ");
+                //        }
+                //    }
+                //    sb.Append(data[i].ToString("X2"));
+                //    sb.Append(" ");
+                //}
+                UnityEngineEx.PlatDependant.LogInfo(sb);
+#endif
                 if (_Handle != IntPtr.Zero)
                 {
                     return kcp_input(this, data, size);

@@ -1411,6 +1411,10 @@ namespace Capstones.Net
                         _MaxSeqInChecking = Math.Max(_MaxSeqInChecking, pseq);
                     }
                 }
+                else
+                {
+                    PlatDependant.LogError("Try to enqueue a req of " + pseq + ", min is " + _MinSeqInChecking);
+                }
             }
 
             //2. delete disposing
@@ -1452,6 +1456,10 @@ namespace Capstones.Net
                         if (tick - checking.StartTick >= timeout)
                         {
                             checking.SetError("timedout");
+#if DEBUG_PVP
+                            PlatDependant.LogError("timedout. seq: " + checking.Seq + "; timeout: " + checking.Timeout + "; start tick: " + checking.StartTick + "; current tick: " + tick + " of " +
+                                (checking.RequestObj == null ? "null" : checking.RequestObj.GetType().Name));
+#endif
                             _CheckingReq[index] = null;
                             if (i == _MinSeqInChecking)
                             {
@@ -1504,6 +1512,10 @@ namespace Capstones.Net
                         { // the newer request is back, so we let older request timeout.
 #if !DONOT_CHECK_OUT_OF_ORDER_TIMEOUT
                             checking.SetError("timedout - newer request is done");
+#endif
+#if DEBUG_PVP
+                            PlatDependant.LogError("newer request is done. done: " + pingback + "; checking: " + checking.Seq + " of " +
+                                (checking.RequestObj == null ? "null" : checking.RequestObj.GetType().Name));
 #endif
                         }
                         else
