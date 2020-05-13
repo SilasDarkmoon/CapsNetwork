@@ -1385,10 +1385,19 @@ namespace Capstones.Net
         {
             //1. add _pending
             Request pending;
-            uint maxSeq = 0;
             while (_PendingReq.TryDequeue(out pending))
             {
-                var pseq = maxSeq = pending.Seq;
+                var pseq = pending.Seq;
+                if (pseq == 0)
+                { // this req is being sent.
+                    SpinWait spin = new SpinWait();
+                    var spinStart = System.Environment.TickCount;
+                    do
+                    {
+                        spin.SpinOnce();
+                        pseq = pending.Seq;
+                    } while (pseq == 0 && System.Environment.TickCount - spinStart < 2000);
+                }
                 if (pseq >= _MinSeqInChecking)
                 {
                     var ncnt = pseq - _MinSeqInChecking + 1;
