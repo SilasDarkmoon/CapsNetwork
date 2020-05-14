@@ -292,7 +292,8 @@ function api.result(request,isMyTimedout)
                     if errorCode == "401" then
                         msg = clr.transstr("token_error")
                     end
-                else
+                end
+                if not msg then
                     msg = clr.trans('networkError')
                 end
             else
