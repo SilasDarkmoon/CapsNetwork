@@ -286,7 +286,15 @@ function api.result(request,isMyTimedout)
             elseif api.bool(error) then
                 failed = 'network'
                 event = "none"
-                msg = clr.trans('networkError')
+                local list = string.split(error .. "", ' ')
+                if list and #list >= 2 then
+                    local errorCode = list[2]
+                    if errorCode == "401" then
+                        msg = clr.transstr("token_error")
+                    end
+                else
+                    msg = clr.trans('networkError')
+                end
             else
                 msg = request.www:ParseResponseText(request.token, request.seq)
                 local tab = json.decode(msg)
