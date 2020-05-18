@@ -437,7 +437,7 @@ namespace Capstones.Net
     public interface IReqClient : IChannel
     {
         Request Send(object reqobj, int timeout);
-        int Timeout { get; set; }
+        int Timeout { get; set; } // TODO: this is the default timeout for Send Method.
     }
     public interface IReqServer : IChannel
     {
