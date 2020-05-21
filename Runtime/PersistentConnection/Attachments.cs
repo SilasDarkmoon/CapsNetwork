@@ -258,6 +258,7 @@ namespace Capstones.Net
         protected int _NextTrackedIndex = 0;
         protected int _RTT = -1;
         public int RTT { get { return _RTT; } }
+        protected IReqClient _Client;
 
         public RTTMeasure()
         {
@@ -267,7 +268,23 @@ namespace Capstones.Net
             }
             _LastTick = Environment.TickCount;
         }
+        public RTTMeasure(IReqClient client)
+            : this()
+        {
+            _Client = client;
+            if (client is IReqServer)
+            {
+                var server = client as IReqServer;
+                server.RegHandler(HandleRequest);
+            }
+        }
 
+        [EventOrder(-200)]
+        public object HandleRequest(IReqClient from, uint messagetype, object reqobj, uint seq)
+        {
+            RecordTick();
+            return null;
+        }
         protected int CalculateRTT()
         {
             int cnt = 0;
@@ -304,7 +321,6 @@ namespace Capstones.Net
 
     public class Heartbeat : RTTMeasure, IDisposable
     {
-        protected IReqClient _Client;
         public object _HeartbeatObj;
         public Func<object> _HeartbeatCreator;
 
@@ -327,8 +343,8 @@ namespace Capstones.Net
         }
 
         public Heartbeat(IReqClient client)
+            : base(client)
         {
-            _Client = client;
             Start();
         }
         public Heartbeat(IReqClient client, object heartbeatObj)

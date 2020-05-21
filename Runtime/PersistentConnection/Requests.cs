@@ -1156,15 +1156,16 @@ namespace Capstones.Net
                 }
             }
         }
-        [EventOrder(int.MinValue)]
+        [EventOrder(-100)]
         public object HandleRequest(IReqClient from, uint messagetype, object reqobj, uint seq)
-        {
+        { // TODO: the handler merge should happen in RegHandler / RemoveHandler
             object respobj = null;
             Type type = null;
             if (reqobj != null)
             {
                 type = reqobj.GetType();
             }
+            HandleRequestEvent merged = null;
             if (type != null)
             {
                 HandleRequestEvent list;
@@ -1173,15 +1174,10 @@ namespace Capstones.Net
                     _TypedHandlers.TryGetValue(type, out list);
                     if (list != null)
                     {
-                        list = list.Clone();
+                        merged = list.Clone();
                     }
                 }
-                if (list != null)
-                {
-                    respobj = list.CallHandlers(from, messagetype, reqobj, seq);
-                }
             }
-            if (respobj == null)
             {
                 HandleRequestEvent list;
                 lock (_RawTypedHandlers)
@@ -1189,23 +1185,33 @@ namespace Capstones.Net
                     _RawTypedHandlers.TryGetValue(messagetype, out list);
                     if (list != null)
                     {
-                        list = list.Clone();
+                        if (merged == null)
+                        {
+                            merged = list.Clone();
+                        }
+                        else
+                        {
+                            merged.MergeHandlers(list);
+                        }
                     }
                 }
-                if (list != null)
-                {
-                    respobj = list.CallHandlers(from, messagetype, reqobj, seq);
-                }
             }
-            if (respobj == null)
             {
                 HandleRequestEvent list;
                 lock (_CommonHandlers)
                 {
-                    list = _CommonHandlers.Clone();
+                    list = _CommonHandlers;
+                    if (merged == null)
+                    {
+                        merged = list.Clone();
+                    }
+                    else
+                    {
+                        merged.MergeHandlers(list);
+                    }
                 }
-                respobj = list.CallHandlers(from, messagetype, reqobj, seq);
             }
+            respobj = merged.CallHandlers(from, messagetype, reqobj, seq);
             return respobj;
         }
         public void SendResponse(IReqClient from, object response, uint seq_pingback)
