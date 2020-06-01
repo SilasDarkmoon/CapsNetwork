@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net;
@@ -72,21 +72,49 @@ namespace Capstones.Net
         protected Semaphore _AcceptedSemaphore = new Semaphore(0, 2);
         protected void BeginAccept4()
         {
-            _Socket.BeginAccept(ar =>
+            try
             {
-                var socket = _Socket.EndAccept(ar);
-                Interlocked.Exchange(ref _AcceptedSocket4, socket);
-                _AcceptedSemaphore.Release();
-            }, null);
+                _Socket.BeginAccept(ar =>
+                {
+                    try
+                    {
+                        var socket = _Socket.EndAccept(ar);
+                        Interlocked.Exchange(ref _AcceptedSocket4, socket);
+                        _AcceptedSemaphore.Release();
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+                    }
+                }, null);
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+            }
         }
         protected void BeginAccept6()
         {
-            _Socket6.BeginAccept(ar =>
+            try
             {
-                var socket = _Socket6.EndAccept(ar);
-                Interlocked.Exchange(ref _AcceptedSocket6, socket);
-                _AcceptedSemaphore.Release();
-            }, null);
+                _Socket6.BeginAccept(ar =>
+                {
+                    try
+                    {
+                        var socket = _Socket6.EndAccept(ar);
+                        Interlocked.Exchange(ref _AcceptedSocket6, socket);
+                        _AcceptedSemaphore.Release();
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+                    }
+                }, null);
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+            }
         }
         public Socket Accept()
         {
