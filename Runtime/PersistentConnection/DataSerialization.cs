@@ -668,6 +668,6 @@ namespace Capstones.Net
         private static Raw _Empty = new Raw();
         public static Raw Empty { get { return _Empty; } }
         private static object _NoResponse = new object();
-        public static object NoResponse { get { return _Empty; } }
+        public static object NoResponse { get { return _NoResponse; } }
     }
 }
