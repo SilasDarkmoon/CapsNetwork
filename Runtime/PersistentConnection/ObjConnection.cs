@@ -494,10 +494,10 @@ namespace Capstones.Net
                     _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq);
                     // send
                     _Stream.Write(stream, 0, stream.Count);
-                }
 #if DEBUG_PVP
-                PlatDependant.LogError(Environment.TickCount.ToString() + $" Write(size{stream.Count} type{type} seq{seq} sseq{sseq})");
+                    PlatDependant.LogError(Environment.TickCount.ToString() + $" Write(size{stream.Count} type{type} seq{seq} sseq{sseq})");
 #endif
+                }
             }
             else
             { // if we directly send the obj to the connection thread, we need to clone it. So it seems to be better to serialize it here.
