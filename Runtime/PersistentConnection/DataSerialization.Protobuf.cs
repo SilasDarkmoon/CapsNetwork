@@ -65,10 +65,10 @@ namespace Capstones.Net
             Attach(input);
         }
 
-        protected override void FireReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq)
+        protected override void FireReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
             ResetReadBlockContext();
-            base.FireReceiveBlock(buffer, size, type, flags, seq, sseq);
+            base.FireReceiveBlock(buffer, size, type, flags, seq, sseq, exFlags);
         }
         public override void ReadBlock()
         {
@@ -249,18 +249,18 @@ namespace Capstones.Net
                                 {
                                     PlatDependant.LogError("We got a too long message. We will drop this message and treat it as an error message.");
                                     ProtobufEncoder.SkipBytes(_InputStream, _Size);
-                                    FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
+                                    FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq, null);
                                 }
                                 else
                                 {
                                     _ReadBuffer.Clear();
                                     ProtobufEncoder.CopyBytes(_InputStream, _ReadBuffer, _Size);
-                                    FireReceiveBlock(_ReadBuffer, _Size, _Type, _Flags, _Seq, _SSeq);
+                                    FireReceiveBlock(_ReadBuffer, _Size, _Type, _Flags, _Seq, _SSeq, null);
                                 }
                             }
                             else
                             {
-                                FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
+                                FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq, null);
                             }
                             ResetReadBlockContext();
                             return;
@@ -351,7 +351,7 @@ namespace Capstones.Net
                                         {
                                             _ReadBuffer.Clear();
                                             ProtobufEncoder.CopyBytes(_InputStream, _ReadBuffer, _Size);
-                                            FireReceiveBlock(_ReadBuffer, _Size, _Type, _Flags, _Seq, _SSeq);
+                                            FireReceiveBlock(_ReadBuffer, _Size, _Type, _Flags, _Seq, _SSeq, null);
                                         }
                                     }
                                     else
@@ -368,7 +368,7 @@ namespace Capstones.Net
                                             var skipsize = _Size - _ParsingVariantIndex;
                                             ProtobufEncoder.SkipBytes(_InputStream, skipsize);
                                             PlatDependant.LogError("We got a too long message. We will drop this message and treat it as an error message.");
-                                            FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
+                                            FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq, null);
                                         }
                                     }
                                     ResetReadBlockContext();
@@ -574,13 +574,13 @@ namespace Capstones.Net
                                     {
                                         if (_Size < 0)
                                         {
-                                            FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq);
+                                            FireReceiveBlock(null, 0, _Type, _Flags, _Seq, _SSeq, null);
                                             ResetReadBlockContext();
                                             return true;
                                         }
                                         else if (_Size == 0)
                                         {
-                                            FireReceiveBlock(_ReadBuffer, 0, _Type, _Flags, _Seq, _SSeq);
+                                            FireReceiveBlock(_ReadBuffer, 0, _Type, _Flags, _Seq, _SSeq, null);
                                             ResetReadBlockContext();
                                             return true;
                                         }
@@ -788,7 +788,7 @@ namespace Capstones.Net
         public bool VariantHeader = true;
 #endif
 
-        public override void PrepareBlock(NativeBufferStream data, uint type, uint flags, uint seq, uint sseq)
+        public override void PrepareBlock(NativeBufferStream data, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
             if (data != null)
             {

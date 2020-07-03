@@ -667,9 +667,9 @@ namespace Capstones.Net
             int start = Environment.TickCount;
             do
             {
-                await System.Threading.Tasks.Task.Delay(100);
                 try
                 {
+                    await System.Threading.Tasks.Task.Delay(100);
                     if (!_ConnectWorkFinished)
                     {
                         BeginReceive();

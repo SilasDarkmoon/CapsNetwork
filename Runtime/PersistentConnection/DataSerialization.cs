@@ -43,16 +43,16 @@ namespace Capstones.Net
         public abstract void ReadBlock(); // Blocked Read.
         public abstract bool TryReadBlock(); // Non-blocked Read.
 
-        public delegate void ReceiveBlockDelegate(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq);
-        public event ReceiveBlockDelegate OnReceiveBlock = (buffer, size, type, flags, seq, sseq) => { };
+        public delegate void ReceiveBlockDelegate(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags);
+        public event ReceiveBlockDelegate OnReceiveBlock = (buffer, size, type, flags, seq, sseq, exflags) => { };
 
-        protected virtual void FireReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq)
+        protected virtual void FireReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
 #if DEBUG_PERSIST_CONNECT
             PlatDependant.LogInfo(string.Format("Data Received, length {0}, type {1}, flags {2:x}, seq {3}, sseq {4}. (from {5})", size, type, flags, seq, sseq, this.GetType().Name));
 #endif
             //buffer.Seek(0, SeekOrigin.Begin);
-            OnReceiveBlock(buffer, size, type, flags, seq, sseq);
+            OnReceiveBlock(buffer, size, type, flags, seq, sseq, exFlags);
         }
 
         #region IDisposable Support
@@ -76,16 +76,16 @@ namespace Capstones.Net
 
     public abstract class DataComposer
     {
-        public abstract void PrepareBlock(NativeBufferStream data, uint type, uint flags, uint seq, uint sseq);
+        public abstract void PrepareBlock(NativeBufferStream data, uint type, uint flags, uint seq, uint sseq, object exFlags);
     }
 
     public abstract class DataPostProcess
     {
-        public virtual uint Process(NativeBufferStream data, int offset, uint flags, uint type, uint seq, uint sseq, bool isServer)
+        public virtual uint Process(NativeBufferStream data, int offset, uint flags, uint type, uint seq, uint sseq, bool isServer, object exFlags)
         {
             return flags;
         }
-        public virtual Pack<uint, int> Deprocess(NativeBufferStream data, int offset, int cnt, uint flags, uint type, uint seq, uint sseq, bool isServer)
+        public virtual Pack<uint, int> Deprocess(NativeBufferStream data, int offset, int cnt, uint flags, uint type, uint seq, uint sseq, bool isServer, object exFlags)
         {
             return new Pack<uint, int>(flags, cnt);
         }
@@ -98,6 +98,10 @@ namespace Capstones.Net
         protected Dictionary<Type, Func<object, NativeBufferStream>> _TypedWriters = new Dictionary<Type, Func<object, NativeBufferStream>>(PredefinedMessages.PredefinedWriters);
         protected Dictionary<Type, uint> _TypeToID = new Dictionary<Type, uint>(PredefinedMessages.PredefinedTypeToID);
 
+        public virtual object GetExFlags(object data)
+        {
+            return null;
+        }
         public virtual uint GetDataType(object data)
         {
             if (data == null)

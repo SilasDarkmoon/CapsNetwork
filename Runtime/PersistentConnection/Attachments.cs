@@ -475,18 +475,25 @@ namespace Capstones.Net
 
         protected async void SendHeartbeatAsync(object heartbeat)
         {
-            var request = _Client.Send(heartbeat, 10000);
-            await request;
-            if (request.Error == null)
+            try
             {
+                var request = _Client.Send(heartbeat, 10000);
+                await request;
+                if (request.Error == null)
+                {
 #if DEBUG_PVP
-                PlatDependant.LogInfo($"Heartbeat response received {Environment.TickCount}");
+                    PlatDependant.LogInfo($"Heartbeat response received {Environment.TickCount}");
 #endif
-                RecordRTT(request.RTT);
+                    RecordRTT(request.RTT);
+                }
+                else
+                {
+                    PlatDependant.LogError(request.Error);
+                }
             }
-            else
+            catch (Exception e)
             {
-                PlatDependant.LogError(request.Error);
+                PlatDependant.LogError(e);
             }
         }
 

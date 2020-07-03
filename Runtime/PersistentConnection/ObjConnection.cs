@@ -262,7 +262,7 @@ namespace Capstones.Net
         protected ConcurrentQueueGrowOnly<PendingRead> _PendingReadQueue = new ConcurrentQueueGrowOnly<PendingRead>();
         protected PendingRead _PendingRead;
         protected internal AutoResetEvent _WaitForObjRead = new AutoResetEvent(false);
-        protected void ReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq)
+        protected void ReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
 #if DEBUG_PVP
             PlatDependant.LogError(Environment.TickCount.ToString() + $" Receive(size{size} type{type} seq{seq} sseq{sseq})");
@@ -274,7 +274,7 @@ namespace Capstones.Net
                 for (int i = processors.Count - 1; i >= 0; --i)
                 {
                     var processor = processors[i];
-                    var pack = processor.Deprocess(buffer, 0, size, flags, type, seq, sseq, IsServer);
+                    var pack = processor.Deprocess(buffer, 0, size, flags, type, seq, sseq, IsServer, exFlags);
                     flags = pack.t1;
                     size = Math.Max(Math.Min(pack.t2, size), 0);
                 }
@@ -479,6 +479,7 @@ namespace Capstones.Net
                 // type
                 var rw = _SerConfig.ReaderWriter;
                 var type = rw.GetDataType(obj);
+                var exFlags = rw.GetExFlags(obj);
                 // write obj
                 var stream = rw.Write(obj);
                 if (stream != null)
@@ -488,10 +489,10 @@ namespace Capstones.Net
                     for (int i = 0; i < processors.Count; ++i)
                     {
                         var processor = processors[i];
-                        flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer);
+                        flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer, exFlags);
                     }
                     // compose block
-                    _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq);
+                    _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq, exFlags);
                     // send
                     _Stream.Write(stream, 0, stream.Count);
 #if DEBUG_PVP
@@ -523,6 +524,7 @@ namespace Capstones.Net
                 // type
                 var rw = _SerConfig.ReaderWriter;
                 var type = rw.GetDataType(mess.Obj);
+                var exFlags = rw.GetExFlags(obj);
                 // seq
                 uint seq = mess.Seq, sseq = mess.SSeq;
                 // write obj
@@ -535,10 +537,10 @@ namespace Capstones.Net
                     for (int i = 0; i < processors.Count; ++i)
                     {
                         var processor = processors[i];
-                        flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer);
+                        flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer, exFlags);
                     }
                     // compose block
-                    _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq);
+                    _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq, exFlags);
                     // send
                     stream.Seek(0, SeekOrigin.Begin);
                     var count = stream.Count;
