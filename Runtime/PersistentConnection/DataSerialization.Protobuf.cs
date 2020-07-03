@@ -874,9 +874,9 @@ namespace Capstones.Net
             RegisteredTypes.TryGetValue(data.GetType(), out rv);
             return rv;
         }
-        public override object Read(uint type, NativeBufferStream buffer, int offset, int cnt)
+        public override object Read(uint type, NativeBufferStream buffer, int offset, int cnt, object exFlags)
         {
-            var frombase = base.Read(type, buffer, offset, cnt);
+            var frombase = base.Read(type, buffer, offset, cnt, exFlags);
             if (frombase != null)
             {
                 return frombase;

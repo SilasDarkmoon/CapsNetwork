@@ -281,7 +281,7 @@ namespace Capstones.Net
                 var pending = new PendingRead()
                 {
                     Type = type,
-                    Obj = _SerConfig.ReaderWriter.Read(type, buffer, 0, size),
+                    Obj = _SerConfig.ReaderWriter.Read(type, buffer, 0, size, exFlags),
                     Seq = seq,
                     SSeq = sseq,
                 };

@@ -432,9 +432,52 @@ namespace Capstones.Net
                 return base.Write(data);
             }
         }
-        public override object Read(uint type, NativeBufferStream buffer, int offset, int cnt)
+        public override object Read(uint type, NativeBufferStream buffer, int offset, int cnt, object exFlags)
         {
-            return base.Read(type, buffer, offset, cnt);
+            var carbonFlags = exFlags as CarbonExFlags;
+            if (carbonFlags == null)
+            {
+                return base.Read(type, buffer, offset, cnt, exFlags);
+            }
+            else
+            {
+                var message = new CarbonMessage()
+                {
+                    Flags = carbonFlags.Flags,
+                    TraceIdHigh = carbonFlags.TraceIdHigh,
+                    TraceIdLow = carbonFlags.TraceIdLow,
+                    Cate = carbonFlags.Cate,
+                    Type = (ushort)(short)(int)type,
+                };
+                if (carbonFlags.Cate == 3)
+                { // Json
+                    byte[] raw = PredefinedMessages.GetRawBuffer(cnt);
+                    buffer.Seek(offset, SeekOrigin.Begin);
+                    buffer.Read(raw, 0, cnt);
+                    string str = null;
+                    try
+                    {
+                        str = System.Text.Encoding.UTF8.GetString(raw);
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+                    }
+                    message.StrMessage = str;
+                }
+                else if (carbonFlags.Cate == 4)
+                { // PB
+                    message.ObjMessage = base.Read(type, buffer, offset, cnt, exFlags);
+                }
+                else
+                { // Raw
+                    byte[] raw = new byte[cnt];
+                    buffer.Seek(offset, SeekOrigin.Begin);
+                    buffer.Read(raw, 0, cnt);
+                    message.BytesMessage = raw;
+                }
+                return message;
+            }
         }
     }
 }

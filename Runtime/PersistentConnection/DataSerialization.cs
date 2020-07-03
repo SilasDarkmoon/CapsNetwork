@@ -125,7 +125,7 @@ namespace Capstones.Net
             }
             return null;
         }
-        public virtual object Read(uint type, NativeBufferStream buffer, int offset, int cnt)
+        public virtual object Read(uint type, NativeBufferStream buffer, int offset, int cnt, object exFlags)
         {
             Func<uint, NativeBufferStream, int, int, object> reader;
             if (_TypedReaders.TryGetValue(type, out reader))
@@ -205,7 +205,7 @@ namespace Capstones.Net
             }
         }
         [ThreadStatic] private static IPooledBuffer _RawBuffer;
-        private static byte[] GetRawBuffer(int cnt)
+        public static byte[] GetRawBuffer(int cnt)
         {
             var buffer = _RawBuffer;
             if (buffer == null)
