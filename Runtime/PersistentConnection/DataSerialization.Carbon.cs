@@ -422,9 +422,13 @@ namespace Capstones.Net
                 {
                     return base.Write(carbonmess.StrMessage);
                 }
-                else
+                else if (carbonmess.ObjMessage != null)
                 {
                     return base.Write(carbonmess.ObjMessage);
+                }
+                else
+                {
+                    return base.Write(PredefinedMessages.Empty);
                 }
             }
             else
@@ -480,4 +484,459 @@ namespace Capstones.Net
             }
         }
     }
+
+    public static class CarbonMessageUtils
+    {
+        public class Heartbeat : IDisposable
+        {
+            protected IReqClient _Client;
+            public object _HeartbeatObj;
+            public Func<object> _HeartbeatCreator;
+
+            protected int _LastTick;
+            public int LastTick { get { return _LastTick; } }
+            public int Interval = 1000;
+            public int Timeout = -1;
+            protected bool _Dead = false;
+            public bool Dead { get { return _Dead; } }
+
+            public event Action OnDead = () => { };
+            protected void OnHeartbeatDead()
+            {
+                Dispose();
+                _Dead = true;
+                var disposable = _Client as IDisposable;
+                if (disposable != null)
+                {
+                    disposable.Dispose();
+                }
+                OnDead();
+            }
+
+            public Heartbeat(IReqClient client)
+            {
+                _Client = client;
+                Start();
+            }
+            public Heartbeat(IReqClient client, object heartbeatObj)
+                : this(client)
+            {
+                _HeartbeatObj = heartbeatObj;
+            }
+            public Heartbeat(IReqClient client, Func<object> heartbeatCreator)
+                : this(client)
+            {
+                _HeartbeatCreator = heartbeatCreator;
+            }
+
+            public void Start()
+            {
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+                if (ThreadSafeValues.IsMainThread)
+                {
+                    CoroutineRunner.StartCoroutine(SendHeartbeatWork());
+                }
+                else
+#endif
+                {
+                    PlatDependant.RunBackgroundLongTime(prog =>
+                    {
+                        try
+                        {
+                            _LastTick = Environment.TickCount;
+                            while (_Client.IsAlive && !_Disposed)
+                            {
+                                if (_Client.IsStarted)
+                                {
+                                    object heartbeat = null;
+                                    if (_HeartbeatCreator != null)
+                                    {
+                                        heartbeat = _HeartbeatCreator();
+                                    }
+                                    if (heartbeat == null)
+                                    {
+                                        heartbeat = _HeartbeatObj;
+                                    }
+                                    if (heartbeat == null)
+                                    {
+                                        heartbeat = PredefinedMessages.Empty;
+                                    }
+                                    SendHeartbeatAsync(heartbeat);
+                                }
+                                else
+                                {
+                                    _LastTick = Environment.TickCount;
+                                }
+                                var interval = Interval;
+                                if (interval < 0)
+                                {
+                                    interval = 1000;
+                                }
+                                Thread.Sleep(interval);
+                                if (Timeout > 0 && Environment.TickCount > _LastTick + Timeout)
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            if (_Client.IsAlive && !_Disposed)
+                            {
+                                OnHeartbeatDead();
+                            }
+                        }
+                    });
+                }
+            }
+
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+            protected IEnumerator SendHeartbeatWork()
+            {
+                try
+                {
+                    _LastTick = Environment.TickCount;
+                    while (_Client != null && _Client.IsAlive && !_Disposed)
+                    {
+                        if (_Client.IsStarted)
+                        {
+                            object heartbeat = null;
+                            if (_HeartbeatCreator != null)
+                            {
+                                heartbeat = _HeartbeatCreator();
+                            }
+                            if (heartbeat == null)
+                            {
+                                heartbeat = _HeartbeatObj;
+                            }
+                            if (heartbeat == null)
+                            {
+                                heartbeat = PredefinedMessages.Empty;
+                            }
+                            SendHeartbeatAsync(heartbeat);
+                        }
+                        else
+                        {
+                            _LastTick = Environment.TickCount;
+                        }
+                        var interval = Interval;
+                        if (interval < 0)
+                        {
+                            interval = 1000;
+                        }
+                        yield return new WaitForSecondsRealtime(interval / 1000f);
+                        if (Timeout > 0 && Environment.TickCount - _LastTick > Timeout)
+                        {
+                            break;
+                        }
+                    }
+                }
+                finally
+                {
+                    if (_Client != null && _Client.IsAlive && !_Disposed)
+                    {
+                        OnHeartbeatDead();
+                    }
+                }
+            }
+#endif
+
+            protected async void SendHeartbeatAsync(object heartbeat)
+            {
+                try
+                {
+                    if (Timeout > 0)
+                    {
+                        var request = _Client.Send(heartbeat, 10000);
+                        await request;
+                        if (request.Error != null)
+                        {
+                            PlatDependant.LogError(request.Error);
+                        }
+                    }
+                    else
+                    {
+                        _Client.SendMessage(heartbeat);
+                    }
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
+            }
+
+            protected bool _Disposed;
+            public void Dispose()
+            {
+                if (!_Disposed)
+                {
+                    _Disposed = true;
+                }
+            }
+        }
+        public static readonly CarbonMessage HeartbeatMessage = new CarbonMessage();
+
+        public class CarbonMessageHandler : IDisposable
+        {
+            public Action OnClose;
+            public Action<byte, ushort, object> OnMessage;
+            public Action<string, ushort> OnJsonMessage;
+
+            public CarbonMessageHandler(IReqClient client)
+            {
+                var handler = client as ReqHandler;
+                if (handler != null)
+                {
+                    Action onClose = null;
+                    onClose = () =>
+                    {
+                        Dispose();
+                        handler.OnClose -= onClose;
+                        handler.RemoveHandler(MessageHandler);
+                    };
+                    handler.OnClose += onClose;
+                    handler.RegHandler(MessageHandler);
+                }
+            }
+
+            [EventOrder(100)]
+            public object MessageHandler(IReqClient from, uint type, object reqobj, uint seq)
+            {
+                var carbon = reqobj as CarbonMessage;
+                if (carbon != null)
+                {
+                    if (carbon.Cate == 3)
+                    {
+                        if (OnJsonMessage != null)
+                        {
+                            OnJsonMessage(carbon.StrMessage, carbon.Type);
+                        }
+                    }
+                    if (OnMessage != null)
+                    {
+                        OnMessage(carbon.Cate, carbon.Type, carbon.ObjMessage);
+                    }
+                }
+
+                return PredefinedMessages.NoResponse;
+            }
+
+            protected bool _Disposed;
+            public void Dispose()
+            {
+                if (!_Disposed)
+                {
+                    _Disposed = true;
+                    if (OnClose != null)
+                    {
+                        OnClose();
+                    }
+                    OnClose = null;
+                    OnMessage = null;
+                    OnJsonMessage = null;
+                }
+            }
+        }
+
+        public static readonly ConnectionFactory.ExtendedConfig ConnectionConfig = new ConnectionFactory.ExtendedConfig()
+        {
+            SConfig = new SerializationConfig()
+            {
+                SplitterFactory = CarbonSplitter.Factory,
+                Composer = new CarbonComposer(),
+                ReaderWriter = new CarbonReaderAndWriter(),
+            },
+            ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
+            {
+                new ConnectionFactory.ClientAttachmentCreator("Heartbeat", client => new Heartbeat(client, HeartbeatMessage)
+                {
+                    Timeout = -1,
+                    Interval = 3000,
+                }),
+                new ConnectionFactory.ClientAttachmentCreator("QoSHandler", client =>
+                {
+                    var handler = client as ReqHandler;
+                    if (handler != null)
+                    {
+                        handler.RegHandler(FuncQosHandler);
+                    }
+                    return null;
+                }),
+                new ConnectionFactory.ClientAttachmentCreator("MessageHandler", client => new CarbonMessageHandler(client)),
+            },
+        };
+
+        [EventOrder(80)]
+        public static object QosHandler(IReqClient from, uint type, object reqobj, uint seq)
+        {
+            var carbonMessage = reqobj as CarbonMessage;
+            if (carbonMessage != null && carbonMessage.ShouldPingback)
+            {
+                from.SendMessage(new CarbonMessage()
+                {
+                    TraceIdHigh = carbonMessage.TraceIdHigh,
+                    TraceIdLow = carbonMessage.TraceIdLow,
+                });
+            }
+            return null;
+        }
+        public static readonly Request.Handler FuncQosHandler = QosHandler;
+
+        public static ReqClient Connect(string url)
+        {
+            return ConnectionFactory.GetClient<ReqClient>(url, ConnectionConfig);
+        }
+        public static ReqClient Connect(string host, int port)
+        {
+            string url = null;
+            IPAddress address;
+            if (IPAddress.TryParse(host, out address))
+            {
+                if (address.AddressFamily == AddressFamily.InterNetworkV6)
+                {
+                    url = "[" + host + "]";
+                }
+                else
+                {
+                    url = host;
+                }
+            }
+            //else
+            //{
+            //    var addresses = Dns.GetHostAddresses(host);
+            //    if (addresses != null && addresses.Length > 0)
+            //    {
+            //        address = addresses[0];
+            //        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+            //        {
+            //            url = "[" + host + "]";
+            //        }
+            //        else
+            //        {
+            //            url = host;
+            //        }
+            //    }
+            //}
+            if (url == null)
+            {
+                url = host;
+            }
+            if (port > 0)
+            {
+                url += ":";
+                url += port;
+            }
+            url = "tcp://" + url;
+            return Connect(url);
+        }
+        public static ReqClient ConnectWithDifferentPort(string url, int port)
+        {
+            var uri = new Uri(url);
+            return Connect(uri.DnsSafeHost, port);
+        }
+
+        public static void SendToken(ReqClient client, string token)
+        {
+            if (client != null)
+            {
+                byte[] message = null;
+                if (token != null)
+                {
+                    var enc = System.Text.Encoding.UTF8.GetBytes(token);
+                    if (enc.Length == 32)
+                    {
+                        message = enc;
+                    }
+                    else
+                    {
+                        message = new byte[32];
+                        Buffer.BlockCopy(enc, 0, message, 0, Math.Min(message.Length, enc.Length));
+                    }
+                }
+                if (message == null)
+                {
+                    message = new byte[32];
+                }
+                client.SendMessage(new CarbonMessage()
+                {
+                    Type = unchecked((ushort)-1),
+                    BytesMessage = message,
+                });
+            }
+        }
+
+        public static void OnClose(ReqClient client, Action onClose)
+        {
+            var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
+            if (handler != null)
+            {
+                handler.OnClose = onClose;
+            }
+        }
+        public static void OnMessage(ReqClient client, Action<byte, ushort, object> onMessage)
+        {
+            var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
+            if (handler != null)
+            {
+                handler.OnMessage = onMessage;
+            }
+        }
+        public static void OnJson(ReqClient client, Action<string, ushort> onJson)
+        {
+            var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
+            if (handler != null)
+            {
+                handler.OnJsonMessage = onJson;
+            }
+        }
+    }
 }
+
+#if UNITY_INCLUDE_TESTS
+#region TESTS
+#if UNITY_EDITOR
+namespace Capstones.Net
+{
+    public static class CarbonMessageTest
+    {
+        public static string Url;
+        public static string Token;
+        public static ReqClient Client;
+
+        public class CarbonMessageTestConnectToServer : UnityEditor.EditorWindow
+        {
+            [UnityEditor.MenuItem("Test/Carbon Message/Connect To...", priority = 200010)]
+            static void Init()
+            {
+                GetWindow(typeof(CarbonMessageTestConnectToServer)).titleContent = new GUIContent("Input Url");
+            }
+            void OnGUI()
+            {
+                Url = UnityEditor.EditorGUILayout.TextField(Url);
+                if (GUILayout.Button("Connect!"))
+                {
+                    Client = CarbonMessageUtils.Connect(Url);
+                }
+            }
+        }
+        public class CarbonMessageTestSendToken : UnityEditor.EditorWindow
+        {
+            [UnityEditor.MenuItem("Test/Carbon Message/Send Token...", priority = 200020)]
+            static void Init()
+            {
+                GetWindow(typeof(CarbonMessageTestSendToken)).titleContent = new GUIContent("Input Token");
+            }
+            void OnGUI()
+            {
+                Token = UnityEditor.EditorGUILayout.TextField(Token);
+                if (GUILayout.Button("Send!"))
+                {
+                    CarbonMessageUtils.SendToken(Client, Token);
+                }
+            }
+        }
+    }
+}
+#endif
+#endregion
+#endif
