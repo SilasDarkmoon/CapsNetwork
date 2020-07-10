@@ -23,7 +23,7 @@ local function OnTcpMessage(message, messagetype)
     else
         printe(err)
     end
-    ndump(messagetype, message)
+    dump({ type = messagetype, message = message }, "recv")
     local typedHandler = typedMessageHandlers[messagetype]
     if type(typedHandler) == "function" then
         typedHandler(message, messagetype)
