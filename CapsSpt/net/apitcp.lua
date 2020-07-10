@@ -17,7 +17,13 @@ local typedMessageHandlers = {}
 local cachedTypedMessage = {}
 
 local function OnTcpMessage(message, messagetype)
-    dump(message, "recv")
+    local jsonMess, err = json.decode(message)
+    if jsonMess then
+        message = jsonMess
+    else
+        printe(err)
+    end
+    ndump(messagetype, message)
     local typedHandler = typedMessageHandlers[messagetype]
     if type(typedHandler) == "function" then
         typedHandler(message, messagetype)
