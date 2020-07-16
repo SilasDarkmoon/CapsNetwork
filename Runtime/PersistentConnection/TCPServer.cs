@@ -26,7 +26,13 @@ namespace Capstones.Net
 
             protected override void PrepareSocket()
             {
-                _Socket = _Server.Accept();
+                while ((_Socket = _Server.TryAccept(this)) == null)
+                {
+                    if (_ConnectWorkFinished)
+                    {
+                        return;
+                    }
+                }
                 _Connected = true;
                 if (OnConnected != null)
                 {
@@ -67,9 +73,15 @@ namespace Capstones.Net
 
         protected Socket _Socket6;
 
-        protected Socket _AcceptedSocket4;
-        protected Socket _AcceptedSocket6;
-        protected Semaphore _AcceptedSemaphore = new Semaphore(0, 2);
+        protected ConcurrentQueueFixedSize<Socket> _AcceptedSockets4 = new ConcurrentQueueFixedSize<Socket>(CONST.MAX_SERVER_PENDING_CONNECTIONS + 1);
+        protected ConcurrentQueueFixedSize<Socket> _AcceptedSockets6 = new ConcurrentQueueFixedSize<Socket>(CONST.MAX_SERVER_PENDING_CONNECTIONS + 1);
+        protected Semaphore _AcceptedSemaphore = new Semaphore(0, CONST.MAX_SERVER_PENDING_CONNECTIONS * 2);
+        protected int _NeedAcceptSocket4Count = CONST.MAX_SERVER_PENDING_CONNECTIONS;
+        protected int _NeedAcceptSocket6Count = CONST.MAX_SERVER_PENDING_CONNECTIONS;
+
+        //protected Socket _AcceptedSocket4;
+        //protected Socket _AcceptedSocket6;
+        //protected Semaphore _AcceptedSemaphore = new Semaphore(0, 2);
         protected void BeginAccept4()
         {
             try
@@ -79,17 +91,24 @@ namespace Capstones.Net
                     try
                     {
                         var socket = _Socket.EndAccept(ar);
-                        Interlocked.Exchange(ref _AcceptedSocket4, socket);
+                        if (socket == null)
+                        {
+                            throw new NullReferenceException("Accepted a null socket.");
+                        }
+                        _AcceptedSockets4.Enqueue(socket);
+                        //Interlocked.Exchange(ref _AcceptedSocket4, socket);
                         _AcceptedSemaphore.Release();
                     }
                     catch (Exception e)
                     {
+                        System.Threading.Interlocked.Increment(ref _NeedAcceptSocket4Count);
                         PlatDependant.LogError(e);
                     }
                 }, null);
             }
             catch (Exception e)
             {
+                System.Threading.Interlocked.Increment(ref _NeedAcceptSocket4Count);
                 PlatDependant.LogError(e);
             }
         }
@@ -102,55 +121,84 @@ namespace Capstones.Net
                     try
                     {
                         var socket = _Socket6.EndAccept(ar);
-                        Interlocked.Exchange(ref _AcceptedSocket6, socket);
+                        if (socket == null)
+                        {
+                            throw new NullReferenceException("Accepted a null socket.");
+                        }
+                        _AcceptedSockets6.Enqueue(socket);
+                        //Interlocked.Exchange(ref _AcceptedSocket6, socket);
                         _AcceptedSemaphore.Release();
                     }
                     catch (Exception e)
                     {
+                        System.Threading.Interlocked.Increment(ref _NeedAcceptSocket6Count);
                         PlatDependant.LogError(e);
                     }
                 }, null);
             }
             catch (Exception e)
             {
+                System.Threading.Interlocked.Increment(ref _NeedAcceptSocket6Count);
                 PlatDependant.LogError(e);
             }
         }
+        public int ListeningCount;
         public Socket Accept()
         {
-            _AcceptedSemaphore.WaitOne();
-            Socket rv = null;
-            SpinWait spin = new SpinWait();
-            while (true)
+            System.Threading.Interlocked.Increment(ref ListeningCount);
+            try
             {
-                rv = _AcceptedSocket4;
-                if (Interlocked.CompareExchange(ref _AcceptedSocket4, null, rv) == rv)
+                _AcceptedSemaphore.WaitOne();
+                Socket rv = null;
+                if (_AcceptedSockets4.TryDequeue(out rv))
                 {
-                    break;
+                    BeginAccept4();
+                    return rv;
                 }
-                spin.SpinOnce();
-            }
-            if (rv != null)
-            {
-                BeginAccept4();
-                return rv;
-            }
-            spin.Reset();
-            while (true)
-            {
-                rv = _AcceptedSocket6;
-                if (Interlocked.CompareExchange(ref _AcceptedSocket6, null, rv) == rv)
+                if (_AcceptedSockets6.TryDequeue(out rv))
                 {
-                    break;
+                    BeginAccept6();
+                    return rv;
                 }
-                spin.SpinOnce();
+                return null;
             }
-            if (rv != null)
+            finally
             {
-                BeginAccept6();
-                return rv;
+                System.Threading.Interlocked.Decrement(ref ListeningCount);
             }
-            return null;
+        }
+        public Socket TryAccept(ServerConnection con)
+        {
+            System.Threading.Interlocked.Increment(ref ListeningCount);
+            try
+            {
+                bool got = _AcceptedSemaphore.WaitOne(CONST.MAX_WAIT_MILLISECONDS);
+                if (!got)
+                {
+                    return null;
+                }
+                if (!con.IsAlive)
+                {
+                    _AcceptedSemaphore.Release();
+                    return null;
+                }
+                Socket rv = null;
+                if (_AcceptedSockets4.TryDequeue(out rv))
+                {
+                    BeginAccept4();
+                    return rv;
+                }
+                if (_AcceptedSockets6.TryDequeue(out rv))
+                {
+                    BeginAccept6();
+                    return rv;
+                }
+                return null;
+            }
+            finally
+            {
+                System.Threading.Interlocked.Decrement(ref ListeningCount);
+            }
         }
 
         protected override IEnumerator ConnectWork()
@@ -169,8 +217,8 @@ namespace Capstones.Net
                     _Socket6.Bind(new IPEndPoint(address6, _Port));
                     _Socket6.Listen(CONST.MAX_SERVER_PENDING_CONNECTIONS);
 
-                    BeginAccept4();
-                    BeginAccept6();
+                    //BeginAccept4();
+                    //BeginAccept6();
                 }
                 catch (ThreadAbortException)
                 {
@@ -187,6 +235,29 @@ namespace Capstones.Net
                 }
                 while (!_ConnectWorkFinished)
                 {
+                    SpinWait spin = new SpinWait();
+                    int cnt4 = _NeedAcceptSocket4Count;
+                    while (System.Threading.Interlocked.CompareExchange(ref _NeedAcceptSocket4Count, 0, cnt4) != cnt4)
+                    {
+                        spin.SpinOnce();
+                        cnt4 = _NeedAcceptSocket4Count;
+                    }
+                    for (int i = 0; i < cnt4; ++i)
+                    {
+                        BeginAccept4();
+                    }
+                    spin.Reset();
+                    int cnt6 = _NeedAcceptSocket6Count;
+                    while (System.Threading.Interlocked.CompareExchange(ref _NeedAcceptSocket6Count, 0, cnt6) != cnt6)
+                    {
+                        spin.SpinOnce();
+                        cnt6 = _NeedAcceptSocket6Count;
+                    }
+                    for (int i = 0; i < cnt6; ++i)
+                    {
+                        BeginAccept6();
+                    }
+
                     int waitinterval;
                     try
                     {

@@ -641,6 +641,7 @@ namespace Capstones.Net
     public class ObjServer : IPositiveConnection, IChannel, IDisposable
     {
         protected IPersistentConnectionServer _Server;
+        public IPersistentConnectionServer Server { get { return _Server; } }
         protected SerializationConfig _SerConfig;
         protected IDictionary<string, object> _ExtraConfig;
 
