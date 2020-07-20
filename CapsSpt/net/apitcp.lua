@@ -49,14 +49,18 @@ function api.TcpConnect()
         return
     end
 
-    if not api.tcpHost then
-        api.tcpHost = ___CONFIG__BASE_URL
-    end
-    if not api.tcpPort then
-        api.tcpPort = 8976
-    end
     api.CloseTcpConnect()
-    api.tcpClient = CarbonMessageUtils.ConnectWithDifferentPort(api.tcpHost, api.tcpPort)
+    if ___CONFIG__TCP_URL then
+        api.tcpClient = CarbonMessageUtils.Connect(___CONFIG__TCP_URL)
+    else
+        if not api.tcpHost then
+            api.tcpHost = ___CONFIG__BASE_URL
+        end
+        if not api.tcpPort then
+            api.tcpPort = 8976
+        end
+        api.tcpClient = CarbonMessageUtils.ConnectWithDifferentPort(api.tcpHost, api.tcpPort)
+    end
     CarbonMessageUtils.OnClose(api.tcpClient, api.TcpConnect)
     CarbonMessageUtils.OnJson(api.tcpClient, OnTcpMessage)
     CarbonMessageUtils.SendToken(api.tcpClient, token)
