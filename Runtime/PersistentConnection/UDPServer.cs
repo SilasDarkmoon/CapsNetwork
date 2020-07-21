@@ -72,7 +72,11 @@ namespace Capstones.Net
             public IAsyncResult ReceiveResult;
             public UDPServer ParentServer;
             protected AsyncCallback EndReceiveFunc;
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
             public ConcurrentQueueGrowOnly<RecvFromInfo> PendingRecvMessages = new ConcurrentQueueGrowOnly<RecvFromInfo>();
+#else
+            public System.Collections.Concurrent.ConcurrentQueue<RecvFromInfo> PendingRecvMessages = new System.Collections.Concurrent.ConcurrentQueue<RecvFromInfo>();
+#endif
 
             public BroadcastSocketReceiveInfo(UDPServer parent, Socket socket, IPEndPoint init_remote)
             {

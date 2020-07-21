@@ -240,8 +240,13 @@ namespace Capstones.Net
             }
         }
 
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
         protected ConcurrentQueueGrowOnly<MessageInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<MessageInfo>();
         protected ConcurrentQueueGrowOnly<ValueList<PooledBufferSpan>> _PendingRecvMessages = new ConcurrentQueueGrowOnly<ValueList<PooledBufferSpan>>();
+#else
+        protected ConcurrentQueue<MessageInfo> _PendingSendMessages = new ConcurrentQueue<MessageInfo>();
+        protected ConcurrentQueue<ValueList<PooledBufferSpan>> _PendingRecvMessages = new ConcurrentQueue<ValueList<PooledBufferSpan>>();
+#endif
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>
         /// Schedule sending the data. Handle OnSendComplete to recyle the data buffer.

@@ -258,8 +258,12 @@ namespace Capstones.Net
         }
         public event Action OnUpdate;
 
-#region Read
+        #region Read
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
         protected ConcurrentQueueGrowOnly<PendingRead> _PendingReadQueue = new ConcurrentQueueGrowOnly<PendingRead>();
+#else
+        protected ConcurrentQueue<PendingRead> _PendingReadQueue = new ConcurrentQueue<PendingRead>();
+#endif
         protected PendingRead _PendingRead;
         protected internal AutoResetEvent _WaitForObjRead = new AutoResetEvent(false);
         protected void ReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)

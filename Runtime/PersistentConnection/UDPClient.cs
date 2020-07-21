@@ -332,8 +332,13 @@ namespace Capstones.Net
 
         public bool HoldSending = false;
         protected int _LastSendTick = int.MinValue;
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
         protected ConcurrentQueueGrowOnly<MessageInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<MessageInfo>();
         protected ConcurrentQueueGrowOnly<RecvFromInfo> _PendingRecvMessages = new ConcurrentQueueGrowOnly<RecvFromInfo>();
+#else
+        protected ConcurrentQueue<MessageInfo> _PendingSendMessages = new ConcurrentQueue<MessageInfo>();
+        protected ConcurrentQueue<RecvFromInfo> _PendingRecvMessages = new ConcurrentQueue<RecvFromInfo>();
+#endif
         //public static readonly byte[] EmptyBuffer = new byte[0];
         protected AutoResetEvent _HaveDataToSend = new AutoResetEvent(false);
         /// <summary>

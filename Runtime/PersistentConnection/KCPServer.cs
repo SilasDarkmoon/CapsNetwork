@@ -413,7 +413,11 @@ namespace Capstones.Net
             //    }
             //}
 
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
             protected ConcurrentQueueGrowOnly<MessageInfo> _PendingSendMessages = new ConcurrentQueueGrowOnly<MessageInfo>();
+#else
+            protected ConcurrentQueue<MessageInfo> _PendingSendMessages = new ConcurrentQueue<MessageInfo>();
+#endif
             public virtual bool TrySend(MessageInfo minfo)
             {
                 if (_Ready && _Started && Thread.CurrentThread.ManagedThreadId == _ConnectionThreadID)

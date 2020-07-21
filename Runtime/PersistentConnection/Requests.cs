@@ -234,7 +234,11 @@ namespace Capstones.Net
                 _CheckingAwaiters.Clear();
             }
 
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
             protected ConcurrentQueueGrowOnly<PeekedRequest> _PendingAwaiters = new ConcurrentQueueGrowOnly<PeekedRequest>();
+#else
+            protected ConcurrentQueue<PeekedRequest> _PendingAwaiters = new ConcurrentQueue<PeekedRequest>();
+#endif
             protected LinkedList<PeekedRequest> _CheckingAwaiters = new LinkedList<PeekedRequest>();
             public void Track(PeekedRequest awaiter)
             {
@@ -334,7 +338,7 @@ namespace Capstones.Net
             return handler;
         }
 #endif
-        #endregion
+#endregion
 
         public override void Dispose()
         {
@@ -715,7 +719,11 @@ namespace Capstones.Net
             protected static TickAwaiterComparer _Comparer = new TickAwaiterComparer();
 
             protected static AutoResetEvent _NewAwaiterGot = new AutoResetEvent(false);
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
             protected static ConcurrentQueueGrowOnly<TickAwaiter> _PendingAwaiters = new ConcurrentQueueGrowOnly<TickAwaiter>();
+#else
+            protected static ConcurrentQueue<TickAwaiter> _PendingAwaiters = new ConcurrentQueue<TickAwaiter>();
+#endif
             protected static List<TickAwaiter> _CheckingAwaiters = new List<TickAwaiter>();
             protected static volatile bool _ChechkingStarted;
             protected static void CheckCompletion(TaskProgress prog)
@@ -788,7 +796,7 @@ namespace Capstones.Net
             await new TickAwaiter(tick);
         }
 
-        #region Receive
+#region Receive
         public class ReceiveAwaiter : IAwaiter
         {
             protected PeekedRequest _Request;
@@ -978,7 +986,7 @@ namespace Capstones.Net
             await request;
             return request;
         }
-        #endregion
+#endregion
     }
 
     public abstract class ReqHandler : IReqServer
@@ -1272,7 +1280,7 @@ namespace Capstones.Net
                 OnUpdate();
             }
         }
-        #region IDisposable Support
+#region IDisposable Support
         protected int _DisposedCnt = 0;
         protected bool _Disposed { get { return _DisposedCnt > 0; } }
         protected virtual void Dispose(bool disposing)
@@ -1293,7 +1301,7 @@ namespace Capstones.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-        #endregion
+#endregion
     }
 
     public class ReqClient : ReqHandler, IReqClient, IPositiveConnection, IDisposable
@@ -1360,8 +1368,13 @@ namespace Capstones.Net
         protected long _MinSeqInChecking = 1;
         protected long _MaxSeqInChecking = 0;
         protected Request[] _CheckingReq = new Request[_MaxCheckingReqCount];
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
         protected ConcurrentQueueGrowOnly<Request> _PendingReq = new ConcurrentQueueGrowOnly<Request>();
         protected ConcurrentQueueGrowOnly<uint> _DisposingReq = new ConcurrentQueueGrowOnly<uint>();
+#else
+        protected ConcurrentQueue<Request> _PendingReq = new ConcurrentQueue<Request>();
+        protected ConcurrentQueue<uint> _DisposingReq = new ConcurrentQueue<uint>();
+#endif
         public Capstones.Net.Request Send(object reqobj, int timeout)
         {
             if (_Channel == null || !_Channel.IsAlive)

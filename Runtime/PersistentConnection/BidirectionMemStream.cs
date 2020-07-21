@@ -415,7 +415,7 @@ namespace Capstones.Net
        }
         public override void SetLength(long value) { throw new NotSupportedException(); }
 
-#if MULTITHREAD_SLOW_AND_SAFE
+#if MULTITHREAD_SLOW_AND_SAFE || !UNITY_ENGINE && !UNITY_5_3_OR_NEWER
         private ConcurrentQueue<BufferInfo> _Buffer = new ConcurrentQueue<BufferInfo>();
 #else
         private ConcurrentQueueGrowOnly<BufferInfo> _Buffer = new ConcurrentQueueGrowOnly<BufferInfo>();
