@@ -83,7 +83,7 @@ namespace Capstones.Net
                 }
             }
         }
-        public void Write(NativeBufferStream buffer, int offset, int count)
+        public void Write(InsertableStream buffer, int offset, int count)
         {
             if (_Con != null)
             {

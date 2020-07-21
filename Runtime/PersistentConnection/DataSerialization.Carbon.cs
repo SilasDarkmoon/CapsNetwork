@@ -84,7 +84,11 @@ namespace Capstones.Net
     {
         public static readonly DataSplitterFactory Factory = new DataSplitterFactory<CarbonSplitter>();
 
-        private NativeBufferStream _ReadBuffer = new NativeBufferStream();
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+        private InsertableStream _ReadBuffer = new NativeBufferStream();
+#else
+        private InsertableStream _ReadBuffer = new ArrayBufferStream();
+#endif
 
         public CarbonSplitter() { }
         public CarbonSplitter(Stream input) : this()
@@ -92,7 +96,7 @@ namespace Capstones.Net
             Attach(input);
         }
 
-        protected override void FireReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
+        protected override void FireReceiveBlock(InsertableStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
             ResetReadBlockContext();
             base.FireReceiveBlock(buffer, size, type, flags, seq, sseq, exFlags);
@@ -286,7 +290,7 @@ namespace Capstones.Net
 
     public class CarbonComposer : DataComposer
     {
-        public override void PrepareBlock(NativeBufferStream data, uint type, uint flags, uint seq, uint sseq, object exFlags)
+        public override void PrepareBlock(InsertableStream data, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
             if (data != null)
             {
@@ -409,7 +413,7 @@ namespace Capstones.Net
                 return base.GetDataType(data);
             }
         }
-        public override NativeBufferStream Write(object data)
+        public override InsertableStream Write(object data)
         {
             CarbonMessage carbonmess = data as CarbonMessage;
             if (carbonmess != null)
@@ -436,7 +440,7 @@ namespace Capstones.Net
                 return base.Write(data);
             }
         }
-        public override object Read(uint type, NativeBufferStream buffer, int offset, int cnt, object exFlags)
+        public override object Read(uint type, InsertableStream buffer, int offset, int cnt, object exFlags)
         {
             var carbonFlags = exFlags as CarbonExFlags;
             if (carbonFlags == null)

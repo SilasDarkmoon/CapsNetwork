@@ -266,7 +266,7 @@ namespace Capstones.Net
 #endif
         protected PendingRead _PendingRead;
         protected internal AutoResetEvent _WaitForObjRead = new AutoResetEvent(false);
-        protected void ReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
+        protected void ReceiveBlock(InsertableStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
 #if DEBUG_PVP
             PlatDependant.LogError(Environment.TickCount.ToString() + $" Receive(size{size} type{type} seq{seq} sseq{sseq})");

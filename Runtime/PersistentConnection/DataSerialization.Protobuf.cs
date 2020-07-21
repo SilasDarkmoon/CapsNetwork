@@ -57,7 +57,11 @@ namespace Capstones.Net
     {
         public static readonly DataSplitterFactory Factory = new DataSplitterFactory<ProtobufSplitter>();
 
-        private NativeBufferStream _ReadBuffer = new NativeBufferStream();
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+        private InsertableStream _ReadBuffer = new NativeBufferStream();
+#else
+        private InsertableStream _ReadBuffer = new ArrayBufferStream();
+#endif
 
         public ProtobufSplitter() { }
         public ProtobufSplitter(Stream input) : this()
@@ -65,7 +69,7 @@ namespace Capstones.Net
             Attach(input);
         }
 
-        protected override void FireReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
+        protected override void FireReceiveBlock(InsertableStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
             ResetReadBlockContext();
             base.FireReceiveBlock(buffer, size, type, flags, seq, sseq, exFlags);
@@ -788,7 +792,7 @@ namespace Capstones.Net
         public bool VariantHeader = true;
 #endif
 
-        public override void PrepareBlock(NativeBufferStream data, uint type, uint flags, uint seq, uint sseq, object exFlags)
+        public override void PrepareBlock(InsertableStream data, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
             if (data != null)
             {
@@ -874,7 +878,7 @@ namespace Capstones.Net
             RegisteredTypes.TryGetValue(data.GetType(), out rv);
             return rv;
         }
-        public override object Read(uint type, NativeBufferStream buffer, int offset, int cnt, object exFlags)
+        public override object Read(uint type, InsertableStream buffer, int offset, int cnt, object exFlags)
         {
             var frombase = base.Read(type, buffer, offset, cnt, exFlags);
             if (frombase != null)
@@ -901,7 +905,7 @@ namespace Capstones.Net
         }
 
         [ThreadStatic] protected static Google.Protobuf.CodedOutputStream _CodedStream;
-        [ThreadStatic] protected static NativeBufferStream _UnderlayStream;
+        [ThreadStatic] protected static InsertableStream _UnderlayStream;
         protected static Google.Protobuf.CodedOutputStream CodedStream
         {
             get
@@ -910,12 +914,18 @@ namespace Capstones.Net
                 if (stream == null)
                 {
                     _CodedStream = stream =
-                        new Google.Protobuf.CodedOutputStream(_UnderlayStream = new NativeBufferStream(), true);
+                        new Google.Protobuf.CodedOutputStream(_UnderlayStream =
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+                        new NativeBufferStream()
+#else
+                        new ArrayBufferStream()
+#endif
+                        , true);
                 }
                 return stream;
             }
         }
-        public override NativeBufferStream Write(object data)
+        public override InsertableStream Write(object data)
         {
             var frombase = base.Write(data);
             if (frombase != null)

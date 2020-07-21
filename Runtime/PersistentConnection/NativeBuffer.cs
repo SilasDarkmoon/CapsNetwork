@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Capstones.Net;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -161,6 +162,8 @@ namespace Capstones.UnityEngineEx
         {
             _Buffer = new NativeBufferStruct(cnt);
         }
+
+        internal IntPtr Address { get { return _Buffer.Address; } }
         public void Resize(int cnt)
         {
             _Buffer.Resize(cnt);
@@ -509,11 +512,11 @@ namespace Capstones.UnityEngineEx
         #endregion
     }
 
-    public class NativeBufferStream : Stream, IList<byte>
+    public abstract class InsertableStream : Stream, IList<byte>
     {
         protected const int _HeadSpace = 128;
 
-        protected NativeBufferStruct _Buffer;
+        protected abstract IList<byte> _Buffer { get; }
         protected int _Offset;
         protected int _Count;
         protected int _Pos;
@@ -521,20 +524,11 @@ namespace Capstones.UnityEngineEx
         protected bool _InsertMode = false;
         public bool InsertMode { get { return _InsertMode; } set { _InsertMode = value; } }
 
-        public NativeBufferStream(int size)
-        {
-            if (size < 0)
-            {
-                size = 0;
-            }
-            _Buffer = new NativeBufferStruct(size + _HeadSpace);
-            _Offset = _HeadSpace;
-            _Count = 0;
-            _Pos = 0;
-        }
-        public NativeBufferStream() : this(0)
-        {
-        }
+        protected abstract void Resize(int cnt);
+        protected abstract void Move(int dstOffset, int srcOffset, int cnt);
+        protected abstract void CopyTo(int srcOffset, byte[] dest, int dstOffset, int cnt);
+        protected abstract void CopyFrom(byte[] src, int srcOffset, int dstOffset, int cnt);
+
         internal void EnsureSpace()
         {
             if (_Count + _Offset >= _Buffer.Count)
@@ -552,7 +546,7 @@ namespace Capstones.UnityEngineEx
                 {
                     newsize = newsize * 2;
                 }
-                _Buffer.Resize(newsize + _Offset);
+                Resize(newsize + _Offset);
             }
         }
         internal void AppendTo(int pos)
@@ -575,7 +569,7 @@ namespace Capstones.UnityEngineEx
                     {
                         newsize = newsize * 2;
                     }
-                    _Buffer.Resize(newsize + _Offset);
+                    Resize(newsize + _Offset);
                 }
                 _Count = cnt;
             }
@@ -584,9 +578,9 @@ namespace Capstones.UnityEngineEx
                 if (_Offset + pos < 0)
                 {
                     int newsize = _Buffer.Count - _Offset - pos + _HeadSpace;
-                    _Buffer.Resize(newsize);
+                    Resize(newsize);
                     int copyoffset = _HeadSpace - pos;
-                    Capstones.Net.KCPLib.kcp_memmove((IntPtr)((long)_Buffer.Address + copyoffset), (IntPtr)((long)_Buffer.Address + _Offset), _Count);
+                    Move(copyoffset, _Offset, _Count);
                     _Offset = _HeadSpace;
                     _Count -= pos;
                     _Pos -= pos;
@@ -647,7 +641,7 @@ namespace Capstones.UnityEngineEx
             {
                 // move towards tail.
                 AppendTo(_Count + count - 1);
-                Capstones.Net.KCPLib.kcp_memmove((IntPtr)((long)_Buffer.Address + _Offset + _Pos + count), (IntPtr)((long)_Buffer.Address + _Offset + _Pos), _Count - _Pos - count);
+                Move(_Offset + _Pos + count, _Offset + _Pos, _Count - _Pos - count);
             }
             for (int i = 0; i < count; ++i)
             {
@@ -685,24 +679,27 @@ namespace Capstones.UnityEngineEx
         }
 
         #region Dispose
-        private bool disposedValue = false; // 要检测冗余调用
+        protected int _DisposedCnt;
         protected override void Dispose(bool disposing)
         {
-            if (!disposedValue)
+            if (System.Threading.Interlocked.Increment(ref _DisposedCnt) == 1)
             {
                 //if (disposing)
                 //{
                 //    GC.SuppressFinalize(this);
                 //}
-                _Buffer.Dispose();
+                var disposableBuffer = _Buffer as IDisposable;
+                if (disposableBuffer != null)
+                {
+                    disposableBuffer.Dispose();
+                }
                 _Offset = 0;
                 _Count = 0;
                 _Pos = 0;
-                disposedValue = true;
+                base.Dispose(disposing);
             }
-            base.Dispose(disposing);
         }
-        ~NativeBufferStream()
+        ~InsertableStream()
         {
             Dispose(false);
         }
@@ -772,7 +769,7 @@ namespace Capstones.UnityEngineEx
             {
                 return 0;
             }
-            System.Runtime.InteropServices.Marshal.Copy((IntPtr)((long)_Buffer.Address + _Offset + _Pos), buffer, offset, rcnt);
+            CopyTo(_Offset + _Pos, buffer, offset, rcnt);
             _Pos += rcnt;
             return rcnt;
         }
@@ -800,9 +797,9 @@ namespace Capstones.UnityEngineEx
             {
                 // move towards tail.
                 AppendTo(_Count + count - 1);
-                Capstones.Net.KCPLib.kcp_memmove((IntPtr)((long)_Buffer.Address + _Offset + _Pos + count), (IntPtr)((long)_Buffer.Address + _Offset + _Pos), _Count - _Pos - count);
+                Move(_Offset + _Pos + count, _Offset + _Pos, _Count - _Pos - count);
             }
-            System.Runtime.InteropServices.Marshal.Copy(buffer, offset, (IntPtr)((long)_Buffer.Address + _Offset + _Pos), count);
+            CopyFrom(buffer, offset, _Offset + _Pos, count);
             _Pos += count;
         }
         public void Overwrite(byte[] buffer, int offset, int count)
@@ -816,7 +813,7 @@ namespace Capstones.UnityEngineEx
                 AppendTo(_Pos);
             }
             AppendTo(_Pos + count - 1);
-            System.Runtime.InteropServices.Marshal.Copy(buffer, offset, (IntPtr)((long)_Buffer.Address + _Offset + _Pos), count);
+            CopyFrom(buffer, offset, _Offset + _Pos, count);
             _Pos += count;
         }
         public override void Write(byte[] buffer, int offset, int count)
@@ -866,7 +863,7 @@ namespace Capstones.UnityEngineEx
         {
             if (arrayIndex >= 0 && _Count > 0)
             {
-                System.Runtime.InteropServices.Marshal.Copy((IntPtr)((long)_Buffer.Address + _Offset), array, arrayIndex, Math.Min(_Count, array.Length - arrayIndex));
+                CopyTo(_Offset, array, arrayIndex, Math.Min(_Count, array.Length - arrayIndex));
             }
         }
         public IEnumerator<byte> GetEnumerator()
@@ -947,6 +944,44 @@ namespace Capstones.UnityEngineEx
             return GetEnumerator();
         }
         #endregion
+    }
+
+    public class NativeBufferStream : InsertableStream
+    {
+        protected NativeBuffer _RealBuffer;
+        protected override IList<byte> _Buffer { get { return _RealBuffer; } }
+
+        public NativeBufferStream(int size)
+        {
+            if (size < 0)
+            {
+                size = 0;
+            }
+            _RealBuffer = new NativeBuffer(size + _HeadSpace);
+            _Offset = _HeadSpace;
+            _Count = 0;
+            _Pos = 0;
+        }
+        public NativeBufferStream() : this(0)
+        {
+        }
+
+        protected override void Resize(int cnt)
+        {
+            _RealBuffer.Resize(cnt);
+        }
+        protected override void Move(int dstOffset, int srcOffset, int cnt)
+        {
+            Capstones.Net.KCPLib.kcp_memmove((IntPtr)((long)_RealBuffer.Address + dstOffset), (IntPtr)((long)_RealBuffer.Address + srcOffset), cnt);
+        }
+        protected override void CopyTo(int srcOffset, byte[] dest, int dstOffset, int cnt)
+        {
+            System.Runtime.InteropServices.Marshal.Copy((IntPtr)((long)_RealBuffer.Address + srcOffset), dest, dstOffset, cnt);
+        }
+        protected override void CopyFrom(byte[] src, int srcOffset, int dstOffset, int cnt)
+        {
+            System.Runtime.InteropServices.Marshal.Copy(src, srcOffset, (IntPtr)((long)_RealBuffer.Address + dstOffset), cnt);
+        }
 
         #region Test
         public static class NativeBufferStreamTest
@@ -1231,5 +1266,77 @@ namespace Capstones.UnityEngineEx
             }
         }
         #endregion
+    }
+
+    public abstract class ManagedBufferStream : InsertableStream
+    {
+        protected byte[] _RealBuffer;
+        protected override IList<byte> _Buffer { get { return _RealBuffer; } }
+
+        protected override void Resize(int cnt)
+        {
+            var newBuffer = new byte[cnt];
+            Buffer.BlockCopy(_RealBuffer, 0, newBuffer, 0, Math.Min(cnt, _RealBuffer.Length));
+            _RealBuffer = newBuffer;
+        }
+        protected override void Move(int dstOffset, int srcOffset, int cnt)
+        {
+            Buffer.BlockCopy(_RealBuffer, srcOffset, _RealBuffer, dstOffset, cnt);
+        }
+        protected override void CopyTo(int srcOffset, byte[] dest, int dstOffset, int cnt)
+        {
+            Buffer.BlockCopy(_RealBuffer, srcOffset, dest, dstOffset, cnt);
+        }
+        protected override void CopyFrom(byte[] src, int srcOffset, int dstOffset, int cnt)
+        {
+            Buffer.BlockCopy(src, srcOffset, _RealBuffer, dstOffset, cnt);
+        }
+    }
+
+    public class ArrayBufferStream : ManagedBufferStream
+    {
+        public ArrayBufferStream(int size)
+        {
+            if (size < 0)
+            {
+                size = 0;
+            }
+            _RealBuffer = new byte[size + _HeadSpace];
+            _Offset = _HeadSpace;
+            _Count = 0;
+            _Pos = 0;
+        }
+        public ArrayBufferStream() : this(0)
+        {
+        }
+    }
+
+    public class PooledBufferStream : ManagedBufferStream
+    {
+        protected IPooledBuffer _Pooled;
+        public PooledBufferStream(int size)
+        {
+            if (size < 0)
+            {
+                size = 0;
+            }
+            _Pooled = BufferPool.GetBufferFromPool(size + _HeadSpace);
+            _RealBuffer = _Pooled.Buffer;
+            _Offset = _HeadSpace;
+            _Count = 0;
+            _Pos = 0;
+        }
+        public PooledBufferStream() : this(0)
+        {
+        }
+        protected override void Resize(int cnt)
+        {
+            var newPooled = BufferPool.GetBufferFromPool(cnt);
+            var newBuffer = newPooled.Buffer;
+            Buffer.BlockCopy(_RealBuffer, 0, newBuffer, 0, Math.Min(cnt, _RealBuffer.Length));
+            _Pooled.Release();
+            _Pooled = newPooled;
+            _RealBuffer = newBuffer;
+        }
     }
 }

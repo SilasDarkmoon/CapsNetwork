@@ -43,10 +43,10 @@ namespace Capstones.Net
         public abstract void ReadBlock(); // Blocked Read.
         public abstract bool TryReadBlock(); // Non-blocked Read.
 
-        public delegate void ReceiveBlockDelegate(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags);
+        public delegate void ReceiveBlockDelegate(InsertableStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags);
         public event ReceiveBlockDelegate OnReceiveBlock = (buffer, size, type, flags, seq, sseq, exflags) => { };
 
-        protected virtual void FireReceiveBlock(NativeBufferStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
+        protected virtual void FireReceiveBlock(InsertableStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
 #if DEBUG_PERSIST_CONNECT
             PlatDependant.LogInfo(string.Format("Data Received, length {0}, type {1}, flags {2:x}, seq {3}, sseq {4}. (from {5})", size, type, flags, seq, sseq, this.GetType().Name));
@@ -76,16 +76,16 @@ namespace Capstones.Net
 
     public abstract class DataComposer
     {
-        public abstract void PrepareBlock(NativeBufferStream data, uint type, uint flags, uint seq, uint sseq, object exFlags);
+        public abstract void PrepareBlock(InsertableStream data, uint type, uint flags, uint seq, uint sseq, object exFlags);
     }
 
     public abstract class DataPostProcess
     {
-        public virtual uint Process(NativeBufferStream data, int offset, uint flags, uint type, uint seq, uint sseq, bool isServer, object exFlags)
+        public virtual uint Process(InsertableStream data, int offset, uint flags, uint type, uint seq, uint sseq, bool isServer, object exFlags)
         {
             return flags;
         }
-        public virtual Pack<uint, int> Deprocess(NativeBufferStream data, int offset, int cnt, uint flags, uint type, uint seq, uint sseq, bool isServer, object exFlags)
+        public virtual Pack<uint, int> Deprocess(InsertableStream data, int offset, int cnt, uint flags, uint type, uint seq, uint sseq, bool isServer, object exFlags)
         {
             return new Pack<uint, int>(flags, cnt);
         }
@@ -94,8 +94,8 @@ namespace Capstones.Net
 
     public abstract class DataReaderAndWriter
     {
-        protected Dictionary<uint, Func<uint, NativeBufferStream, int, int, object>> _TypedReaders = new Dictionary<uint, Func<uint, NativeBufferStream, int, int, object>>(PredefinedMessages.PredefinedReaders);
-        protected Dictionary<Type, Func<object, NativeBufferStream>> _TypedWriters = new Dictionary<Type, Func<object, NativeBufferStream>>(PredefinedMessages.PredefinedWriters);
+        protected Dictionary<uint, Func<uint, InsertableStream, int, int, object>> _TypedReaders = new Dictionary<uint, Func<uint, InsertableStream, int, int, object>>(PredefinedMessages.PredefinedReaders);
+        protected Dictionary<Type, Func<object, InsertableStream>> _TypedWriters = new Dictionary<Type, Func<object, InsertableStream>>(PredefinedMessages.PredefinedWriters);
         protected Dictionary<Type, uint> _TypeToID = new Dictionary<Type, uint>(PredefinedMessages.PredefinedTypeToID);
 
         public virtual object GetExFlags(object data)
@@ -112,22 +112,22 @@ namespace Capstones.Net
             _TypeToID.TryGetValue(data.GetType(), out rv);
             return rv;
         }
-        public virtual NativeBufferStream Write(object data)
+        public virtual InsertableStream Write(object data)
         {
             if (data == null)
             {
                 return null;
             }
-            Func<object, NativeBufferStream> writer;
+            Func<object, InsertableStream> writer;
             if (_TypedWriters.TryGetValue(data.GetType(), out writer))
             {
                 return writer(data);
             }
             return null;
         }
-        public virtual object Read(uint type, NativeBufferStream buffer, int offset, int cnt, object exFlags)
+        public virtual object Read(uint type, InsertableStream buffer, int offset, int cnt, object exFlags)
         {
-            Func<uint, NativeBufferStream, int, int, object> reader;
+            Func<uint, InsertableStream, int, int, object> reader;
             if (_TypedReaders.TryGetValue(type, out reader))
             {
                 return reader(type, buffer, offset, cnt);
@@ -138,7 +138,7 @@ namespace Capstones.Net
 
     public static class PredefinedMessages
     {
-        public static Dictionary<uint, Func<uint, NativeBufferStream, int, int, object>> PredefinedReaders = new Dictionary<uint, Func<uint, NativeBufferStream, int, int, object>>()
+        public static Dictionary<uint, Func<uint, InsertableStream, int, int, object>> PredefinedReaders = new Dictionary<uint, Func<uint, InsertableStream, int, int, object>>()
         {
             { Error.TypeID, ReadError },
             { Raw.TypeID, ReadRaw },
@@ -146,7 +146,7 @@ namespace Capstones.Net
             { Integer.TypeID, ReadInteger },
             { Number.TypeID, ReadNumber },
         };
-        public static Dictionary<Type, Func<object, NativeBufferStream>> PredefinedWriters = new Dictionary<Type, Func<object, NativeBufferStream>>()
+        public static Dictionary<Type, Func<object, InsertableStream>> PredefinedWriters = new Dictionary<Type, Func<object, InsertableStream>>()
         {
             { typeof(Error), WriteError },
             { typeof(byte[]), WriteRawRaw },
@@ -191,15 +191,19 @@ namespace Capstones.Net
             { Number.TypeID, typeof(Number) },
         };
 
-        [ThreadStatic] private static NativeBufferStream _CommonWriterBuffer;
-        private static NativeBufferStream CommonWriterBuffer
+        [ThreadStatic] private static InsertableStream _CommonWriterBuffer;
+        private static InsertableStream CommonWriterBuffer
         {
             get
             {
                 var buffer = _CommonWriterBuffer;
                 if (buffer == null)
                 {
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
                     _CommonWriterBuffer = buffer = new NativeBufferStream();
+#else
+                    _CommonWriterBuffer = buffer = new ArrayBufferStream();
+#endif
                 }
                 return buffer;
             }
@@ -228,7 +232,7 @@ namespace Capstones.Net
             return buffer.Buffer;
         }
 
-        public static object ReadError(uint type, NativeBufferStream buffer, int offset, int cnt)
+        public static object ReadError(uint type, InsertableStream buffer, int offset, int cnt)
         {
             if (type != Error.TypeID)
             {
@@ -257,7 +261,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteError(object data)
+        public static InsertableStream WriteError(object data)
         {
             var real = data as Error;
             if (real == null)
@@ -268,7 +272,7 @@ namespace Capstones.Net
             return WriteRawString(real.Message);
         }
 
-        public static object ReadRaw(uint type, NativeBufferStream buffer, int offset, int cnt)
+        public static object ReadRaw(uint type, InsertableStream buffer, int offset, int cnt)
         {
             if (type != Raw.TypeID)
             {
@@ -289,7 +293,7 @@ namespace Capstones.Net
             }
         }
         private static byte[] _EmptyData = new byte[0];
-        public static NativeBufferStream WriteRawRaw(object data)
+        public static InsertableStream WriteRawRaw(object data)
         {
             if (data == null)
             {
@@ -306,7 +310,7 @@ namespace Capstones.Net
             buffer.Write(real, 0, real.Length);
             return buffer;
         }
-        public static NativeBufferStream WriteRaw(object data)
+        public static InsertableStream WriteRaw(object data)
         {
             var real = data as Raw;
             if (real == null)
@@ -317,7 +321,7 @@ namespace Capstones.Net
             return WriteRawRaw(real.Message);
         }
 
-        public static object ReadString(uint type, NativeBufferStream buffer, int offset, int cnt)
+        public static object ReadString(uint type, InsertableStream buffer, int offset, int cnt)
         {
             if (type != String.TypeID)
             {
@@ -346,7 +350,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawString(object data)
+        public static InsertableStream WriteRawString(object data)
         {
             if (data == null)
             {
@@ -373,7 +377,7 @@ namespace Capstones.Net
             }
             return buffer;
         }
-        public static NativeBufferStream WriteString(object data)
+        public static InsertableStream WriteString(object data)
         {
             var real = data as String;
             if (real == null)
@@ -384,7 +388,7 @@ namespace Capstones.Net
             return WriteRawString(real.Message);
         }
 
-        public static object ReadInteger(uint type, NativeBufferStream buffer, int offset, int cnt)
+        public static object ReadInteger(uint type, InsertableStream buffer, int offset, int cnt)
         {
             if (type != Integer.TypeID)
             {
@@ -410,7 +414,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawInt32(object data)
+        public static InsertableStream WriteRawInt32(object data)
         {
             if (data is int)
             {
@@ -429,7 +433,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawUInt32(object data)
+        public static InsertableStream WriteRawUInt32(object data)
         {
             if (data is uint)
             {
@@ -448,7 +452,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawInt64(object data)
+        public static InsertableStream WriteRawInt64(object data)
         {
             if (data is long)
             {
@@ -471,7 +475,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawUInt64(object data)
+        public static InsertableStream WriteRawUInt64(object data)
         {
             if (data is ulong)
             {
@@ -494,7 +498,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawIntPtr(object data)
+        public static InsertableStream WriteRawIntPtr(object data)
         {
             if (data is IntPtr)
             {
@@ -520,7 +524,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawUIntPtr(object data)
+        public static InsertableStream WriteRawUIntPtr(object data)
         {
             if (data is UIntPtr)
             {
@@ -546,7 +550,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteInteger(object data)
+        public static InsertableStream WriteInteger(object data)
         {
             var real = data as Integer;
             if (real == null)
@@ -557,7 +561,7 @@ namespace Capstones.Net
             return WriteRawInt64(real.Message);
         }
 
-        public static object ReadNumber(uint type, NativeBufferStream buffer, int offset, int cnt)
+        public static object ReadNumber(uint type, InsertableStream buffer, int offset, int cnt)
         {
             if (type != Number.TypeID)
             {
@@ -591,7 +595,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawFloat(object data)
+        public static InsertableStream WriteRawFloat(object data)
         {
             if (data is float)
             {
@@ -609,7 +613,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteRawDouble(object data)
+        public static InsertableStream WriteRawDouble(object data)
         {
             if (data is double)
             {
@@ -632,7 +636,7 @@ namespace Capstones.Net
                 return null;
             }
         }
-        public static NativeBufferStream WriteNumber(object data)
+        public static InsertableStream WriteNumber(object data)
         {
             var real = data as Number;
             if (real == null)
