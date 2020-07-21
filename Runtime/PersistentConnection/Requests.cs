@@ -1247,6 +1247,7 @@ namespace Capstones.Net
         public abstract bool IsConnected { get; }
 
         public event Action OnClose = () => { };
+        protected void FireOnClose() { OnClose(); }
         public event Action<IServerConnectionLifetime> OnConnected;
         protected virtual void FireOnConnected(IServerConnectionLifetime child)
         {
@@ -1272,12 +1273,12 @@ namespace Capstones.Net
             }
         }
         #region IDisposable Support
-        protected bool _Disposed = false;
-        protected void Dispose(bool disposing)
+        protected int _DisposedCnt = 0;
+        protected bool _Disposed { get { return _DisposedCnt > 0; } }
+        protected virtual void Dispose(bool disposing)
         {
-            if (!_Disposed)
+            if (System.Threading.Interlocked.Increment(ref _DisposedCnt) == 1)
             {
-                Volatile.Write(ref _Disposed, true);
                 OnDispose();
                 OnClose();
             }
@@ -1367,7 +1368,7 @@ namespace Capstones.Net
             {
                 return null;
             }
-            if (Volatile.Read(ref _Disposed))
+            if (_Disposed)
             {
                 return null;
             }
@@ -1601,7 +1602,7 @@ namespace Capstones.Net
                             }
                             finally
                             {
-                                Dispose();
+                                OnDispose();
                             }
                         });
                     }
@@ -1628,7 +1629,7 @@ namespace Capstones.Net
             }
             if (!_Channel.IsAlive)
             {
-                Dispose();
+                OnDispose();
                 return;
             }
             if (PositiveMode)
@@ -1673,14 +1674,39 @@ namespace Capstones.Net
             }
             finally
             {
-                Dispose();
+                OnDispose();
             }
         }
 
 #region IDisposable Support
         public bool LeaveOpen = false;
+        protected override void Dispose(bool disposing)
+        {
+            if (System.Threading.Interlocked.Increment(ref _DisposedCnt) == 1)
+            {
+                var channel = _Channel;
+                if (channel != null)
+                {
+                    var con = channel.Connection;
+                    if (con != null)
+                    {
+                        con.Dispose();
+                    }
+                    var stream = channel.Stream;
+                    if (stream != null)
+                    {
+                        stream.Dispose();
+                    }
+                }
+                if (PositiveMode)
+                {
+                    OnDispose();
+                }
+            }
+        }
         protected override void OnDispose()
         {
+            System.Threading.Interlocked.Increment(ref _DisposedCnt);
             if (_Channel != null)
             {
                 _Channel.OnReceiveObj -= OnChannelReceive;
@@ -1722,6 +1748,7 @@ namespace Capstones.Net
                     }
                 }
             }
+            FireOnClose();
         }
 #endregion
     }
