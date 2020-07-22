@@ -73,15 +73,20 @@ namespace Capstones.Net
 
         protected Socket _Socket6;
 
-        protected ConcurrentQueueFixedSize<Socket> _AcceptedSockets4 = new ConcurrentQueueFixedSize<Socket>(CONST.MAX_SERVER_PENDING_CONNECTIONS + 1);
-        protected ConcurrentQueueFixedSize<Socket> _AcceptedSockets6 = new ConcurrentQueueFixedSize<Socket>(CONST.MAX_SERVER_PENDING_CONNECTIONS + 1);
+        protected struct AcceptedSocketInfo
+        {
+            public Socket Socket;
+            public bool IsIPv6;
+        }
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+        protected ConcurrentQueueGrowOnly<AcceptedSocketInfo> _AcceptedSockets = new ConcurrentQueueGrowOnly<AcceptedSocketInfo>();
+#else
+        protected System.Collections.Concurrent.ConcurrentQueue<AcceptedSocketInfo> _AcceptedSockets = new System.Collections.Concurrent.ConcurrentQueue<AcceptedSocketInfo>();
+#endif
         protected Semaphore _AcceptedSemaphore = new Semaphore(0, CONST.MAX_SERVER_PENDING_CONNECTIONS * 2);
         protected int _NeedAcceptSocket4Count = CONST.MAX_SERVER_PENDING_CONNECTIONS;
         protected int _NeedAcceptSocket6Count = CONST.MAX_SERVER_PENDING_CONNECTIONS;
 
-        //protected Socket _AcceptedSocket4;
-        //protected Socket _AcceptedSocket6;
-        //protected Semaphore _AcceptedSemaphore = new Semaphore(0, 2);
         protected void BeginAccept4()
         {
             try
@@ -95,13 +100,13 @@ namespace Capstones.Net
                         {
                             throw new NullReferenceException("Accepted a null socket.");
                         }
-                        _AcceptedSockets4.Enqueue(socket);
-                        //Interlocked.Exchange(ref _AcceptedSocket4, socket);
+                        _AcceptedSockets.Enqueue(new AcceptedSocketInfo() { Socket = socket, IsIPv6 = false });
                         _AcceptedSemaphore.Release();
                     }
                     catch (Exception e)
                     {
                         System.Threading.Interlocked.Increment(ref _NeedAcceptSocket4Count);
+                        _HaveDataToSend.Set();
                         PlatDependant.LogError(e);
                     }
                 }, null);
@@ -109,6 +114,7 @@ namespace Capstones.Net
             catch (Exception e)
             {
                 System.Threading.Interlocked.Increment(ref _NeedAcceptSocket4Count);
+                _HaveDataToSend.Set();
                 PlatDependant.LogError(e);
             }
         }
@@ -125,13 +131,13 @@ namespace Capstones.Net
                         {
                             throw new NullReferenceException("Accepted a null socket.");
                         }
-                        _AcceptedSockets6.Enqueue(socket);
-                        //Interlocked.Exchange(ref _AcceptedSocket6, socket);
+                        _AcceptedSockets.Enqueue(new AcceptedSocketInfo() { Socket = socket, IsIPv6 = true });
                         _AcceptedSemaphore.Release();
                     }
                     catch (Exception e)
                     {
                         System.Threading.Interlocked.Increment(ref _NeedAcceptSocket6Count);
+                        _HaveDataToSend.Set();
                         PlatDependant.LogError(e);
                     }
                 }, null);
@@ -139,6 +145,7 @@ namespace Capstones.Net
             catch (Exception e)
             {
                 System.Threading.Interlocked.Increment(ref _NeedAcceptSocket6Count);
+                _HaveDataToSend.Set();
                 PlatDependant.LogError(e);
             }
         }
@@ -149,16 +156,18 @@ namespace Capstones.Net
             try
             {
                 _AcceptedSemaphore.WaitOne();
-                Socket rv = null;
-                if (_AcceptedSockets4.TryDequeue(out rv))
+                AcceptedSocketInfo info;
+                if (_AcceptedSockets.TryDequeue(out info))
                 {
-                    BeginAccept4();
-                    return rv;
-                }
-                if (_AcceptedSockets6.TryDequeue(out rv))
-                {
-                    BeginAccept6();
-                    return rv;
+                    if (info.IsIPv6)
+                    {
+                        BeginAccept6();
+                    }
+                    else
+                    {
+                        BeginAccept4();
+                    }
+                    return info.Socket;
                 }
                 return null;
             }
@@ -182,16 +191,18 @@ namespace Capstones.Net
                     _AcceptedSemaphore.Release();
                     return null;
                 }
-                Socket rv = null;
-                if (_AcceptedSockets4.TryDequeue(out rv))
+                AcceptedSocketInfo info;
+                if (_AcceptedSockets.TryDequeue(out info))
                 {
-                    BeginAccept4();
-                    return rv;
-                }
-                if (_AcceptedSockets6.TryDequeue(out rv))
-                {
-                    BeginAccept6();
-                    return rv;
+                    if (info.IsIPv6)
+                    {
+                        BeginAccept6();
+                    }
+                    else
+                    {
+                        BeginAccept4();
+                    }
+                    return info.Socket;
                 }
                 return null;
             }
