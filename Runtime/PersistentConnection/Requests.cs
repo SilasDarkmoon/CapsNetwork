@@ -1697,6 +1697,7 @@ namespace Capstones.Net
         {
             if (System.Threading.Interlocked.Increment(ref _DisposedCnt) == 1)
             {
+                var isPositiveMode = PositiveMode;
                 var channel = _Channel;
                 if (channel != null)
                 {
@@ -1711,7 +1712,7 @@ namespace Capstones.Net
                         stream.Dispose();
                     }
                 }
-                if (PositiveMode)
+                if (isPositiveMode)
                 {
                     OnDispose();
                 }
