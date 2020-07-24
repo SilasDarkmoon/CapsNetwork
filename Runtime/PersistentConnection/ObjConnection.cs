@@ -195,6 +195,7 @@ namespace Capstones.Net
             _Connection = connection;
             _LastReceiveTick = Environment.TickCount;
             _Connection.OnUpdate = OnConnectionUpdate;
+            _Connection.OnClose = con => Dispose();
             _ServerConnection = connection as IServerConnection;
             _PositiveConnection = connection as IPositiveConnection;
             _Stream = new ConnectionStream(_Connection, true) { DonotNotifyReceive = !_DeserializeInConnectionThread };

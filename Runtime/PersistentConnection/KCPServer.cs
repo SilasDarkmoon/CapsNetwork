@@ -91,9 +91,14 @@ namespace Capstones.Net
                     _InfoHandle.Free();
                     //_Info = null; // maybe we shoud not release this info.
 
+                    if (_OnClose != null)
+                    {
+                        _OnClose(this);
+                    }
                     // set handlers to null.
                     _OnUpdate = null;
                     _OnReceive = null;
+                    _OnClose = null;
                     //_OnSendComplete = null;
                 }
                 if (!inFinalizer)
@@ -390,6 +395,28 @@ namespace Capstones.Net
                     }
                 }
             }
+            protected CommonHandler _OnClose;
+            /// <summary>
+            /// This will be called in connection thread.
+            /// </summary>
+            public CommonHandler OnClose
+            {
+                get { return _OnClose; }
+                set
+                {
+                    if (value != _OnClose)
+                    {
+                        if (IsStarted)
+                        {
+                            PlatDependant.LogError("Cannot change PreDispose when connection started");
+                        }
+                        else
+                        {
+                            _OnClose = value;
+                        }
+                    }
+                }
+            }
             //protected SendCompleteHandler _OnSendComplete;
             ///// <summary>
             ///// This will be called in undetermined thread.
@@ -465,7 +492,7 @@ namespace Capstones.Net
             _ConnectionHandle = GCHandle.Alloc(_Connection);
 
             _Connection.UpdateInterval = 10;
-            _Connection.PreDispose = _con => DisposeSelf();
+            _Connection.OnClose = _con => DisposeSelf();
             _Connection.OnReceive = (data, cnt, sender) =>
             {
                 ServerConnection[] cons;

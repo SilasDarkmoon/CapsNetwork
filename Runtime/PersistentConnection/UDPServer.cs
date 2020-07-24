@@ -643,11 +643,12 @@ namespace Capstones.Net
             }
             finally
             {
+                _ConnectWorkFinished = true;
                 //_ConnectWorkStarted = false;
                 //_ConnectWorkFinished = false;
-                if (_PreDispose != null)
+                if (_OnClose != null)
                 {
-                    _PreDispose(this);
+                    _OnClose(this);
                 }
                 if (_Socket != null)
                 {
@@ -677,7 +678,7 @@ namespace Capstones.Net
                 _OnSend = null;
                 //_OnSendComplete = null;
                 _OnUpdate = null;
-                _PreDispose = null;
+                _OnClose = null;
             }
         }
         public override bool TrySend(MessageInfo minfo)

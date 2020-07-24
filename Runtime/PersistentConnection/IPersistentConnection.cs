@@ -32,6 +32,7 @@ namespace Capstones.Net
         EndPoint RemoteEndPoint { get; }
         ReceiveHandler OnReceive { get; set; }
         UpdateHandler OnUpdate { get; set; }
+        CommonHandler OnClose { get; set; }
         void Send(IPooledBuffer data, int cnt);
         void Send(ValueList<PooledBufferSpan> data); // the buffer in data do not need to AddRef and can be released directly.
         void Send(object data, SendSerializer serializer);

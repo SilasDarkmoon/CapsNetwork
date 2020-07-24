@@ -50,7 +50,7 @@ namespace Capstones.Net
             // set minrto to 10?
 
             _Connection.UpdateInterval = 10;
-            _Connection.PreDispose = _con => DisposeSelf();
+            _Connection.OnClose = _con => DisposeSelf();
             _Connection.OnReceive = (data, cnt, sender) =>
             {
                 _KCP.Input(data, cnt);
@@ -140,9 +140,14 @@ namespace Capstones.Net
                 _ConnectionHandle.Free();
                 //_Connection = null; // the connection should be disposed alreay, so we donot need to set it to null.
 
+                if (_OnClose != null)
+                {
+                    _OnClose(this);
+                }
                 // set handlers to null.
                 _OnUpdate = null;
                 _OnReceive = null;
+                _OnClose = null;
             }
         }
 
@@ -228,6 +233,28 @@ namespace Capstones.Net
                     else
                     {
                         _OnUpdate = value;
+                    }
+                }
+            }
+        }
+        protected CommonHandler _OnClose;
+        /// <summary>
+        /// This will be called in connection thread.
+        /// </summary>
+        public CommonHandler OnClose
+        {
+            get { return _OnClose; }
+            set
+            {
+                if (value != _OnClose)
+                {
+                    if (IsStarted)
+                    {
+                        PlatDependant.LogError("Cannot change PreDispose when connection started");
+                    }
+                    else
+                    {
+                        _OnClose = value;
                     }
                 }
             }

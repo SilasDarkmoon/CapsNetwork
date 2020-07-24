@@ -34,7 +34,7 @@ namespace Capstones.Net
         protected int _UpdateInterval = -1;
         protected int _EaseUpdateRatio = 8;
         //protected SendCompleteHandler _OnSendComplete;
-        protected CommonHandler _PreDispose;
+        protected CommonHandler _OnClose;
         protected UpdateHandler _OnUpdate;
         protected SendHandler _OnSend;
         protected CommonHandler _PreStart;
@@ -154,12 +154,12 @@ namespace Capstones.Net
         /// <summary>
         /// This will be called in connection thread.
         /// </summary>
-        public CommonHandler PreDispose
+        public CommonHandler OnClose
         {
-            get { return _PreDispose; }
+            get { return _OnClose; }
             set
             {
-                if (value != _PreDispose)
+                if (value != _OnClose)
                 {
                     if (IsStarted)
                     {
@@ -167,7 +167,7 @@ namespace Capstones.Net
                     }
                     else
                     {
-                        _PreDispose = value;
+                        _OnClose = value;
                     }
                 }
             }
@@ -981,11 +981,12 @@ namespace Capstones.Net
             }
             finally
             {
+                _ConnectWorkFinished = true;
                 //_ConnectWorkStarted = false;
                 //_ConnectWorkFinished = false;
-                if (_PreDispose != null)
+                if (_OnClose != null)
                 {
-                    _PreDispose(this);
+                    _OnClose(this);
                 }
                 if (_Socket != null)
                 {
@@ -997,7 +998,7 @@ namespace Capstones.Net
                 _OnSend = null;
                 //_OnSendComplete = null;
                 _OnUpdate = null;
-                _PreDispose = null;
+                _OnClose = null;
             }
         }
 

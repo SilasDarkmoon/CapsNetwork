@@ -30,7 +30,7 @@ namespace Capstones.Net
         private string _Url;
         protected ReceiveHandler _OnReceive;
         //protected SendCompleteHandler _OnSendComplete;
-        protected CommonHandler _PreDispose;
+        protected CommonHandler _OnClose;
         protected SendHandler _OnSend;
         protected UpdateHandler _OnUpdate;
         protected bool _PositiveMode;
@@ -104,12 +104,12 @@ namespace Capstones.Net
         /// <summary>
         /// This will be called in connection thread.
         /// </summary>
-        public CommonHandler PreDispose
+        public CommonHandler OnClose
         {
-            get { return _PreDispose; }
+            get { return _OnClose; }
             set
             {
-                if (value != _PreDispose)
+                if (value != _OnClose)
                 {
                     if (IsStarted)
                     {
@@ -117,7 +117,7 @@ namespace Capstones.Net
                     }
                     else
                     {
-                        _PreDispose = value;
+                        _OnClose = value;
                     }
                 }
             }
@@ -580,11 +580,12 @@ namespace Capstones.Net
             }
             finally
             {
+                _ConnectWorkFinished = true;
                 //_ConnectWorkRunning = false;
                 //_ConnectWorkCanceled = false;
-                if (_PreDispose != null)
+                if (_OnClose != null)
                 {
-                    _PreDispose(this);
+                    _OnClose(this);
                 }
                 if (_Socket != null)
                 {
@@ -596,7 +597,7 @@ namespace Capstones.Net
                 _OnSend = null;
                 _OnUpdate = null;
                 //_OnSendComplete = null;
-                _PreDispose = null;
+                _OnClose = null;
             }
         }
 
