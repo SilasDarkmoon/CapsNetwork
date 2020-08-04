@@ -25,7 +25,7 @@ namespace Capstones.Net
 {
     public static class AttachmentExtensions
     {
-#if !UNITY_ENGINE && !UNITY_5_3_OR_NEWER || NET_4_6 || NET_STANDARD_2_0
+#if (!UNITY_ENGINE && !UNITY_5_3_OR_NEWER || NET_4_6 || NET_STANDARD_2_0) && !USE_LOCKED_DICTIONARY_INSTEAD_OF_CONCURRENT_DICTIONARY
         private static ConcurrentDictionary<object, ConcurrentDictionary<string, object>> _AttachmentList = new ConcurrentDictionary<object, ConcurrentDictionary<string, object>>();
         public static void SetAttachment(object owner, string name, object attach)
         {
@@ -115,7 +115,7 @@ namespace Capstones.Net
                 return;
             }
 
-            IConnectionStatus connection = owner as IConnectionStatus;
+            IChannel connection = owner as IChannel;
             if (connection == null || connection.IsAlive)
             {
                 Dictionary<string, object> attachments;
@@ -250,7 +250,7 @@ namespace Capstones.Net
         }
     }
 
-    #region Attachments
+#region Attachments
     public class RTTMeasure
     {
         public const int TrackedRTTCnt = 10;
@@ -536,5 +536,5 @@ namespace Capstones.Net
             }
         }
     }
-    #endregion
+#endregion
 }
