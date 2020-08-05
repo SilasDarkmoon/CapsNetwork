@@ -874,6 +874,7 @@ namespace Capstones.Net
             var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
             if (handler != null)
             {
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
                 if (onClose == null)
                 {
                     handler.OnClose = null;
@@ -882,29 +883,16 @@ namespace Capstones.Net
                 {
                     if (ThreadSafeValues.IsMainThread)
                     {
-                        SynchronizationContext sync = null;
-                        try
-                        {
-                            sync = SynchronizationContext.Current;
-                        }
-                        catch (Exception e)
-                        {
-                            PlatDependant.LogError(e);
-                        }
-                        if (sync == null)
-                        {
-                            handler.OnClose = onClose;
-                        }
-                        else
-                        {
-                            handler.OnClose = () => sync.Post(state => onClose(), null);
-                        }
+                        handler.OnClose = () => UnityThreadDispatcher.RunInUnityThread(onClose);
                     }
                     else
                     {
                         handler.OnClose = onClose;
                     }
                 }
+#else
+                handler.OnClose = onClose;
+#endif
             }
         }
         public static void OnMessage(ReqClient client, Action<byte, ushort, object> onMessage)
