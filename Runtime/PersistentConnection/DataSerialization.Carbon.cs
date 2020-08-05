@@ -874,7 +874,37 @@ namespace Capstones.Net
             var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
             if (handler != null)
             {
-                handler.OnClose = onClose;
+                if (onClose == null)
+                {
+                    handler.OnClose = null;
+                }
+                else
+                {
+                    if (ThreadSafeValues.IsMainThread)
+                    {
+                        SynchronizationContext sync = null;
+                        try
+                        {
+                            sync = SynchronizationContext.Current;
+                        }
+                        catch (Exception e)
+                        {
+                            PlatDependant.LogError(e);
+                        }
+                        if (sync == null)
+                        {
+                            handler.OnClose = onClose;
+                        }
+                        else
+                        {
+                            handler.OnClose = () => sync.Post(state => onClose(), null);
+                        }
+                    }
+                    else
+                    {
+                        handler.OnClose = onClose;
+                    }
+                }
             }
         }
         public static void OnMessage(ReqClient client, Action<byte, ushort, object> onMessage)
