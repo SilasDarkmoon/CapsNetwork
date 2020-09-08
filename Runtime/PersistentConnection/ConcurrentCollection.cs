@@ -1384,44 +1384,4 @@ namespace Capstones.UnityEngineEx
         }
     }
 #endif
-
-    public class WriteReadInTwoThread<T> where T : class, new()
-    {
-        protected class DataWithVersion
-        {
-            public T Data;
-            public int Version;
-        }
-
-        protected DataWithVersion _Read = new DataWithVersion() { Data = new T() };
-        protected DataWithVersion _Write = new DataWithVersion() { Data = new T() };
-        protected DataWithVersion _Inter = new DataWithVersion() { Data = new T() };
-
-        public T Read
-        {
-            get
-            {
-                var ver = _Read.Version;
-                _Read = Interlocked.Exchange(ref _Inter, _Read);
-                if (ver > _Read.Version)
-                {
-                    _Read = Interlocked.Exchange(ref _Inter, _Read);
-                }
-                return _Read.Data;
-            }
-        }
-        public T Write
-        {
-            get
-            {
-                return _Write.Data;
-            }
-        }
-        public void FinishWrite()
-        {
-            var ver = ++_Write.Version;
-            _Write = Interlocked.Exchange(ref _Inter, _Write);
-            _Write.Version = ver;
-        }
-    }
 }
