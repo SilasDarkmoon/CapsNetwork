@@ -348,6 +348,35 @@ namespace Capstones.Net
         }
     }
 
+    public class PooledBufferStream : ManagedBufferStream
+    {
+        protected IPooledBuffer _Pooled;
+        public PooledBufferStream(int size)
+        {
+            if (size < 0)
+            {
+                size = 0;
+            }
+            _Pooled = BufferPool.GetBufferFromPool(size + _HeadSpace);
+            _RealBuffer = _Pooled.Buffer;
+            _Offset = _HeadSpace;
+            _Count = 0;
+            _Pos = 0;
+        }
+        public PooledBufferStream() : this(0)
+        {
+        }
+        protected override void Resize(int cnt)
+        {
+            var newPooled = BufferPool.GetBufferFromPool(cnt);
+            var newBuffer = newPooled.Buffer;
+            Buffer.BlockCopy(_RealBuffer, 0, newBuffer, 0, Math.Min(cnt, _RealBuffer.Length));
+            _Pooled.Release();
+            _Pooled = newPooled;
+            _RealBuffer = newBuffer;
+        }
+    }
+
     public struct BufferInfo
     {
         public BufferInfo(IPooledBuffer buffer, int cnt)
