@@ -482,7 +482,7 @@ namespace Capstones.UnityEditorEx.Net
                                     sw.Write("    public static class ProtobufReaderAndWriterReg");
                                     sw.WriteLine(sbFileNamePart);
                                     sw.WriteLine("#else");
-                                    sw.WriteLine("    public partial class ProtobufReaderAndWriter");
+                                    sw.WriteLine("    public static partial class ProtobufReg");
                                     sw.WriteLine("#endif");
                                     sw.WriteLine("    {");
                                     for (int i = 0; i < sorted.Length; ++i)
@@ -490,9 +490,9 @@ namespace Capstones.UnityEditorEx.Net
                                         var minfo = sorted[i];
                                         if (!minfo.IsEnum && minfo.RegID > 0)
                                         {
-                                            sw.Write("        private static ProtobufReaderAndWriter.RegisteredType _Reg_");
+                                            sw.Write("        private static ProtobufReg.RegisteredType _Reg_");
                                             sw.Write(minfo.FullCSharpName.Replace('.', '_'));
-                                            sw.Write(" = new ProtobufReaderAndWriter.RegisteredType(");
+                                            sw.Write(" = new ProtobufReg.RegisteredType(");
                                             sw.Write(minfo.RegID);
                                             sw.Write(", typeof(");
                                             sw.Write(minfo.FullCSharpName);

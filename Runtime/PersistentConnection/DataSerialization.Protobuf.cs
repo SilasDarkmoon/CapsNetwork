@@ -830,40 +830,6 @@ namespace Capstones.Net
 
     public partial class ProtobufReaderAndWriter : DataReaderAndWriter
     {
-        private static Dictionary<uint, Google.Protobuf.MessageParser> _DataParsers;
-        private static Dictionary<uint, Google.Protobuf.MessageParser> DataParsers
-        {
-            get
-            {
-                if (_DataParsers == null)
-                {
-                    _DataParsers = new Dictionary<uint, Google.Protobuf.MessageParser>();
-                }
-                return _DataParsers;
-            }
-        }
-        private static Dictionary<Type, uint> _RegisteredTypes;
-        private static Dictionary<Type, uint> RegisteredTypes
-        {
-            get
-            {
-                if (_RegisteredTypes == null)
-                {
-                    _RegisteredTypes = new Dictionary<Type, uint>();
-                }
-                return _RegisteredTypes;
-            }
-        }
-
-        public class RegisteredType
-        {
-            public RegisteredType(uint id, Type messageType, Google.Protobuf.MessageParser parser)
-            {
-                DataParsers[id] = parser;
-                RegisteredTypes[messageType] = id;
-            }
-        }
-
         public override uint GetDataType(object data)
         {
             if (data == null)
@@ -875,7 +841,7 @@ namespace Capstones.Net
             {
                 return rv;
             }
-            RegisteredTypes.TryGetValue(data.GetType(), out rv);
+            ProtobufReg.RegisteredTypes.TryGetValue(data.GetType(), out rv);
             return rv;
         }
         public override object Read(uint type, InsertableStream buffer, int offset, int cnt, object exFlags)
@@ -886,7 +852,7 @@ namespace Capstones.Net
                 return frombase;
             }
             Google.Protobuf.MessageParser parser;
-            DataParsers.TryGetValue(type, out parser);
+            ProtobufReg.DataParsers.TryGetValue(type, out parser);
             if (parser != null)
             {
                 try
