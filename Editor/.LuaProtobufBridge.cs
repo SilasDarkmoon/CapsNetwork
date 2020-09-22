@@ -139,7 +139,7 @@ namespace Capstones.LuaExt
             }
         }
 
-        public static void WriteProtocolData(this IntPtr l, object data)
+        public static bool WriteProtocolData(this IntPtr l, object data)
         {
             if (data != null)
             {
@@ -147,10 +147,12 @@ namespace Capstones.LuaExt
                 if (TypedSyncFuncs.TryGetValue(data.GetType(), out reg))
                 {
                     reg.PushFunc(l, data);
+                    return true;
                 }
             }
+            return false;
         }
-        public static void ReadProtocolData(this IntPtr l, object data)
+        public static bool ReadProtocolData(this IntPtr l, object data)
         {
             if (data != null)
             {
@@ -158,8 +160,10 @@ namespace Capstones.LuaExt
                 if (TypedSyncFuncs.TryGetValue(data.GetType(), out reg))
                 {
                     reg.ReadFunc(l, data);
+                    return true;
                 }
             }
+            return false;
         }
         public static void PushProtocol(this IntPtr l, object data)
         {
