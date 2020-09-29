@@ -175,6 +175,10 @@ namespace Capstones.UnityEngineEx
                 OverwriteList(buffer, offset, count);
             }
         }
+        public void Consume()
+        {
+            _Offset += _Pos;
+        }
 
         #region Dispose
         protected int _DisposedCnt;

@@ -17,19 +17,16 @@ namespace Capstones.Net
 {
     public class CarbonExFlags
     {
-        public byte Flags;
-        public ulong TraceIdHigh;
-        public uint TraceIdLow;
-        public byte Cate;
+        public short Flags;
+        public short Cate;
+        public int Type;
     }
 
     public class CarbonMessage
     {
-        public byte Flags;
-        public ulong TraceIdHigh;
-        public uint TraceIdLow;
-        public byte Cate;
-        public ushort Type;
+        public short Flags;
+        public short Cate;
+        public int Type;
 
         private object _Message;
         public object ObjMessage
@@ -56,11 +53,11 @@ namespace Capstones.Net
         {
             if (value)
             {
-                Flags |= unchecked((byte)(0x1 << index));
+                Flags |= unchecked((short)(0x1 << index));
             }
             else
             {
-                Flags &= unchecked((byte)~(0x1 << index));
+                Flags &= unchecked((short)~(0x1 << index));
             }
         }
         public bool Encrypted
@@ -77,8 +74,7 @@ namespace Capstones.Net
 
     /// <summary>
     /// Bytes: (4 size)
-    /// 1 flags, 12 trace, 1 proto-category 2 message-type
-    /// (12 trace pingback)
+    /// 2 flags, 2 proto-category, 4 message-type
     /// </summary>
     public class CarbonSplitter : DataSplitter, IBuffered
     {
@@ -96,12 +92,198 @@ namespace Capstones.Net
             Attach(input);
         }
 
+        protected void FireReceiveBlock(InsertableStream buffer, int size, CarbonExFlags exFlags)
+        {
+            if (buffer == null)
+            {
+                FireReceiveBlock(null, 0, (uint)exFlags.Type, (uint)(ushort)exFlags.Flags, 0, 0, exFlags);
+            }
+            else if (exFlags.Cate == 2 && exFlags.Type == 1)
+            {
+                bool decodeSuccess = false;
+                uint seq_client = 0;
+                uint sseq = 0;
+                uint pbtype = 0;
+                uint pbtag = 0;
+                uint pbflags = 0;
+                int pbsize = 0;
+                try
+                {
+                    buffer.Seek(0, SeekOrigin.Begin);
+                    while (true)
+                    { // Read Each Tag-Field
+                        if (pbtype == 0)
+                        { // Determine the start of a message.
+                            while (pbtag == 0)
+                            {
+                                try
+                                {
+                                    ulong tag = ProtobufEncoder.ReadVariant(buffer);
+                                    pbtag = (uint)tag;
+                                }
+                                catch (Google.Protobuf.InvalidProtocolBufferException e)
+                                {
+                                    PlatDependant.LogError(e);
+                                }
+                                catch (InvalidOperationException)
+                                {
+                                    // this means the stream is closed. so we ignore the exception.
+                                    //PlatDependant.LogError(e);
+                                    return;
+                                }
+                                catch (Exception e)
+                                {
+                                    PlatDependant.LogError(e);
+                                    return;
+                                }
+                            }
+                        }
+                        else
+                        { // The Next tag must follow
+                            try
+                            {
+                                ulong tag = ProtobufEncoder.ReadVariant(buffer);
+                                pbtag = (uint)tag;
+                                if (pbtag == 0)
+                                {
+                                    return;
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                PlatDependant.LogError(e);
+                                return;
+                            }
+                        }
+                        try
+                        { // Tag got.
+                            int seq = Google.Protobuf.WireFormat.GetTagFieldNumber(pbtag);
+                            var ttype = Google.Protobuf.WireFormat.GetTagWireType(pbtag);
+                            if (seq == 1)
+                            {
+                                if (ttype == Google.Protobuf.WireFormat.WireType.Varint)
+                                {
+                                    ulong value = ProtobufEncoder.ReadVariant(buffer);
+                                    pbtype = (uint)ProtobufEncoder.DecodeZigZag64(value);
+                                }
+                                else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
+                                {
+                                    uint value = ProtobufEncoder.ReadFixed32(buffer);
+                                    pbtype = value;
+                                }
+                            }
+                            else if (pbtype != 0)
+                            {
+                                if (seq == 2)
+                                {
+                                    if (ttype == Google.Protobuf.WireFormat.WireType.Varint)
+                                    {
+                                        ulong value = ProtobufEncoder.ReadVariant(buffer);
+                                        pbflags = (uint)value;
+                                    }
+                                    else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
+                                    {
+                                        uint value = ProtobufEncoder.ReadFixed32(buffer);
+                                        pbflags = value;
+                                    }
+                                }
+                                else if (seq == 3)
+                                {
+                                    if (ttype == Google.Protobuf.WireFormat.WireType.Varint)
+                                    {
+                                        ulong value = ProtobufEncoder.ReadVariant(buffer);
+                                        seq_client = (uint)value;
+                                    }
+                                    else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
+                                    {
+                                        uint value = ProtobufEncoder.ReadFixed32(buffer);
+                                        seq_client = value;
+                                    }
+                                }
+                                else if (seq == 4)
+                                {
+                                    if (ttype == Google.Protobuf.WireFormat.WireType.Varint)
+                                    {
+                                        ulong value = ProtobufEncoder.ReadVariant(buffer);
+                                        sseq = (uint)value;
+                                    }
+                                    else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
+                                    {
+                                        uint value = ProtobufEncoder.ReadFixed32(buffer);
+                                        sseq = value;
+                                    }
+                                }
+                                else if (seq == 5)
+                                {
+                                    if (ttype == Google.Protobuf.WireFormat.WireType.LengthDelimited)
+                                    {
+                                        ulong value = ProtobufEncoder.ReadVariant(buffer);
+                                        pbsize = (int)value;
+                                    }
+                                    else if (ttype == Google.Protobuf.WireFormat.WireType.Fixed32)
+                                    {
+                                        uint value = ProtobufEncoder.ReadFixed32(buffer);
+                                        pbsize = (int)value;
+                                    }
+                                    else
+                                    {
+                                        pbsize = 0;
+                                    }
+                                    if (pbsize >= 0)
+                                    {
+                                        if (pbsize > buffer.Length - buffer.Position)
+                                        {
+                                            PlatDependant.LogError("We got a too long message. We will drop this message and treat it as an error message.");
+                                            return;
+                                        }
+                                        else
+                                        {
+                                            buffer.Consume();
+                                            FireReceiveBlock(buffer, pbsize, pbtype, pbflags, seq_client, sseq, exFlags);
+                                            decodeSuccess = true;
+                                            return;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        return;
+                                    }
+                                }
+                            }
+                            // else means the first field(type) has not been read yet.
+                            pbtag = 0;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // this means the stream is closed. so we ignore the exception.
+                            //PlatDependant.LogError(e);
+                            return;
+                        }
+                        catch (Exception e)
+                        {
+                            PlatDependant.LogError(e);
+                        }
+                    }
+                }
+                finally
+                {
+                    if (!decodeSuccess)
+                    {
+                        FireReceiveBlock(null, 0, pbtype, pbflags, seq_client, sseq, exFlags);
+                    }
+                }
+            }
+            else
+            {
+                FireReceiveBlock(buffer, size, (uint)exFlags.Type, (uint)(ushort)exFlags.Flags, 0, 0, exFlags);
+            }
+        }
         protected override void FireReceiveBlock(InsertableStream buffer, int size, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
             ResetReadBlockContext();
             base.FireReceiveBlock(buffer, size, type, flags, seq, sseq, exFlags);
         }
-        protected void ReadHeaders(out uint size, out byte flags, out ulong traceHigh, out uint traceLow, out byte cate, out ushort type)
+        protected void ReadHeaders(out uint size, out short flags, out short cate, out int type)
         {
             // Read size.(4 bytes)
             size = 0;
@@ -110,26 +292,23 @@ namespace Capstones.Net
                 size <<= 8;
                 size += (byte)_InputStream.ReadByte();
             }
-            // Read flags.(1 byte)
-            flags = (byte)_InputStream.ReadByte();
-            // Read Trace Id.(12 bytes)
-            traceHigh = 0;
-            traceLow = 0;
-            for (int i = 0; i < 8; ++i)
-            {
-                traceHigh <<= 8;
-                traceHigh += (byte)_InputStream.ReadByte();
-            }
-            for (int i = 0; i < 4; ++i)
-            {
-                traceLow <<= 8;
-                traceLow += (byte)_InputStream.ReadByte();
-            }
-            // Read Cate.(1 byte)
-            cate = (byte)_InputStream.ReadByte();
-            // Read Type. (2 byte)
-            type = 0;
+            // Read flags.(2 byte)
+            flags = 0;
             for (int i = 0; i < 2; ++i)
+            {
+                flags <<= 8;
+                flags += (byte)_InputStream.ReadByte();
+            }
+            // Read Cate.(2 byte)
+            cate = 0;
+            for (int i = 0; i < 2; ++i)
+            {
+                cate <<= 8;
+                cate += (byte)_InputStream.ReadByte();
+            }
+            // Read Type. (4 byte)
+            type = 0;
+            for (int i = 0; i < 4; ++i)
             {
                 type <<= 8;
                 type += (byte)_InputStream.ReadByte();
@@ -142,20 +321,16 @@ namespace Capstones.Net
                 try
                 {
                     uint size;
-                    byte flags;
-                    ulong traceHigh;
-                    uint traceLow;
-                    byte cate;
-                    ushort type;
-                    ReadHeaders(out size, out flags, out traceHigh, out traceLow, out cate, out type);
-                    int realsize = (int)(size - 16);
-                    uint realtype = unchecked((uint)(int)(short)type);
+                    short flags;
+                    short cate;
+                    int type;
+                    ReadHeaders(out size, out flags, out cate, out type);
+                    int realsize = (int)(size - 8);
                     var exFlags = new CarbonExFlags()
                     {
                         Flags = flags,
-                        TraceIdHigh = traceHigh,
-                        TraceIdLow = traceLow,
                         Cate = cate,
+                        Type = type,
                     };
                     if (realsize >= 0)
                     {
@@ -163,18 +338,18 @@ namespace Capstones.Net
                         {
                             PlatDependant.LogError("We got a too long message. We will drop this message and treat it as an error message.");
                             ProtobufEncoder.SkipBytes(_InputStream, realsize);
-                            FireReceiveBlock(null, 0, realtype, flags, 0, 0, exFlags);
+                            FireReceiveBlock(null, 0, exFlags);
                         }
                         else
                         {
                             _ReadBuffer.Clear();
                             ProtobufEncoder.CopyBytes(_InputStream, _ReadBuffer, realsize);
-                            FireReceiveBlock(_ReadBuffer, realsize, realtype, flags, 0, 0, exFlags);
+                            FireReceiveBlock(_ReadBuffer, realsize, exFlags);
                         }
                     }
                     else
                     {
-                        FireReceiveBlock(null, 0, realtype, flags, 0, 0, exFlags);
+                        FireReceiveBlock(null, 0, exFlags);
                     }
                     ResetReadBlockContext();
                     return;
@@ -195,11 +370,9 @@ namespace Capstones.Net
 
         private CarbonExFlags _ExFlags;
         private int _Size;
-        private uint _Type;
         private void ResetReadBlockContext()
         {
             _Size = 0;
-            _Type = 0;
             _ExFlags = null;
         }
         public int BufferedSize { get { return (_BufferedStream == null ? 0 : _BufferedStream.BufferedSize); } }
@@ -218,26 +391,22 @@ namespace Capstones.Net
                     {
                         if (_ExFlags == null)
                         {
-                            if (BufferedSize < 20)
+                            if (BufferedSize < 12)
                             {
                                 return false;
                             }
                             uint size;
-                            byte flags;
-                            ulong traceHigh;
-                            uint traceLow;
-                            byte cate;
-                            ushort type;
-                            ReadHeaders(out size, out flags, out traceHigh, out traceLow, out cate, out type);
+                            short flags;
+                            short cate;
+                            int type;
+                            ReadHeaders(out size, out flags, out cate, out type);
                             _ExFlags = new CarbonExFlags()
                             {
                                 Flags = flags,
-                                TraceIdHigh = traceHigh,
-                                TraceIdLow = traceLow,
                                 Cate = cate,
+                                Type = type,
                             };
-                            _Size = (int)(size - 16);
-                            _Type = (uint)(int)(short)type;
+                            _Size = (int)(size - 8);
                         }
                         else
                         {
@@ -251,18 +420,18 @@ namespace Capstones.Net
                                 {
                                     PlatDependant.LogError("We got a too long message. We will drop this message and treat it as an error message.");
                                     ProtobufEncoder.SkipBytes(_InputStream, _Size);
-                                    FireReceiveBlock(null, 0, _Type, _ExFlags.Flags, 0, 0, _ExFlags);
+                                    FireReceiveBlock(null, 0, _ExFlags);
                                 }
                                 else
                                 {
                                     _ReadBuffer.Clear();
                                     ProtobufEncoder.CopyBytes(_InputStream, _ReadBuffer, _Size);
-                                    FireReceiveBlock(_ReadBuffer, _Size, _Type, _ExFlags.Flags, 0, 0, _ExFlags);
+                                    FireReceiveBlock(_ReadBuffer, _Size, _ExFlags);
                                 }
                             }
                             else
                             {
-                                FireReceiveBlock(null, 0, _Type, _ExFlags.Flags, 0, 0, _ExFlags);
+                                FireReceiveBlock(null, 0, _ExFlags);
                             }
                             ResetReadBlockContext();
                             return true;
@@ -288,95 +457,52 @@ namespace Capstones.Net
         }
     }
 
-    public class CarbonComposer : DataComposer
+    public class CarbonComposer : ProtobufComposer
     {
         public override void PrepareBlock(InsertableStream data, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
             if (data != null)
             {
+                CarbonExFlags carbonflags = exFlags as CarbonExFlags;
+                if (carbonflags != null && carbonflags.Cate == 2 && carbonflags.Type == 1)
+                {
+                    // Wrapped-Protobuf
+                    base.PrepareBlock(data, type, flags, seq, sseq, exFlags);
+                }
+
                 var size = data.Count;
                 data.InsertMode = true;
                 data.Seek(0, SeekOrigin.Begin);
 
-                byte carbonFlags = 0;
-                ulong carbonTraceIdHigh = 0;
-                uint carbonTraceIdLow = 0;
-                byte carbonCate = 0;
-                CarbonExFlags carbonflags = exFlags as CarbonExFlags;
+                short carbonFlags = 0;
+                short carbonCate = 0;
+                int carbonType = 0;
                 if (carbonflags != null)
                 {
                     carbonFlags = carbonflags.Flags;
-                    carbonTraceIdHigh = carbonflags.TraceIdHigh;
-                    carbonTraceIdLow = carbonflags.TraceIdLow;
                     carbonCate = carbonflags.Cate;
+                    carbonType = carbonflags.Type;
                 }
 
-                bool is_client = seq != 0;
-                bool have_traceid = carbonTraceIdHigh != 0 || carbonTraceIdLow != 0;
-                bool is_pingback = is_client && have_traceid;
-
-                uint full_size = (uint)(size + 16);
-                if (is_pingback) full_size += 12;
+                uint full_size = (uint)(size + 8);
 
                 // write size.(4 bytes) (not included in full_size)
                 data.WriteByte((byte)((full_size & (0xFF << 24)) >> 24));
                 data.WriteByte((byte)((full_size & (0xFF << 16)) >> 16));
                 data.WriteByte((byte)((full_size & (0xFF << 8)) >> 8));
                 data.WriteByte((byte)(full_size & 0xFF));
-                // write flags.(1 byte)
-                data.WriteByte((byte)(flags | carbonFlags));
-                // Write TraceId (12 bytes)
-                if (is_client)
-                {
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                    data.WriteByte(0);
-                }
-                else
-                {
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 56)) >> 56));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 48)) >> 48));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 40)) >> 40));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 32)) >> 32));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 24)) >> 24));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 16)) >> 16));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 8)) >> 8));
-                    data.WriteByte((byte)(carbonTraceIdHigh & 0xFFUL));
-                    data.WriteByte((byte)((carbonTraceIdLow & (0xFF << 24)) >> 24));
-                    data.WriteByte((byte)((carbonTraceIdLow & (0xFF << 16)) >> 16));
-                    data.WriteByte((byte)((carbonTraceIdLow & (0xFF << 8)) >> 8));
-                    data.WriteByte((byte)(carbonTraceIdLow & 0xFF));
-                }
-                // Write Cate.(1 byte)
-                data.WriteByte(carbonCate);
-                // Write Type.(2 bytes)
-                data.WriteByte((byte)((type & (0xFF << 8)) >> 8));
-                data.WriteByte((byte)(type & 0xFF));
-                // write Traceback.(12 bytes)
-                if (is_pingback)
-                {
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 56)) >> 56));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 48)) >> 48));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 40)) >> 40));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 32)) >> 32));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 24)) >> 24));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 16)) >> 16));
-                    data.WriteByte((byte)((carbonTraceIdHigh & (0xFFUL << 8)) >> 8));
-                    data.WriteByte((byte)(carbonTraceIdHigh & 0xFFUL));
-                    data.WriteByte((byte)((carbonTraceIdLow & (0xFF << 24)) >> 24));
-                    data.WriteByte((byte)((carbonTraceIdLow & (0xFF << 16)) >> 16));
-                    data.WriteByte((byte)((carbonTraceIdLow & (0xFF << 8)) >> 8));
-                    data.WriteByte((byte)(carbonTraceIdLow & 0xFF));
-                }
+
+                // write flags.(2 byte)
+                data.WriteByte((byte)((carbonFlags & (0xFF << 8)) >> 8));
+                data.WriteByte((byte)(carbonFlags & 0xFF));
+                // Write Cate.(2 byte)
+                data.WriteByte((byte)((carbonCate & (0xFF << 8)) >> 8));
+                data.WriteByte((byte)(carbonCate & 0xFF));
+                // Write Type.(4 bytes)
+                data.WriteByte((byte)((carbonType & (0xFF << 24)) >> 24));
+                data.WriteByte((byte)((carbonType & (0xFF << 16)) >> 16));
+                data.WriteByte((byte)((carbonType & (0xFF << 8)) >> 8));
+                data.WriteByte((byte)(carbonType & 0xFF));
             }
         }
     }
@@ -391,14 +517,54 @@ namespace Capstones.Net
                 return new CarbonExFlags()
                 {
                     Flags = carbonmess.Flags,
-                    TraceIdHigh = carbonmess.TraceIdHigh,
-                    TraceIdLow = carbonmess.TraceIdLow,
                     Cate = carbonmess.Cate,
+                    Type = carbonmess.Type,
+                };
+            }
+            else if (data is byte[])
+            {
+                return new CarbonExFlags()
+                {
+                    Flags = 0,
+                    Cate = 2,
+                    Type = -128,
+                };
+            }
+            else if (data is string)
+            {
+                return new CarbonExFlags()
+                {
+                    Flags = 0,
+                    Cate = 1,
+                    Type = -128,
+                };
+            }
+            else if (GetDataType(data) != 0)
+            {
+                return new CarbonExFlags()
+                {
+                    Flags = 0,
+                    Cate = 2,
+                    Type = 1,
+                };
+            }
+            else if (data is Google.Protobuf.IMessage)
+            {
+                return new CarbonExFlags()
+                {
+                    Flags = 0,
+                    Cate = 4,
+                    Type = -128,
                 };
             }
             else
             {
-                return base.GetExFlags(data);
+                return new CarbonExFlags()
+                {
+                    Flags = 0,
+                    Cate = 2,
+                    Type = -128,
+                };
             }
         }
         public override uint GetDataType(object data)
@@ -406,7 +572,14 @@ namespace Capstones.Net
             CarbonMessage carbonmess = data as CarbonMessage;
             if (carbonmess != null)
             {
-                return (uint)(int)carbonmess.Type;
+                if (carbonmess.Cate == 2 && carbonmess.Type == 1)
+                {
+                    return base.GetDataType(carbonmess.ObjMessage);
+                }
+                else
+                {
+                    return 0;
+                }
             }
             else
             {
@@ -452,12 +625,10 @@ namespace Capstones.Net
                 var message = new CarbonMessage()
                 {
                     Flags = carbonFlags.Flags,
-                    TraceIdHigh = carbonFlags.TraceIdHigh,
-                    TraceIdLow = carbonFlags.TraceIdLow,
                     Cate = carbonFlags.Cate,
-                    Type = (ushort)(short)(int)type,
+                    Type = carbonFlags.Type,
                 };
-                if (carbonFlags.Cate == 3)
+                if (carbonFlags.Cate == 3 || carbonFlags.Cate == 1)
                 { // Json
                     byte[] raw = PredefinedMessages.GetRawBuffer(cnt);
                     buffer.Seek(offset, SeekOrigin.Begin);
@@ -475,6 +646,10 @@ namespace Capstones.Net
                 }
                 else if (carbonFlags.Cate == 4)
                 { // PB
+                    message.ObjMessage = ProtobufEncoder.ReadRaw(new ListSegment<byte>(buffer, offset, cnt));
+                }
+                else if (carbonFlags.Cate == 2 && carbonFlags.Type == 1)
+                {
                     message.ObjMessage = base.Read(type, buffer, offset, cnt, exFlags);
                 }
                 else
@@ -683,8 +858,8 @@ namespace Capstones.Net
         public class CarbonMessageHandler : IDisposable
         {
             public Action OnClose;
-            public Action<byte, ushort, object> OnMessage;
-            public Action<string, ushort> OnJsonMessage;
+            public Action<short, int, object> OnMessage;
+            public Action<string, int> OnJsonMessage;
 
             public CarbonMessageHandler(IReqClient client)
             {
@@ -757,40 +932,53 @@ namespace Capstones.Net
                     Timeout = -1,
                     Interval = 3000,
                 }),
-                new ConnectionFactory.ClientAttachmentCreator("QoSHandler", client =>
-                {
-                    var handler = client as ReqHandler;
-                    if (handler != null)
-                    {
-                        handler.RegHandler(FuncQosHandler);
-                    }
-                    return null;
-                }),
+                //new ConnectionFactory.ClientAttachmentCreator("QoSHandler", client =>
+                //{
+                //    var handler = client as ReqHandler;
+                //    if (handler != null)
+                //    {
+                //        handler.RegHandler(FuncQosHandler);
+                //    }
+                //    return null;
+                //}),
                 new ConnectionFactory.ClientAttachmentCreator("MessageHandler", client => new CarbonMessageHandler(client)),
             },
         };
-
-        [EventOrder(80)]
-        public static object QosHandler(IReqClient from, uint type, object reqobj, uint seq)
+        public static readonly ConnectionFactory.ExtendedConfig HostedPVPConnectionConfig = new ConnectionFactory.ExtendedConfig()
         {
-            var carbonMessage = reqobj as CarbonMessage;
-            if (carbonMessage != null && carbonMessage.ShouldPingback)
+            SConfig = new SerializationConfig()
             {
-                from.SendMessage(new CarbonMessage()
+                SplitterFactory = CarbonSplitter.Factory,
+                Composer = new CarbonComposer(),
+                ReaderWriter = new CarbonReaderAndWriter(),
+            },
+            ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
+            {
+                new ConnectionFactory.ClientAttachmentCreator("CarbonHeartbeat", client => new Heartbeat(client, HeartbeatMessage)
                 {
-                    TraceIdHigh = carbonMessage.TraceIdHigh,
-                    TraceIdLow = carbonMessage.TraceIdLow,
-                });
-            }
-            return null;
-        }
-        public static readonly Request.Handler FuncQosHandler = QosHandler;
+                    Timeout = -1,
+                    Interval = 3000,
+                }),
+            },
+        };
 
-        public static ReqClient Connect(string url)
-        {
-            return ConnectionFactory.GetClient<ReqClient>(url, ConnectionConfig);
-        }
-        public static ReqClient Connect(string host, int port)
+        //[EventOrder(80)]
+        //public static object QosHandler(IReqClient from, uint type, object reqobj, uint seq)
+        //{
+        //    var carbonMessage = reqobj as CarbonMessage;
+        //    if (carbonMessage != null && carbonMessage.ShouldPingback)
+        //    {
+        //        from.SendMessage(new CarbonMessage()
+        //        {
+        //            TraceIdHigh = carbonMessage.TraceIdHigh,
+        //            TraceIdLow = carbonMessage.TraceIdLow,
+        //        });
+        //    }
+        //    return null;
+        //}
+        //public static readonly Request.Handler FuncQosHandler = QosHandler;
+
+        public static string CombineUrl(string host, int port)
         {
             string url = null;
             IPAddress address;
@@ -831,6 +1019,15 @@ namespace Capstones.Net
                 url += port;
             }
             url = "tcp://" + url;
+            return url;
+        }
+        public static ReqClient Connect(string url)
+        {
+            return ConnectionFactory.GetClient<ReqClient>(url, ConnectionConfig);
+        }
+        public static ReqClient Connect(string host, int port)
+        {
+            string url = CombineUrl(host, port);
             return Connect(url);
         }
         public static ReqClient ConnectWithDifferentPort(string url, int port)
@@ -895,7 +1092,7 @@ namespace Capstones.Net
 #endif
             }
         }
-        public static void OnMessage(ReqClient client, Action<byte, ushort, object> onMessage)
+        public static void OnMessage(ReqClient client, Action<short, int, object> onMessage)
         {
             var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
             if (handler != null)
@@ -903,7 +1100,7 @@ namespace Capstones.Net
                 handler.OnMessage = onMessage;
             }
         }
-        public static void OnJson(ReqClient client, Action<string, ushort> onJson)
+        public static void OnJson(ReqClient client, Action<string, int> onJson)
         {
             var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
             if (handler != null)
