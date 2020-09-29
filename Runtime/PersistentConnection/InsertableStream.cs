@@ -178,6 +178,8 @@ namespace Capstones.UnityEngineEx
         public void Consume()
         {
             _Offset += _Pos;
+            _Count -= _Pos;
+            _Pos = 0;
         }
 
         #region Dispose
