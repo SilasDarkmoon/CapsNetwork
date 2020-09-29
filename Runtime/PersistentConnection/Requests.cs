@@ -2087,14 +2087,55 @@ namespace Capstones.Net
             }
         }
 
-        public struct ExtendedConfig
+        public struct ConnectionConfig : IEnumerable
         {
             public SerializationConfig SConfig;
             public IList<IClientAttachmentCreator> ClientAttachmentCreators;
             public IList<IServerAttachmentCreator> ServerAttachmentCreators;
+
+            public IEnumerator GetEnumerator()
+            {
+                yield return SConfig;
+                foreach (var creator in ClientAttachmentCreators)
+                {
+                    yield return creator;
+                }
+                foreach (var creator in ServerAttachmentCreators)
+                {
+                    yield return creator;
+                }
+            }
+
+            public ConnectionConfig(ConnectionConfig other)
+            {
+                SConfig = other.SConfig;
+                ClientAttachmentCreators = other.ClientAttachmentCreators == null ? null : new List<IClientAttachmentCreator>(other.ClientAttachmentCreators);
+                ServerAttachmentCreators = other.ServerAttachmentCreators == null ? null : new List<IServerAttachmentCreator>(other.ServerAttachmentCreators);
+            }
+
+            public void Add(SerializationConfig sconfig)
+            {
+                SConfig = sconfig;
+            }
+            public void Add(IClientAttachmentCreator creator)
+            {
+                if (ClientAttachmentCreators == null)
+                {
+                    ClientAttachmentCreators = new List<IClientAttachmentCreator>();
+                }
+                ClientAttachmentCreators.Add(creator);
+            }
+            public void Add(IServerAttachmentCreator creator)
+            {
+                if (ServerAttachmentCreators == null)
+                {
+                    ServerAttachmentCreators = new List<IServerAttachmentCreator>();
+                }
+                ServerAttachmentCreators.Add(creator);
+            }
         }
 
-        public static IReqClient GetClient(string url, ExtendedConfig econfig)
+        public static IReqClient GetClient(string url, ConnectionConfig econfig)
         {
             var uri = new Uri(url);
             var scheme = uri.Scheme;
@@ -2150,13 +2191,13 @@ namespace Capstones.Net
         }
         public static IReqClient GetClient(string url, SerializationConfig sconfig)
         {
-            return GetClient(url, new ExtendedConfig() { SConfig = sconfig });
+            return GetClient(url, new ConnectionConfig() { SConfig = sconfig });
         }
         public static IReqClient GetClient(string url)
         {
             return GetClient(url, null);
         }
-        public static T GetClient<T>(string url, ExtendedConfig econfig) where T : class, IReqClient
+        public static T GetClient<T>(string url, ConnectionConfig econfig) where T : class, IReqClient
         {
             return GetClient(url, econfig) as T;
         }
@@ -2168,7 +2209,7 @@ namespace Capstones.Net
         {
             return GetClient(url) as T;
         }
-        public static IReqServer GetServer(string url, ExtendedConfig econfig)
+        public static IReqServer GetServer(string url, ConnectionConfig econfig)
         {
             var uri = new Uri(url);
             var scheme = uri.Scheme;
@@ -2245,13 +2286,13 @@ namespace Capstones.Net
         }
         public static IReqServer GetServer(string url, SerializationConfig sconfig)
         {
-            return GetServer(url, new ExtendedConfig() { SConfig = sconfig });
+            return GetServer(url, new ConnectionConfig() { SConfig = sconfig });
         }
         public static IReqServer GetServer(string url)
         {
             return GetServer(url, null);
         }
-        public static T GetServer<T>(string url, ExtendedConfig econfig) where T : class, IReqServer
+        public static T GetServer<T>(string url, ConnectionConfig econfig) where T : class, IReqServer
         {
             return GetServer(url, econfig) as T;
         }

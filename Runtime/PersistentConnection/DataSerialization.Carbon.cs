@@ -917,7 +917,7 @@ namespace Capstones.Net
             }
         }
 
-        public static readonly ConnectionFactory.ExtendedConfig ConnectionConfig = new ConnectionFactory.ExtendedConfig()
+        public static readonly ConnectionFactory.ConnectionConfig ConnectionConfig = new ConnectionFactory.ConnectionConfig()
         {
             SConfig = new SerializationConfig()
             {
@@ -944,7 +944,7 @@ namespace Capstones.Net
                 new ConnectionFactory.ClientAttachmentCreator("MessageHandler", client => new CarbonMessageHandler(client)),
             },
         };
-        public static readonly ConnectionFactory.ExtendedConfig HostedPVPConnectionConfig = new ConnectionFactory.ExtendedConfig()
+        public static readonly ConnectionFactory.ConnectionConfig HostedPVPConnectionConfig = new ConnectionFactory.ConnectionConfig()
         {
             SConfig = new SerializationConfig()
             {
