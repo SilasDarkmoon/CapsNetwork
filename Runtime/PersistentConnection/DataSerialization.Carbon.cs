@@ -961,6 +961,21 @@ namespace Capstones.Net
                 }),
             },
         };
+        public static bool UseCarbonInPVP;
+        public static ConnectionFactory.ConnectionConfig PVPConnectionConfig
+        {
+            get
+            {
+                if (UseCarbonInPVP)
+                {
+                    return HostedPVPConnectionConfig;
+                }
+                else
+                {
+                    return default(ConnectionFactory.ConnectionConfig);
+                }
+            }
+        }
 
         //[EventOrder(80)]
         //public static object QosHandler(IReqClient from, uint type, object reqobj, uint seq)
