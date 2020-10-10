@@ -1075,7 +1075,7 @@ namespace Capstones.Net
                 }
                 client.SendMessage(new CarbonMessage()
                 {
-                    Type = unchecked((ushort)-1),
+                    Type = unchecked((ushort)-2),
                     BytesMessage = message,
                 });
             }
