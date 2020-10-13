@@ -959,6 +959,11 @@ namespace Capstones.Net
                     Timeout = -1,
                     Interval = 3000,
                 }),
+                new ConnectionFactory.ClientAttachmentCreator("TokenSender", client =>
+                {
+                    SendToken((ReqClient)client, null);
+                    return null;
+                }),
             },
         };
         public static bool UseCarbonInPVP;
@@ -1051,8 +1056,21 @@ namespace Capstones.Net
             return Connect(uri.DnsSafeHost, port);
         }
 
+        private static string _CurToken;
         public static void SendToken(ReqClient client, string token)
         {
+            if (token == null)
+            {
+                if (_CurToken == null)
+                {
+                    return;
+                }
+                token = _CurToken;
+            }
+            else
+            {
+                _CurToken = token;
+            }
             if (client != null)
             {
                 byte[] message = null;
