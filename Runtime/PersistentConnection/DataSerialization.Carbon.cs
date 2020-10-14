@@ -651,6 +651,7 @@ namespace Capstones.Net
                 else if (carbonFlags.Cate == 2 && carbonFlags.Type == 1)
                 {
                     message.ObjMessage = base.Read(type, buffer, offset, cnt, exFlags);
+                    return message.ObjMessage; // Notice: in this condition, we should not return the wrapper. Only the ObjMessage in the wrapper is meaningful.
                 }
                 else
                 { // Raw
