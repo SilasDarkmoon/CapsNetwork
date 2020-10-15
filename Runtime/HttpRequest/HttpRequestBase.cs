@@ -10,6 +10,12 @@ using System.Threading;
 using UnityEngine;
 using Capstones.UnityEngineEx;
 
+#if (UNITY_ENGINE || UNITY_5_3_OR_NEWER) && !NET_4_6 && !NET_STANDARD_2_0
+using Unity.IO.Compression;
+#else
+using System.IO.Compression;
+#endif
+
 namespace Capstones.Net
 {
     public class HttpRequestData
@@ -537,7 +543,12 @@ namespace Capstones.Net
         public byte[] ParseResponse(string token, ulong seq)
         {
             string error;
-            return ParseResponse(token, seq, out error);
+            var data = ParseResponse(token, seq, out error);
+            if (error != null)
+            {
+                PlatDependant.LogError(error);
+            }
+            return data;
         }
         public byte[] ParseResponse(string token, ulong seq, out string error)
         {
@@ -721,7 +732,7 @@ namespace Capstones.Net
             if (!string.IsNullOrEmpty(compressMethod))
             {
                 DataPostProcessFunc compressFunc;
-                if (EncryptFuncs.TryGetValue(compressMethod, out compressFunc))
+                if (CompressFuncs.TryGetValue(compressMethod, out compressFunc))
                 {
                     try
                     {
@@ -739,8 +750,11 @@ namespace Capstones.Net
             }
             if (data != null)
             {
-                AddHeaderRaw("Content-Encoding", compressMethod);
-                AddHeaderRaw("Accept-Encoding", compressMethod);
+                if (!string.IsNullOrEmpty(compressMethod))
+                {
+                    AddHeaderRaw("Content-Encoding", compressMethod);
+                    AddHeaderRaw("Accept-Encoding", compressMethod);
+                }
             }
             else
             {
@@ -856,6 +870,36 @@ namespace Capstones.Net
                     form.ContentType = "application/json";
                 }
             }
+
+            public static byte[] CompressFunc_GZip(byte[] data, string token, ulong seq)
+            {
+                var memstream = new MemoryStream();
+#if (UNITY_ENGINE || UNITY_5_3_OR_NEWER) && !NET_4_6 && !NET_STANDARD_2_0
+                using (var gzipstream = new Unity.IO.Compression.GZipStream(memstream, Unity.IO.Compression.CompressionLevel.Optimal, false))
+#else
+                using (var gzipstream = new System.IO.Compression.GZipStream(memstream, System.IO.Compression.CompressionLevel.Optimal, false))
+#endif
+                {
+                    gzipstream.Write(data, 0, data.Length);
+                    gzipstream.Flush();
+                    return memstream.ToArray();
+                }
+            }
+            public static byte[] DecompressFunc_GZip(byte[] data, string token, ulong seq)
+            {
+#if (UNITY_ENGINE || UNITY_5_3_OR_NEWER) && !NET_4_6 && !NET_STANDARD_2_0
+                using (var gzipstream = new Unity.IO.Compression.GZipStream(new MemoryStream(data), Unity.IO.Compression.CompressionMode.Decompress, false))
+#else
+                using (var gzipstream = new System.IO.Compression.GZipStream(new MemoryStream(data), System.IO.Compression.CompressionMode.Decompress, false))
+#endif
+                {
+                    using (var decompressed = new MemoryStream())
+                    {
+                        gzipstream.CopyTo(decompressed);
+                        return decompressed.ToArray();
+                    }
+                }
+            }
         }
 
         static HttpRequestBase()
@@ -867,6 +911,9 @@ namespace Capstones.Net
             RequestDataPrepareFuncs["default"] = PrepareFuncHelper.Prepare_Default;
             RequestDataPrepareFuncs["json"] = PrepareFuncHelper.Prepare_Json;
             RequestDataPrepareFuncs["form2json"] = PrepareFuncHelper.Prepare_Form2Json;
+
+            CompressFuncs["gzip"] = PrepareFuncHelper.CompressFunc_GZip;
+            DecompressFuncs["gzip"] = PrepareFuncHelper.DecompressFunc_GZip;
         }
 
         public static HttpRequestBase Create(string url, HttpRequestData headers, HttpRequestData data, string dest)
