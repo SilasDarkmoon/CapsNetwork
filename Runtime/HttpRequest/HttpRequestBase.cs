@@ -282,12 +282,13 @@ namespace Capstones.Net
         public abstract void StopRequest();
 
         public delegate byte[] DataPostProcessFunc(byte[] data, string token, ulong seq);
-        public static Dictionary<string, DataPostProcessFunc> CompressFuncs = new Dictionary<string, DataPostProcessFunc>();
-        public static Dictionary<string, DataPostProcessFunc> DecompressFuncs = new Dictionary<string, DataPostProcessFunc>();
-        public static Dictionary<string, DataPostProcessFunc> EncryptFuncs = new Dictionary<string, DataPostProcessFunc>();
-        public static Dictionary<string, DataPostProcessFunc> DecryptFuncs = new Dictionary<string, DataPostProcessFunc>();
+        public static readonly Dictionary<string, DataPostProcessFunc> CompressFuncs = new Dictionary<string, DataPostProcessFunc>();
+        public static readonly Dictionary<string, DataPostProcessFunc> DecompressFuncs = new Dictionary<string, DataPostProcessFunc>();
+        public static readonly Dictionary<string, DataPostProcessFunc> EncryptFuncs = new Dictionary<string, DataPostProcessFunc>();
+        public static readonly Dictionary<string, DataPostProcessFunc> DecryptFuncs = new Dictionary<string, DataPostProcessFunc>();
+        public static readonly HashSet<string> IgnoredCompressMethods = new HashSet<string>();
         public delegate void RequestDataPrepareFunc(HttpRequestData form, string token, ulong seq, HttpRequestData headers);
-        public static Dictionary<string, RequestDataPrepareFunc> RequestDataPrepareFuncs = new Dictionary<string, RequestDataPrepareFunc>();
+        public static readonly Dictionary<string, RequestDataPrepareFunc> RequestDataPrepareFuncs = new Dictionary<string, RequestDataPrepareFunc>();
         public static string PreferredCompressMethod;
         public static string PreferredEncryptMethod;
         public static string PreferredPrepareMethod;
@@ -593,7 +594,7 @@ namespace Capstones.Net
                     }
 
                     var data = _Resp;
-                    if (!string.IsNullOrEmpty(enc))
+                    if (!string.IsNullOrEmpty(enc) && !IgnoredCompressMethods.Contains(enc))
                     {
                         DataPostProcessFunc decompressFunc;
                         if (!DecompressFuncs.TryGetValue(enc, out decompressFunc))
@@ -607,8 +608,10 @@ namespace Capstones.Net
                         }
                         catch (Exception e)
                         {
-                            error = e.ToString();
-                            return null;
+                            //error = e.ToString();
+                            //return null;
+                            PlatDependant.LogError("Decompress " + enc + " failed. Will ignore " + enc + ". Exception:\n" + e.ToString());
+                            IgnoredCompressMethods.Add(enc);
                         }
                     }
 
