@@ -95,7 +95,7 @@ namespace Capstones.UnityEditorEx.Net
             public int RegID;
             public List<AttributeInfo> Attributes;
         }
-        public static AttributeInfo GetAttribute(this List<AttributeInfo> attrs, string attr)
+        public static AttributeInfo GetAttribute(this IList<AttributeInfo> attrs, string attr)
         {
             if (attrs != null)
             {
@@ -109,11 +109,11 @@ namespace Capstones.UnityEditorEx.Net
             }
             return null;
         }
-        public static bool ContainsAttribute(this List<AttributeInfo> attrs, string attr)
+        public static bool ContainsAttribute(this IList<AttributeInfo> attrs, string attr)
         {
             return GetAttribute(attrs, attr) != null;
         }
-        public static string GetAttributeArg(this List<AttributeInfo> attrs, string attr, int index)
+        public static string GetAttributeArg(this IList<AttributeInfo> attrs, string attr, int index)
         {
             var info = GetAttribute(attrs, attr);
             if (info != null)
@@ -299,6 +299,109 @@ namespace Capstones.UnityEditorEx.Net
                 }
             }
 
+            // find file attributes
+            int firstMessageLine = srclines.Count;
+            for (int j = 0; j < sortedMessages.Length; ++j)
+            {
+                var minfo = sortedMessages[j];
+                if (minfo.Line >= 0)
+                {
+                    firstMessageLine = minfo.Line;
+                    break;
+                }
+            }
+            int firstValidLine = firstMessageLine;
+            for (int i = 0; i < firstMessageLine; ++i)
+            {
+                string line = srclines[i];
+                if (line != null)
+                {
+                    line = line.Trim();
+                    if (line != "")
+                    {
+                        if (!line.StartsWith("//"))
+                        {
+                            firstValidLine = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            List<AttributeInfo> fileAttributes = new List<AttributeInfo>();
+            for (int i = 0; i < firstMessageLine; ++i)
+            {
+                var line = srclines[i];
+                if (line != null)
+                {
+                    line = line.Trim();
+                    if (line != "")
+                    {
+                        if (line.StartsWith("//"))
+                        {
+                            line = line.Substring("//".Length);
+                            while (line.Length > 0 && line[0] == '/')
+                            {
+                                line = line.Substring(1);
+                            }
+                            line = line.TrimStart();
+                            if (line.StartsWith("["))
+                            {
+                                line = line.Substring(1);
+                                var endIndex = line.LastIndexOf("]");
+                                if (endIndex >= 0)
+                                {
+                                    line = line.Substring(0, endIndex);
+                                    // attibute found.
+                                    var attrInfo = new AttributeInfo();
+                                    var argstart = line.IndexOf("(");
+                                    if (argstart >= 0)
+                                    {
+                                        attrInfo.Name = line.Substring(0, argstart);
+                                        var argsend = line.LastIndexOf(")");
+                                        if (argsend <= argstart)
+                                        {
+                                            argsend = line.Length;
+                                        }
+                                        var argstxt = line.Substring(argstart + 1, argsend - argstart - 1);
+                                        var args = argstxt.Split(new[] { ',', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                                        if (args != null && args.Length > 0)
+                                        {
+                                            attrInfo.Args = new List<string>(args);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        attrInfo.Name = line;
+                                    }
+                                    var attrname = attrInfo.Name;
+                                    var tarSplitIndex = attrname.IndexOf(':');
+                                    if (tarSplitIndex < 0)
+                                    {
+                                        if (i < firstValidLine)
+                                        {
+                                            fileAttributes.Add(attrInfo);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        var attrtar = attrname.Substring(0, tarSplitIndex).Trim();
+                                        attrname = attrname.Substring(tarSplitIndex + 1).Trim();
+                                        attrInfo.Name = attrname;
+                                        if (!string.IsNullOrEmpty(attrname))
+                                        {
+                                            if (attrtar == "file")
+                                            {
+                                                fileAttributes.Add(attrInfo);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // find comment and Add attributes
             for (int j = 0; j < sortedMessages.Length; ++j)
             {
@@ -369,39 +472,42 @@ namespace Capstones.UnityEditorEx.Net
             }
 
             // check IgnoreReg and RegID
-            int lastRegID = 0;
-            HashSet<int> usedRegID = new HashSet<int>();
-            for (int j = 0; j < sortedMessages.Length; ++j)
+            if (!fileAttributes.ContainsAttribute("NoReg"))
             {
-                var minfo = sortedMessages[j];
-                if (minfo.Attributes.ContainsAttribute("NoReg"))
+                int lastRegID = 0;
+                HashSet<int> usedRegID = new HashSet<int>();
+                for (int j = 0; j < sortedMessages.Length; ++j)
                 {
-                    minfo.IgnoreReg = true;
-                }
-                else if (!minfo.IsEnum)
-                {
-                    var regid = minfo.Attributes.GetAttributeArg("RegID", 0).Convert<int>();
-                    if (regid == 0)
+                    var minfo = sortedMessages[j];
+                    if (minfo.Attributes.ContainsAttribute("NoReg"))
                     {
-                        regid = ++lastRegID;
+                        minfo.IgnoreReg = true;
                     }
-                    else
+                    else if (!minfo.IsEnum)
                     {
-                        lastRegID = regid;
-                    }
-                    if (regid <= 0)
-                    {
-                        PlatDependant.LogError("RegID of " + minfo.FullName + " is " + regid + " <= 0");
-                    }
-                    else
-                    {
-                        if (usedRegID.Add(regid))
+                        var regid = minfo.Attributes.GetAttributeArg("RegID", 0).Convert<int>();
+                        if (regid == 0)
                         {
-                            minfo.RegID = regid;
+                            regid = ++lastRegID;
                         }
                         else
                         {
-                            PlatDependant.LogError("RegID of " + minfo.FullName + " is " + regid + " duplicated");
+                            lastRegID = regid;
+                        }
+                        if (regid <= 0)
+                        {
+                            PlatDependant.LogError("RegID of " + minfo.FullName + " is " + regid + " <= 0");
+                        }
+                        else
+                        {
+                            if (usedRegID.Add(regid))
+                            {
+                                minfo.RegID = regid;
+                            }
+                            else
+                            {
+                                PlatDependant.LogError("RegID of " + minfo.FullName + " is " + regid + " duplicated");
+                            }
                         }
                     }
                 }
