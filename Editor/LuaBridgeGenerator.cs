@@ -447,7 +447,7 @@ namespace Capstones.UnityEditorEx.Net
                                         sbfile.AppendLine("        {");
                                         fieldKeys.Add(fname);
                                         sbfile.AppendLine("            l.PushString(LS_" + fname.Replace('.', '_') + ");");
-                                        sbfile.AppendLine("            l.SetField(-2, LS_messageName);");
+                                        sbfile.AppendLine("            l.RawSet(-2, LS_messageName);");
                                         sbfile.AppendLine("            l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans");
                                         sbfile.AppendLine("            l.pushlightuserdata(_ProtobufTrans.r);");
                                         sbfile.AppendLine("            l.settable(-3);");
@@ -463,7 +463,7 @@ namespace Capstones.UnityEditorEx.Net
                                             }
                                             var fieldname = field["name"].String;
                                             fieldKeys.Add(fieldname);
-                                            sbfile.AppendLine("            l.SetField(-2, LS_" + fieldname + ");");
+                                            sbfile.AppendLine("            l.RawSet(-2, LS_" + fieldname + ");");
                                         }
                                         sbfile.AppendLine("        }");
                                         sbfile.AppendLine("        public static void ReadProtocolData(this IntPtr l, " + csname + " data)");
@@ -472,7 +472,7 @@ namespace Capstones.UnityEditorEx.Net
                                         {
                                             var fieldname = field["name"].String;
                                             fieldKeys.Add(fieldname);
-                                            sbfile.AppendLine("            l.GetField(-1, LS_" + fieldname + ");");
+                                            sbfile.AppendLine("            l.RawGet(-1, LS_" + fieldname + ");");
                                             if (field["label"].AsEnum<ProtobufFieldLabel>() == ProtobufFieldLabel.LABEL_REPEATED)
                                             {
                                                 AppendReadRepeated(field);
