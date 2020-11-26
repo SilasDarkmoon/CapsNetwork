@@ -319,6 +319,19 @@ namespace Capstones.LuaExt
                 return default(T);
             }
         }
+        public class LuaNativeProtocol<T> : Capstones.LuaLib.LuaHub.LuaPushNativeBase<T> where T : new()
+        {
+            public override T GetLua(IntPtr l, int index)
+            {
+                return TypeHubProtocolPrecompiled<T>.GetLuaRaw(l, index);
+            }
+            public override IntPtr PushLua(IntPtr l, T val)
+            {
+                l.newtable(); // ud
+                TypeHubProtocolPrecompiled<T>.SetDataRaw(l, -1, val);
+                return IntPtr.Zero;
+            }
+        }
     }
 
 #if UNITY_INCLUDE_TESTS
