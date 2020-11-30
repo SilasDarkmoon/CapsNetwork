@@ -247,7 +247,7 @@ namespace Capstones.LuaExt
         }
         internal static ProtobufTrans _ProtobufTrans = new ProtobufTrans();
 
-        public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubValueTypePrecompiled<T> where T : new()
+        public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubValueTypePrecompiled<T>, ILuaNative where T : new()
         {
             public override IntPtr PushLua(IntPtr l, object val)
             {
@@ -284,6 +284,10 @@ namespace Capstones.LuaExt
                 l.rawget(-2); // ud type meta
                 l.setmetatable(-3); // ud type
                 l.pop(1); // ud
+                l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // ud #trans
+                l.pushvalue(-1); // ud #trans #trans
+                l.gettable(-3); // ud #trans trans
+                l.rawset(-3); // ud
                 return IntPtr.Zero;
             }
             public override void SetData(IntPtr l, int index, T val)
@@ -318,6 +322,19 @@ namespace Capstones.LuaExt
                 }
                 return default(T);
             }
+            public void Wrap(IntPtr l, int index)
+            {
+                T val = GetLua(l, index);
+                PushLua(l, val);
+            }
+            public void Unwrap(IntPtr l, int index)
+            {
+                var val = GetLuaRaw(l, index);
+                l.newtable(); // ud
+                SetDataRaw(l, -1, val);
+            }
+
+            public static readonly LuaNativeProtocol<T> LuaHubNative = new LuaNativeProtocol<T>();
         }
         public class LuaNativeProtocol<T> : Capstones.LuaLib.LuaHub.LuaPushNativeBase<T> where T : new()
         {
