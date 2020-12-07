@@ -183,7 +183,7 @@ namespace Capstones.LuaExt
             return rv;
         }
 
-        internal sealed class ProtobufTrans : SelfHandled, Capstones.LuaLib.ILuaTrans
+        internal sealed class ProtobufTrans : SelfHandled, Capstones.LuaLib.ILuaTrans, ILuaTransMulti
         {
             public bool ShouldCache { get { return false; } }
 
@@ -244,10 +244,48 @@ namespace Capstones.LuaExt
             {
                 SetDataRaw(l, index, val);
             }
+
+            public void SetData<T>(IntPtr l, int index, T val)
+            {
+                if (val is ILuaWrapper)
+                {
+                    return; // it is useless to sync between lua-tables
+                }
+                else
+                {
+                    SetData(l, index, (object)val);
+                }
+            }
+            public T GetLua<T>(IntPtr l, int index)
+            {
+                if (typeof(ILuaWrapper).IsAssignableFrom(typeof(T)))
+                {
+                    try
+                    {
+                        var val = Activator.CreateInstance<T>();
+                        var wrapper = (ILuaWrapper)val;
+                        l.pushvalue(index);
+                        var refid = l.refer();
+                        var binding = new BaseLua(l, refid);
+                        wrapper.Binding = binding;
+                        return (T)wrapper;
+                    }
+                    catch (Exception e)
+                    { // we can not create instance of wrapper?
+                        PlatDependant.LogError(e);
+                        return default(T);
+                    }
+                }
+                else
+                {
+                    var result = GetLua(l, index);
+                    return result is T ? (T)result : default(T);
+                }
+            }
         }
         internal static ProtobufTrans _ProtobufTrans = new ProtobufTrans();
 
-        public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubValueTypePrecompiled<T>, ILuaNative where T : new()
+        public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubValueTypePrecompiled<T>, ILuaNative, ILuaTransMulti where T : new()
         {
             public override IntPtr PushLua(IntPtr l, object val)
             {
@@ -334,6 +372,49 @@ namespace Capstones.LuaExt
                 SetDataRaw(l, -1, val);
             }
 
+            public void SetData<TT>(IntPtr l, int index, TT val)
+            {
+                if (val is ILuaWrapper)
+                {
+                    return; // it is useless to sync between lua-tables
+                }
+                else if (val is T)
+                {
+                    SetDataRaw(l, index, (T)(object)val);
+                }
+                else
+                {
+                    // not corrent type?
+                    return;
+                }
+            }
+            public TT GetLua<TT>(IntPtr l, int index)
+            {
+                if (typeof(ILuaWrapper).IsAssignableFrom(typeof(TT)))
+                {
+                    try
+                    {
+                        var val = Activator.CreateInstance<TT>();
+                        var wrapper = (ILuaWrapper)val;
+                        l.pushvalue(index);
+                        var refid = l.refer();
+                        var binding = new BaseLua(l, refid);
+                        wrapper.Binding = binding;
+                        return (TT)wrapper;
+                    }
+                    catch (Exception e)
+                    { // we can not create instance of wrapper?
+                        PlatDependant.LogError(e);
+                        return default(TT);
+                    }
+                }
+                else
+                {
+                    var result = GetLua(l, index);
+                    return result is TT ? (TT)(object)result : default(TT);
+                }
+            }
+
             public static readonly LuaNativeProtocol<T> LuaHubNative = new LuaNativeProtocol<T>();
         }
         public class LuaNativeProtocol<T> : Capstones.LuaLib.LuaHub.LuaPushNativeBase<T> where T : new()
@@ -379,4 +460,174 @@ namespace Capstones.LuaExt
     }
     #endregion
 #endif
+}
+
+namespace LuaProto
+{
+    using pb = global::Google.Protobuf;
+    using pbc = global::Google.Protobuf.Collections;
+    using pbr = global::Google.Protobuf.Reflection;
+    using scg = global::System.Collections.Generic;
+
+    public interface IBidirectionConvertible<T>
+    {
+        void CopyFrom(T message);
+        void CopyTo(T message);
+    }
+    public interface IProtoConvertible<T> : IBidirectionConvertible<T>
+    {
+        T Convert();
+    }
+    public interface IWrapperConvertible<T> : IBidirectionConvertible<T>
+    {
+        T Convert(IntPtr l);
+    }
+
+    public abstract class BaseLuaProtoWrapper<TWrapper, TProto> : BaseLuaWrapper<TWrapper>, pb::IMessage<TWrapper>, IProtoConvertible<TProto>
+        where TWrapper : BaseLuaWrapper, pb::IMessage<TWrapper>, IProtoConvertible<TProto>, new()
+        where TProto : pb::IMessage<TProto>, new()
+    {
+        public BaseLuaProtoWrapper() { }
+        public BaseLuaProtoWrapper(IntPtr l) : base(l) { }
+
+        protected static readonly TProto ProtoTemplate = new TProto();
+        public pbr.MessageDescriptor Descriptor { get { return ProtoTemplate.Descriptor; } }
+        // read data to raw proto obj from stream. And then read data from raw proto obj.
+        public void MergeFrom(pb.CodedInputStream input)
+        {
+            var template = new TProto();
+            template.MergeFrom(input);
+            CopyFrom(template);
+        }
+        // write data to raw proto obj. And then write raw proto obj to stream.
+        public void WriteTo(pb.CodedOutputStream output)
+        {
+            Convert().WriteTo(output);
+        }
+        // convert to raw proto obj and calculate size.
+        public int CalculateSize()
+        {
+            return Convert().CalculateSize();
+        }
+        // not really clone. the cloned wrapper points to the same lua-table.
+        public TWrapper Clone()
+        {
+            return new TWrapper() { Binding = Binding };
+        }
+        // compares whether they point to the same lua-table.
+        public bool Equals(TWrapper other)
+        {
+            return Equals(Binding, other == null ? null : other.Binding);
+        }
+        // just point to the same lua-table. not really copy data.
+        public void MergeFrom(TWrapper other)
+        {
+            Binding = other == null ? null : other.Binding;
+        }
+
+        public static TProto Convert(TWrapper wrapper)
+        {
+            if (wrapper == null)
+            {
+                return default(TProto);
+            }
+            var result = new TProto();
+            wrapper.CopyTo(result);
+            return result;
+        }
+        public TProto Convert()
+        {
+            var result = new TProto();
+            CopyTo(result);
+            return result;
+        }
+
+        public abstract void CopyFrom(TProto message);
+        public abstract void CopyTo(TProto message);
+    }
+
+    public static class LuaProtoWrapperExtensions
+    {
+        public static void ConvertField<TDest, TSrc>(this IntPtr l, out TDest dest, TSrc src)
+        {
+            if (src is ILuaWrapper)
+            {
+                var convertible = src as IProtoConvertible<TDest>;
+                dest = convertible.Convert();
+            }
+            else
+            {
+                var convertible = src as IWrapperConvertible<TDest>;
+                dest = convertible.Convert(l);
+            }
+        }
+        public static void ConvertField<TDest, TSrc>(this ILuaWrapper thiz, out TDest dest, TSrc src)
+        {
+            ConvertField(thiz.Binding.L, out dest, src);
+        }
+        public static void ConvertField<T>(this ILuaWrapper thiz, out T dest, T src)
+        {
+            dest = src;
+        }
+        public static void ConvertField<TDest, TSrc>(this ILuaWrapper thiz, pbc.RepeatedField<TDest> dest, LuaList<TSrc> src)
+        {
+            dest.Clear();
+            src.ForEach(item =>
+            {
+                TDest ditem;
+                ConvertField(thiz, out ditem, item);
+                dest.Add(ditem);
+            });
+        }
+        public static void ConvertField<T>(this ILuaWrapper thiz, pbc.RepeatedField<T> dest, LuaList<T> src)
+        {
+            dest.Clear();
+            src.ForEach(item =>
+            {
+                dest.Add(item);
+            });
+        }
+        public static void ConvertField<TDest, TSrc>(this ILuaWrapper thiz, out LuaList<TDest> dest, pbc.RepeatedField<TSrc> src)
+        {
+            dest = new LuaList<TDest>(thiz.Binding.L);
+            for (int i = 0; i < src.Count; ++i)
+            {
+                var item = src[i];
+                TDest ditem;
+                ConvertField(thiz, out ditem, item);
+                dest.Add(ditem);
+            }
+        }
+        public static void ConvertField<T>(this ILuaWrapper thiz, out LuaList<T> dest, pbc.RepeatedField<T> src)
+        {
+            dest = new LuaList<T>(thiz.Binding.L);
+            for (int i = 0; i < src.Count; ++i)
+            {
+                var item = src[i];
+                dest.Add(item);
+            }
+        }
+        public static LuaList<TDest> Convert<TDest, TSrc>(this pbc.RepeatedField<TSrc> src, IntPtr l)
+        {
+            var dest = new LuaList<TDest>(l);
+            for (int i = 0; i < src.Count; ++i)
+            {
+                var item = src[i];
+                TDest ditem;
+                ConvertField(l, out ditem, item);
+                dest.Add(ditem);
+            }
+            return dest;
+        }
+        public static LuaList<T> Convert<T>(this pbc.RepeatedField<T> src, IntPtr l)
+        {
+            var dest = new LuaList<T>(l);
+            for (int i = 0; i < src.Count; ++i)
+            {
+                var item = src[i];
+                dest.Add(item);
+            }
+            return dest;
+        }
+    }
 }

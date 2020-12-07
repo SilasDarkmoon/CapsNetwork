@@ -43,6 +43,13 @@ namespace Capstones.UnityEditorEx.Net
             }
             return csname.ToString();
         }
+        public static void WriteIndent(this System.IO.StreamWriter sw, int level)
+        {
+            for (int i = 0; i < level; ++i)
+            {
+                sw.Write("    ");
+            }
+        }
 
         [MenuItem("Net/Generate Lua-Protobuf Bridge", priority = 100030)]
         public static void Generate_Lua_Data_Bridge()
@@ -644,7 +651,7 @@ namespace Capstones.UnityEditorEx.Net
                                             sw.WriteLine("        {");
                                             sw.Write("            ___tp_");
                                             sw.Write(typepart);
-                                            sw.Write(".TypeHubSub.PushLua(l, val);");
+                                            sw.Write(".TypeHubSub.LuaHubNative.PushLua(l, val);");
                                             sw.WriteLine();
                                             sw.WriteLine("        }");
                                             sw.Write("        public static void GetLua(this IntPtr l, int index, out ");
@@ -695,6 +702,79 @@ namespace Capstones.UnityEditorEx.Net
                                     sw.WriteLine("    }");
                                     sw.WriteLine("}");
                                 }
+
+                                //// LuaProto
+                                //using (var sw = PlatDependant.OpenWriteText(hubdir + "LuaProto" + sbFileNamePart + ".cs"))
+                                //{
+                                //    StringBuilder sbprotoext = new StringBuilder();
+                                //    int level = 0;
+                                //    int mindex = 0;
+                                //    sw.WriteLine("using System;");
+                                //    sw.WriteLine("using Capstones.LuaWrap;");
+                                //    sw.WriteLine();
+                                //    Action WriteMessage = null;
+                                //    WriteMessage = () =>
+                                //    {
+                                //        var minfo = sorted[mindex];
+                                //        List<string> namespaces = new List<string>();
+                                //        if (!minfo.IsNested)
+                                //        {
+                                //            var lastindex = minfo.FullCSharpName.LastIndexOf(".");
+                                //            if (lastindex > 0)
+                                //            {
+                                //                var pre = minfo.FullCSharpName.Substring(0, lastindex);
+                                //                namespaces.AddRange(pre.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries));
+                                //            }
+                                //        }
+                                //        if (!minfo.IsNested)
+                                //        {
+                                //            sw.WriteLine("namespace LuaProto");
+                                //            sw.WriteLine("{");
+                                //            ++level;
+                                //            foreach (var ns in namespaces)
+                                //            {
+                                //                sw.WriteIndent(level);
+                                //                sw.Write("namespace ");
+                                //                sw.Write(ns);
+                                //                sw.WriteLine();
+                                //                sw.WriteIndent(level);
+                                //                sw.Write("{");
+                                //                sw.WriteLine();
+                                //                ++level;
+                                //            }
+                                //        }
+                                //        sw.WriteIndent(level);
+                                //        sw.Write("public sealed partial class ");
+                                //        sw.Write(minfo.Name);
+                                //        sw.Write(" : BaseLuaProtoWrapper<");
+                                //        sw.Write(minfo.Name);
+                                //        sw.Write(", global::");
+                                //        sw.Write(minfo.FullCSharpName);
+                                //        sw.Write(">");
+                                //        sw.WriteLine();
+                                //        sw.WriteIndent(level);
+                                //        sw.WriteLine("{");
+                                //        sw.WriteIndent(level);
+                                //        sw.WriteLine("}");
+                                //        if (!minfo.IsNested)
+                                //        {
+                                //            foreach (var ns in namespaces)
+                                //            {
+                                //                --level;
+                                //                sw.WriteIndent(level);
+                                //                sw.Write("}");
+                                //                sw.WriteLine();
+                                //            }
+                                //            sw.WriteLine("}");
+                                //            --level;
+                                //        }
+                                //        ++mindex;
+                                //    };
+                                //    while (mindex < sorted.Length)
+                                //    {
+                                //        WriteMessage();
+                                //    }
+                                //}
                             }
                         }
                     }
