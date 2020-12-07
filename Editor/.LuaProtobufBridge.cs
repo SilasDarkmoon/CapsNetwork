@@ -183,9 +183,10 @@ namespace Capstones.LuaExt
             return rv;
         }
 
-        internal sealed class ProtobufTrans : SelfHandled, Capstones.LuaLib.ILuaTrans, ILuaTransMulti
+        internal sealed class ProtobufTrans : SelfHandled, Capstones.LuaLib.ILuaTrans
         {
             public bool ShouldCache { get { return false; } }
+            public bool Nonexclusive { get { return true; } }
 
             private static string GetName(IntPtr l, int index)
             {
@@ -244,49 +245,12 @@ namespace Capstones.LuaExt
             {
                 SetDataRaw(l, index, val);
             }
-
-            public void SetData<T>(IntPtr l, int index, T val)
-            {
-                if (val is ILuaWrapper)
-                {
-                    return; // it is useless to sync between lua-tables
-                }
-                else
-                {
-                    SetData(l, index, (object)val);
-                }
-            }
-            public T GetLua<T>(IntPtr l, int index)
-            {
-                if (typeof(ILuaWrapper).IsAssignableFrom(typeof(T)))
-                {
-                    try
-                    {
-                        var val = Activator.CreateInstance<T>();
-                        var wrapper = (ILuaWrapper)val;
-                        l.pushvalue(index);
-                        var refid = l.refer();
-                        var binding = new BaseLua(l, refid);
-                        wrapper.Binding = binding;
-                        return (T)wrapper;
-                    }
-                    catch (Exception e)
-                    { // we can not create instance of wrapper?
-                        PlatDependant.LogError(e);
-                        return default(T);
-                    }
-                }
-                else
-                {
-                    var result = GetLua(l, index);
-                    return result is T ? (T)result : default(T);
-                }
-            }
         }
         internal static ProtobufTrans _ProtobufTrans = new ProtobufTrans();
 
-        public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubValueTypePrecompiled<T>, ILuaNative, ILuaTransMulti where T : new()
+        public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubValueTypePrecompiled<T>, ILuaNative where T : new()
         {
+            public override bool Nonexclusive { get { return true; } }
             public override IntPtr PushLua(IntPtr l, object val)
             {
                 PushLua(l, (T)val);
@@ -370,49 +334,6 @@ namespace Capstones.LuaExt
                 var val = GetLuaRaw(l, index);
                 l.newtable(); // ud
                 SetDataRaw(l, -1, val);
-            }
-
-            public void SetData<TT>(IntPtr l, int index, TT val)
-            {
-                if (val is ILuaWrapper)
-                {
-                    return; // it is useless to sync between lua-tables
-                }
-                else if (val is T)
-                {
-                    SetDataRaw(l, index, (T)(object)val);
-                }
-                else
-                {
-                    // not corrent type?
-                    return;
-                }
-            }
-            public TT GetLua<TT>(IntPtr l, int index)
-            {
-                if (typeof(ILuaWrapper).IsAssignableFrom(typeof(TT)))
-                {
-                    try
-                    {
-                        var val = Activator.CreateInstance<TT>();
-                        var wrapper = (ILuaWrapper)val;
-                        l.pushvalue(index);
-                        var refid = l.refer();
-                        var binding = new BaseLua(l, refid);
-                        wrapper.Binding = binding;
-                        return (TT)wrapper;
-                    }
-                    catch (Exception e)
-                    { // we can not create instance of wrapper?
-                        PlatDependant.LogError(e);
-                        return default(TT);
-                    }
-                }
-                else
-                {
-                    var result = GetLua(l, index);
-                    return result is TT ? (TT)(object)result : default(TT);
-                }
             }
 
             public static readonly LuaNativeProtocol<T> LuaHubNative = new LuaNativeProtocol<T>();
