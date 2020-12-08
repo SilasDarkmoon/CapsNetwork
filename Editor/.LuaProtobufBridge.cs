@@ -528,7 +528,7 @@ namespace LuaProto
                 dest.Add(item);
             }
         }
-        public static LuaList<TDest> Convert<TDest, TSrc>(this pbc.RepeatedField<TSrc> src, IntPtr l)
+        public static LuaList<TDest> ConvertField<TDest, TSrc>(this pbc.RepeatedField<TSrc> src, IntPtr l)
         {
             var dest = new LuaList<TDest>(l);
             for (int i = 0; i < src.Count; ++i)
@@ -540,7 +540,7 @@ namespace LuaProto
             }
             return dest;
         }
-        public static LuaList<T> Convert<T>(this pbc.RepeatedField<T> src, IntPtr l)
+        public static LuaList<T> ConvertField<T>(this pbc.RepeatedField<T> src, IntPtr l)
         {
             var dest = new LuaList<T>(l);
             for (int i = 0; i < src.Count; ++i)
@@ -549,6 +549,28 @@ namespace LuaProto
                 dest.Add(item);
             }
             return dest;
+        }
+        public static T ConvertField<T>(this IWrapperConvertible<T> src, IntPtr l)
+        {
+            if (src == null)
+            {
+                return default(T);
+            }
+            else
+            {
+                return src.Convert(l);
+            }
+        }
+        public static T ConvertField<T>(this IProtoConvertible<T> src)
+        {
+            if (src == null)
+            {
+                return default(T);
+            }
+            else
+            {
+                return src.Convert();
+            }
         }
     }
 }

@@ -846,7 +846,7 @@ namespace Capstones.UnityEditorEx.Net
                                             {
                                                 var mtype = field["type_name"].String;
                                                 var typename = GetCSharpMessageName(mtype);
-                                                sw.Write(".Convert<LuaProto.");
+                                                sw.Write(".ConvertField<LuaProto.");
                                                 sw.Write(typename);
                                                 sw.Write(", global::");
                                                 sw.Write(typename);
@@ -854,7 +854,7 @@ namespace Capstones.UnityEditorEx.Net
                                             }
                                             else if (ftype == ProtobufNativeType.TYPE_MESSAGE || repeated)
                                             {
-                                                sw.Write(".Convert(L)");
+                                                sw.Write(".ConvertField(L)");
                                             }
                                             sw.WriteLine(";");
                                         }
@@ -891,7 +891,7 @@ namespace Capstones.UnityEditorEx.Net
                                                 sw.Write(fname);
                                                 sw.Write(" = ");
                                                 sw.Write(fname);
-                                                sw.WriteLine(".Convert();");
+                                                sw.WriteLine(".ConvertField();");
                                             }
                                             else if (repeated)
                                             {
