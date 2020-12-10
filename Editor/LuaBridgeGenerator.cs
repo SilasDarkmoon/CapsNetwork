@@ -807,17 +807,25 @@ namespace Capstones.UnityEditorEx.Net
                                             sw.WriteIndent(level + 1);
                                             sw.WriteLine("{");
                                             sw.WriteIndent(level + 2);
-                                            sw.Write("get { return Get<");
+                                            sw.Write("get { return Get");
+                                            if (repeated)
+                                            {
+                                                sw.Write("OrCreate");
+                                            }
+                                            sw.Write("<");
                                             sw.Write(typename);
                                             sw.Write(">(\"");
                                             sw.Write(field["name"].String);
                                             sw.Write("\"); }");
                                             sw.WriteLine();
-                                            sw.WriteIndent(level + 2);
-                                            sw.Write("set { Set(\"");
-                                            sw.Write(field["name"].String);
-                                            sw.Write("\", value); }");
-                                            sw.WriteLine();
+                                            if (!repeated)
+                                            {
+                                                sw.WriteIndent(level + 2);
+                                                sw.Write("set { Set(\"");
+                                                sw.Write(field["name"].String);
+                                                sw.Write("\", value); }");
+                                                sw.WriteLine();
+                                            }
                                             sw.WriteIndent(level + 1);
                                             sw.WriteLine("}");
                                         }
@@ -836,27 +844,40 @@ namespace Capstones.UnityEditorEx.Net
                                             {
                                                 fname = char.ToUpper(fname[0]) + fname.Substring(1);
                                             }
-                                            sw.WriteIndent(level + 2);
-                                            sw.Write(fname);
-                                            sw.Write(" = message.");
-                                            sw.Write(fname);
-                                            bool repeated = field["label"].AsEnum<ProtobufFieldLabel>() == ProtobufFieldLabel.LABEL_REPEATED;
                                             var ftype = field["type"].AsEnum<ProtobufNativeType>();
-                                            if (ftype == ProtobufNativeType.TYPE_MESSAGE && repeated)
+                                            bool repeated = field["label"].AsEnum<ProtobufFieldLabel>() == ProtobufFieldLabel.LABEL_REPEATED;
+                                            sw.WriteIndent(level + 2);
+                                            if (repeated)
                                             {
-                                                var mtype = field["type_name"].String;
-                                                var typename = GetCSharpMessageName(mtype);
-                                                sw.Write(".ConvertField<LuaProto.");
-                                                sw.Write(typename);
-                                                sw.Write(", global::");
-                                                sw.Write(typename);
-                                                sw.Write(">(L)");
+                                                if (ftype == ProtobufNativeType.TYPE_MESSAGE)
+                                                {
+                                                    sw.Write("this.ConvertField(");
+                                                    sw.Write(fname);
+                                                    sw.Write(", message.");
+                                                    sw.Write(fname);
+                                                    sw.Write(");");
+                                                    sw.WriteLine();
+                                                }
+                                                else
+                                                {
+                                                    sw.Write(fname);
+                                                    sw.Write(".ConvertField(message.");
+                                                    sw.Write(fname);
+                                                    sw.Write(");");
+                                                    sw.WriteLine();
+                                                }
                                             }
-                                            else if (ftype == ProtobufNativeType.TYPE_MESSAGE || repeated)
+                                            else
                                             {
-                                                sw.Write(".ConvertField(L)");
+                                                sw.Write(fname);
+                                                sw.Write(" = message.");
+                                                sw.Write(fname);
+                                                if (ftype == ProtobufNativeType.TYPE_MESSAGE)
+                                                {
+                                                    sw.Write(".ConvertField(L)");
+                                                }
+                                                sw.WriteLine(";");
                                             }
-                                            sw.WriteLine(";");
                                         }
                                         sw.WriteIndent(level + 1);
                                         sw.WriteLine("}");
@@ -895,23 +916,10 @@ namespace Capstones.UnityEditorEx.Net
                                             }
                                             else if (repeated)
                                             {
-                                                string typename;
-                                                if (FieldType2CSName.TryGetValue(ftype, out typename))
-                                                {
-                                                    if (typename != null)
-                                                    {
-                                                    }
-                                                    else if (ftype == ProtobufNativeType.TYPE_ENUM)
-                                                    {
-                                                        var mtype = field["type_name"].String;
-                                                        typename = "global::" + GetCSharpMessageName(mtype);
-                                                    }
-                                                }
-                                                sw.Write("this.ConvertField<");
-                                                sw.Write(typename);
-                                                sw.Write(">(message.");
+                                                sw.Write("message.");
                                                 sw.Write(fname);
-                                                sw.Write(", ");
+                                                sw.Write(".ConvertField");
+                                                sw.Write("(");
                                                 sw.Write(fname);
                                                 sw.WriteLine(");");
                                             }

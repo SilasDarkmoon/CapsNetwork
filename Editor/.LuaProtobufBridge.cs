@@ -500,7 +500,7 @@ namespace LuaProto
                 dest.Add(ditem);
             });
         }
-        public static void ConvertField<T>(this ILuaWrapper thiz, pbc.RepeatedField<T> dest, LuaList<T> src)
+        public static void ConvertField<T>(this pbc.RepeatedField<T> dest, LuaList<T> src)
         {
             dest.Clear();
             src.ForEach(item =>
@@ -508,9 +508,9 @@ namespace LuaProto
                 dest.Add(item);
             });
         }
-        public static void ConvertField<TDest, TSrc>(this ILuaWrapper thiz, out LuaList<TDest> dest, pbc.RepeatedField<TSrc> src)
+        public static void ConvertField<TDest, TSrc>(this ILuaWrapper thiz, LuaList<TDest> dest, pbc.RepeatedField<TSrc> src)
         {
-            dest = new LuaList<TDest>(thiz.Binding.L);
+            dest.Clear();
             for (int i = 0; i < src.Count; ++i)
             {
                 var item = src[i];
@@ -519,37 +519,37 @@ namespace LuaProto
                 dest.Add(ditem);
             }
         }
-        public static void ConvertField<T>(this ILuaWrapper thiz, out LuaList<T> dest, pbc.RepeatedField<T> src)
+        public static void ConvertField<T>(this LuaList<T> dest, pbc.RepeatedField<T> src)
         {
-            dest = new LuaList<T>(thiz.Binding.L);
+            dest.Clear();
             for (int i = 0; i < src.Count; ++i)
             {
                 var item = src[i];
                 dest.Add(item);
             }
         }
-        public static LuaList<TDest> ConvertField<TDest, TSrc>(this pbc.RepeatedField<TSrc> src, IntPtr l)
-        {
-            var dest = new LuaList<TDest>(l);
-            for (int i = 0; i < src.Count; ++i)
-            {
-                var item = src[i];
-                TDest ditem;
-                ConvertField(l, out ditem, item);
-                dest.Add(ditem);
-            }
-            return dest;
-        }
-        public static LuaList<T> ConvertField<T>(this pbc.RepeatedField<T> src, IntPtr l)
-        {
-            var dest = new LuaList<T>(l);
-            for (int i = 0; i < src.Count; ++i)
-            {
-                var item = src[i];
-                dest.Add(item);
-            }
-            return dest;
-        }
+        //public static LuaList<TDest> ConvertField<TDest, TSrc>(this pbc.RepeatedField<TSrc> src, IntPtr l)
+        //{
+        //    var dest = new LuaList<TDest>(l);
+        //    for (int i = 0; i < src.Count; ++i)
+        //    {
+        //        var item = src[i];
+        //        TDest ditem;
+        //        ConvertField(l, out ditem, item);
+        //        dest.Add(ditem);
+        //    }
+        //    return dest;
+        //}
+        //public static LuaList<T> ConvertField<T>(this pbc.RepeatedField<T> src, IntPtr l)
+        //{
+        //    var dest = new LuaList<T>(l);
+        //    for (int i = 0; i < src.Count; ++i)
+        //    {
+        //        var item = src[i];
+        //        dest.Add(item);
+        //    }
+        //    return dest;
+        //}
         public static T ConvertField<T>(this IWrapperConvertible<T> src, IntPtr l)
         {
             if (src == null)
