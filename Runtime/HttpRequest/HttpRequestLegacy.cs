@@ -601,7 +601,12 @@ namespace Capstones.Net
                     {
                         if (we.Response is System.Net.HttpWebResponse && ((System.Net.HttpWebResponse)we.Response).StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
                         {
-
+                            // TODO: Is it safe to ignore this error?
+                        }
+                        else if (we.Response is System.Net.HttpWebResponse)
+                        {
+                            var code = ((System.Net.HttpWebResponse)we.Response).StatusCode;
+                            _Error = "HttpError: " + (int)code + "\n" + we.Message;
                         }
                         else
                         {

@@ -70,21 +70,13 @@ local function reqHandleEventData(event)
 end
 
 function req.defaultOnFailed(request)
-    local resDlg, dlgccomp
     local failedWait = { }
     if request.failed == "network" or request.failed == "timedout" then
-        resDlg = require("ui.common.manager.DialogManager").ShowRetryPop(clr.trans("tips"), request.msg, function()
-            failedWait.done = true
-            failedWait.retry = true
-        end)
+        failedWait.done = true
+        failedWait.retry = true
     else
-        resDlg = require("ui.common.manager.DialogManager").ShowAlertPop(clr.trans("tips"), request.msg, function()
-            failedWait.done = true
-        end)
+        failedWait.done = true
     end
-
-    local canvas = resDlg:GetComponent(clr.UnityEngine.Canvas)
-    canvas.sortingOrder = 20010
     return failedWait
 end
 

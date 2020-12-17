@@ -282,19 +282,34 @@ function api.result(request,isMyTimedout)
             if error == 'timedout' or isMyTimedout == true then
                 failed = 'timedout'
                 event = "none"
-                msg = clr.trans('timedOut')
+                msg = clr.transstr('timedOut')
             elseif api.bool(error) then
                 failed = 'network'
                 event = "none"
-                local list = string.split(error .. "", ' ')
-                if list and #list >= 2 then
-                    local errorCode = list[2]
-                    if errorCode == "401" then
-                        msg = clr.transstr("token_error")
+                if type(error) == "string" then
+                    msg = error
+                    if string.sub(error, 1, 11) == "HttpError: " then
+                        local sub = string.sub(error, 12)
+                        local split = string.find(sub, "\n", 1, true)
+                        if split then
+                            msg = string.sub(sub, split + 1)
+                            sub = string.sub(sub, 1, split - 1)
+                        end
+                        local code = tonumber(sub)
+                        if code and code ~= 0 then
+                            if ___CONFIG__HTTPERROR_MSG and ___CONFIG__HTTPERROR_MSG[code] then
+                                msg = clr.transstr(___CONFIG__HTTPERROR_MSG[code])
+                            end
+                            failed = code
+                        else
+                            failed = sub
+                        end
                     end
+                -- else
+                --     msg = tostring(error)
                 end
                 if not msg then
-                    msg = clr.trans('networkError')
+                    msg = clr.transstr('networkError')
                 end
             else
                 msg = request.www:ParseResponseText(request.token, request.seq)
@@ -310,8 +325,13 @@ function api.result(request,isMyTimedout)
                         request.val = tab
                         msg = tab and clr.transstr(tab.tips) or clr.transstr('server_refuse', failed)
                     else
-                        if tab.type == 0 then
-                            failed = true
+                        local type = tab.type and tonumber(tab.type)
+                        if type and type <= 0 then
+                            if type == 0 then
+                                failed = true
+                            else
+                                failed = type
+                            end
                             msg = clr.transstr(tab.tips) or tab.tips or clr.transstr('server_refuse', failed)
                             -- msg = msg .. "\n" .. tab.traceIdentifier
                         end
@@ -374,10 +394,10 @@ end
 
 function api.msg(request)
     if not (type(request) == 'table' and request.www and clr.isobj(request.www)) then
-        return clr.trans('invalid_request_obj')
+        return clr.transstr('invalid_request_obj')
     end
     if not request.done then
-        return clr.trans('request_not_completed')
+        return clr.transstr('request_not_completed')
     end
     return request.msg
 end
