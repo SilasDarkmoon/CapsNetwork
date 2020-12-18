@@ -153,7 +153,7 @@ namespace Capstones.Net
 #endif
                             if (_Status != HttpRequestStatus.Finished)
                             {
-                                _Error = "Request Error (Cancelled)";
+                                _Error = "cancelled";
                                 _Status = HttpRequestStatus.Finished;
                             }
                             return;
@@ -284,7 +284,7 @@ namespace Capstones.Net
 #endif
                                 if (_Status != HttpRequestStatus.Finished)
                                 {
-                                    _Error = "Request Error (Cancelled)";
+                                    _Error = "cancelled";
                                     _Status = HttpRequestStatus.Finished;
                                 }
                                 return;
@@ -326,7 +326,7 @@ namespace Capstones.Net
 #endif
                             if (_Status != HttpRequestStatus.Finished)
                             {
-                                _Error = "Request Error (Cancelled)";
+                                _Error = "cancelled";
                                 _Status = HttpRequestStatus.Finished;
                             }
                             return;
@@ -358,7 +358,7 @@ namespace Capstones.Net
 #endif
                             if (_Status != HttpRequestStatus.Finished)
                             {
-                                _Error = "Request Error (Cancelled)";
+                                _Error = "cancelled";
                                 _Status = HttpRequestStatus.Finished;
                             }
                             return;
@@ -407,7 +407,7 @@ namespace Capstones.Net
 #endif
                                     if (_Status != HttpRequestStatus.Finished)
                                     {
-                                        _Error = "Request Error (Cancelled)";
+                                        _Error = "cancelled";
                                         _Status = HttpRequestStatus.Finished;
                                     }
                                     return;
@@ -488,7 +488,7 @@ namespace Capstones.Net
 #endif
                                                 if (_Status != HttpRequestStatus.Finished)
                                                 {
-                                                    _Error = "Request Error (Cancelled)";
+                                                    _Error = "cancelled";
                                                     _Status = HttpRequestStatus.Finished;
                                                 }
                                                 return;
@@ -542,7 +542,7 @@ namespace Capstones.Net
 #endif
                                                 if (_Status != HttpRequestStatus.Finished)
                                                 {
-                                                    _Error = "Request Error (Cancelled)";
+                                                    _Error = "cancelled";
                                                     _Status = HttpRequestStatus.Finished;
                                                 }
                                                 return;
