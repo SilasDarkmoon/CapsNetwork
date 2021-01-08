@@ -408,8 +408,14 @@ namespace LuaProto
         where TWrapper : BaseLuaWrapper, pb::IMessage<TWrapper>, IProtoConvertible<TProto>, new()
         where TProto : pb::IMessage<TProto>, new()
     {
-        public BaseLuaProtoWrapper() { }
-        public BaseLuaProtoWrapper(IntPtr l) : base(l) { }
+        public BaseLuaProtoWrapper()
+        {
+            _CachedFields = new Dictionary<string, object>() { { "messageName", ProtoTemplate.Descriptor.FullName } };
+        }
+        public BaseLuaProtoWrapper(IntPtr l) : base(l)
+        {
+            _CachedFields = new Dictionary<string, object>() { { "messageName", ProtoTemplate.Descriptor.FullName } };
+        }
 
         protected static readonly TProto ProtoTemplate = new TProto();
         public pbr.MessageDescriptor Descriptor { get { return ProtoTemplate.Descriptor; } }
