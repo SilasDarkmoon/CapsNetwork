@@ -268,7 +268,18 @@ namespace Capstones.Net
                     {
                         if (_InnerReq.error != null)
                         {
-                            _Error = _InnerReq.error;
+                            if (_InnerReq.isHttpError)
+                            {
+                                _Error = "HttpError: " + _InnerReq.responseCode + "\n" + _InnerReq.error;
+                            }
+                            else if (_InnerReq.error.StartsWith("Request timeout", StringComparison.InvariantCultureIgnoreCase))
+                            {
+                                _Error = "timedout";
+                            }
+                            else
+                            {
+                                _Error = _InnerReq.error;
+                            }
                         }
                         else
                         {
@@ -357,7 +368,7 @@ namespace Capstones.Net
                     _InnerReq.Dispose();
                 }
                 _ReceiveStream.Dispose();
-                _Error = "Request Error (Cancelled)";
+                _Error = "cancelled";
                 FinishResponse();
             }
         }

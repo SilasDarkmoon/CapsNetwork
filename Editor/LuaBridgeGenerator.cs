@@ -43,6 +43,34 @@ namespace Capstones.UnityEditorEx.Net
             }
             return csname.ToString();
         }
+        public static void WriteIndent(this System.IO.StreamWriter sw, int level)
+        {
+            for (int i = 0; i < level; ++i)
+            {
+                sw.Write("    ");
+            }
+        }
+        public static readonly Dictionary<ProtobufNativeType, string> FieldType2CSName = new Dictionary<ProtobufNativeType, string>()
+        {
+            { ProtobufNativeType.TYPE_BOOL, "bool" },
+            { ProtobufNativeType.TYPE_BYTES, "byte[]" },
+            { ProtobufNativeType.TYPE_DOUBLE, "double" },
+            { ProtobufNativeType.TYPE_ENUM, null },
+            { ProtobufNativeType.TYPE_FIXED32, "uint" },
+            { ProtobufNativeType.TYPE_FIXED64, "ulong" },
+            { ProtobufNativeType.TYPE_FLOAT, "float" },
+            //{ Google.Protobuf.Reflection.FieldType.Group, null }, // currently unhandled.
+            { ProtobufNativeType.TYPE_INT32, "int" },
+            { ProtobufNativeType.TYPE_INT64, "long" },
+            { ProtobufNativeType.TYPE_MESSAGE, null },
+            { ProtobufNativeType.TYPE_SFIXED32, "int" },
+            { ProtobufNativeType.TYPE_SFIXED64, "long" },
+            { ProtobufNativeType.TYPE_SINT32, "int" },
+            { ProtobufNativeType.TYPE_SINT64, "long" },
+            { ProtobufNativeType.TYPE_STRING, "string" },
+            { ProtobufNativeType.TYPE_UINT32, "uint" },
+            { ProtobufNativeType.TYPE_UINT64, "ulong" },
+        };
 
         [MenuItem("Net/Generate Lua-Protobuf Bridge", priority = 100030)]
         public static void Generate_Lua_Data_Bridge()
@@ -109,7 +137,6 @@ namespace Capstones.UnityEditorEx.Net
                     }
                 }
             }
-
 
             HashSet<string> fieldKeys = new HashSet<string>() { "messageName" };
             // Enumerate All Messages
@@ -253,27 +280,6 @@ namespace Capstones.UnityEditorEx.Net
                                         sbfile.AppendLine("                }");
                                         sbfile.AppendLine("            }");
                                     };
-                                    Dictionary<ProtobufNativeType, string> fieldType2CSName = new Dictionary<ProtobufNativeType, string>()
-                                    {
-                                        { ProtobufNativeType.TYPE_BOOL, "bool" },
-                                        { ProtobufNativeType.TYPE_BYTES, "byte[]" },
-                                        { ProtobufNativeType.TYPE_DOUBLE, "double" },
-                                        { ProtobufNativeType.TYPE_ENUM, null },
-                                        { ProtobufNativeType.TYPE_FIXED32, "uint" },
-                                        { ProtobufNativeType.TYPE_FIXED64, "ulong" },
-                                        { ProtobufNativeType.TYPE_FLOAT, "float" },
-                                        //{ Google.Protobuf.Reflection.FieldType.Group, null }, // currently unhandled.
-                                        { ProtobufNativeType.TYPE_INT32, "int" },
-                                        { ProtobufNativeType.TYPE_INT64, "long" },
-                                        { ProtobufNativeType.TYPE_MESSAGE, null },
-                                        { ProtobufNativeType.TYPE_SFIXED32, "int" },
-                                        { ProtobufNativeType.TYPE_SFIXED64, "long" },
-                                        { ProtobufNativeType.TYPE_SINT32, "int" },
-                                        { ProtobufNativeType.TYPE_SINT64, "long" },
-                                        { ProtobufNativeType.TYPE_STRING, "string" },
-                                        { ProtobufNativeType.TYPE_UINT32, "uint" },
-                                        { ProtobufNativeType.TYPE_UINT64, "ulong" },
-                                    };
                                     Func<ProtobufMessage, string> GetFieldDefaultValueString = field =>
                                     {
                                         string typename;
@@ -282,7 +288,7 @@ namespace Capstones.UnityEditorEx.Net
                                         {
                                             return "\"\"";
                                         }
-                                        if (fieldType2CSName.TryGetValue(ftype, out typename))
+                                        if (FieldType2CSName.TryGetValue(ftype, out typename))
                                         {
                                             if (typename != null)
                                             {
@@ -315,7 +321,7 @@ namespace Capstones.UnityEditorEx.Net
                                         string defaultstr = GetFieldDefaultValueString(field);
                                         if (defaultstr != null)
                                         {
-                                            var cstypename = fieldType2CSName[ftype];
+                                            var cstypename = FieldType2CSName[ftype];
                                             sbfile.AppendLine(prefix + "            if (l.isnoneornil(-1))");
                                             sbfile.AppendLine(prefix + "            {");
                                             sbfile.AppendLine(prefix + "                data." + fname + " = " + defaultstr + ";");
@@ -447,7 +453,7 @@ namespace Capstones.UnityEditorEx.Net
                                         sbfile.AppendLine("        {");
                                         fieldKeys.Add(fname);
                                         sbfile.AppendLine("            l.PushString(LS_" + fname.Replace('.', '_') + ");");
-                                        sbfile.AppendLine("            l.SetField(-2, LS_messageName);");
+                                        sbfile.AppendLine("            l.RawSet(-2, LS_messageName);");
                                         sbfile.AppendLine("            l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans");
                                         sbfile.AppendLine("            l.pushlightuserdata(_ProtobufTrans.r);");
                                         sbfile.AppendLine("            l.settable(-3);");
@@ -463,7 +469,7 @@ namespace Capstones.UnityEditorEx.Net
                                             }
                                             var fieldname = field["name"].String;
                                             fieldKeys.Add(fieldname);
-                                            sbfile.AppendLine("            l.SetField(-2, LS_" + fieldname + ");");
+                                            sbfile.AppendLine("            l.RawSet(-2, LS_" + fieldname + ");");
                                         }
                                         sbfile.AppendLine("        }");
                                         sbfile.AppendLine("        public static void ReadProtocolData(this IntPtr l, " + csname + " data)");
@@ -472,7 +478,7 @@ namespace Capstones.UnityEditorEx.Net
                                         {
                                             var fieldname = field["name"].String;
                                             fieldKeys.Add(fieldname);
-                                            sbfile.AppendLine("            l.GetField(-1, LS_" + fieldname + ");");
+                                            sbfile.AppendLine("            l.RawGet(-1, LS_" + fieldname + ");");
                                             if (field["label"].AsEnum<ProtobufFieldLabel>() == ProtobufFieldLabel.LABEL_REPEATED)
                                             {
                                                 AppendReadRepeated(field);
@@ -644,7 +650,7 @@ namespace Capstones.UnityEditorEx.Net
                                             sw.WriteLine("        {");
                                             sw.Write("            ___tp_");
                                             sw.Write(typepart);
-                                            sw.Write(".TypeHubSub.PushLua(l, val);");
+                                            sw.Write(".TypeHubSub.LuaHubNative.PushLua(l, val);");
                                             sw.WriteLine();
                                             sw.WriteLine("        }");
                                             sw.Write("        public static void GetLua(this IntPtr l, int index, out ");
@@ -694,6 +700,393 @@ namespace Capstones.UnityEditorEx.Net
                                     }
                                     sw.WriteLine("    }");
                                     sw.WriteLine("}");
+                                }
+
+                                // LuaProto
+                                using (var sw = PlatDependant.OpenWriteText(hubdir + "LuaProto" + sbFileNamePart + ".cs"))
+                                {
+                                    int level = 0;
+                                    int mindex = 0;
+                                    sw.WriteLine("using System;");
+                                    sw.WriteLine("using Capstones.LuaWrap;");
+                                    sw.WriteLine();
+                                    Action WriteMessage = null;
+                                    WriteMessage = () =>
+                                    {
+                                        var minfo = sorted[mindex];
+                                        if (minfo.IsEnum)
+                                        {
+                                            ++mindex;
+                                            return;
+                                        }
+                                        List<string> namespaces = new List<string>();
+                                        if (!minfo.IsNested)
+                                        {
+                                            var lastindex = minfo.FullCSharpName.LastIndexOf(".");
+                                            if (lastindex > 0)
+                                            {
+                                                var pre = minfo.FullCSharpName.Substring(0, lastindex);
+                                                namespaces.AddRange(pre.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries));
+                                            }
+                                        }
+                                        if (!minfo.IsNested)
+                                        {
+                                            sw.WriteLine("namespace LuaProto");
+                                            sw.WriteLine("{");
+                                            ++level;
+                                            foreach (var ns in namespaces)
+                                            {
+                                                sw.WriteIndent(level);
+                                                sw.Write("namespace ");
+                                                sw.Write(ns);
+                                                sw.WriteLine();
+                                                sw.WriteIndent(level);
+                                                sw.Write("{");
+                                                sw.WriteLine();
+                                                ++level;
+                                            }
+                                        }
+                                        sw.WriteIndent(level);
+                                        sw.Write("public sealed partial class ");
+                                        sw.Write(minfo.Name);
+                                        sw.Write(" : BaseLuaProtoWrapper<");
+                                        sw.Write(minfo.Name);
+                                        sw.Write(", global::");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.Write(">");
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 1);
+                                        sw.Write("public ");
+                                        sw.Write(minfo.Name);
+                                        sw.Write("() { }");
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level + 1);
+                                        sw.Write("public ");
+                                        sw.Write(minfo.Name);
+                                        sw.Write("(IntPtr l) : base(l) { }");
+                                        sw.WriteLine();
+                                        sw.WriteLine();
+                                        foreach (var field in minfo.Desc["field"].Messages)
+                                        {
+                                            sw.WriteIndent(level + 1);
+                                            sw.Write("public ");
+                                            bool repeated = field["label"].AsEnum<ProtobufFieldLabel>() == ProtobufFieldLabel.LABEL_REPEATED;
+                                            var ftype = field["type"].AsEnum<ProtobufNativeType>();
+                                            string typename;
+                                            if (FieldType2CSName.TryGetValue(ftype, out typename))
+                                            {
+                                                if (typename != null)
+                                                {
+                                                }
+                                                else if (ftype == ProtobufNativeType.TYPE_ENUM)
+                                                {
+                                                    var mtype = field["type_name"].String;
+                                                    typename = "global::" + GetCSharpMessageName(mtype);
+                                                }
+                                                else if (ftype == ProtobufNativeType.TYPE_MESSAGE)
+                                                {
+                                                    var mtype = field["type_name"].String;
+                                                    typename = "LuaProto." + GetCSharpMessageName(mtype);
+                                                }
+                                            }
+                                            if (repeated)
+                                            {
+                                                typename = "LuaList<" + typename + ">";
+                                            }
+                                            sw.Write(typename);
+                                            sw.Write(" ");
+                                            var fname = field["name"].String;
+                                            if (char.IsLower(fname[0]))
+                                            {
+                                                fname = char.ToUpper(fname[0]) + fname.Substring(1);
+                                            }
+                                            sw.Write(fname);
+                                            sw.WriteLine();
+                                            sw.WriteIndent(level + 1);
+                                            sw.WriteLine("{");
+                                            sw.WriteIndent(level + 2);
+                                            sw.Write("get { return Get");
+                                            if (repeated)
+                                            {
+                                                sw.Write("OrCreate");
+                                            }
+                                            sw.Write("<");
+                                            sw.Write(typename);
+                                            sw.Write(">(\"");
+                                            sw.Write(field["name"].String);
+                                            sw.Write("\"); }");
+                                            sw.WriteLine();
+                                            if (!repeated)
+                                            {
+                                                sw.WriteIndent(level + 2);
+                                                sw.Write("set { Set(\"");
+                                                sw.Write(field["name"].String);
+                                                sw.Write("\", value); }");
+                                                sw.WriteLine();
+                                            }
+                                            sw.WriteIndent(level + 1);
+                                            sw.WriteLine("}");
+                                        }
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level + 1);
+                                        sw.Write("public override void CopyFrom(global::");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.Write(" message)");
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("{");
+                                        foreach (var field in minfo.Desc["field"].Messages)
+                                        {
+                                            var fname = field["name"].String;
+                                            if (char.IsLower(fname[0]))
+                                            {
+                                                fname = char.ToUpper(fname[0]) + fname.Substring(1);
+                                            }
+                                            var ftype = field["type"].AsEnum<ProtobufNativeType>();
+                                            bool repeated = field["label"].AsEnum<ProtobufFieldLabel>() == ProtobufFieldLabel.LABEL_REPEATED;
+                                            sw.WriteIndent(level + 2);
+                                            if (repeated)
+                                            {
+                                                if (ftype == ProtobufNativeType.TYPE_MESSAGE)
+                                                {
+                                                    sw.Write("this.ConvertField(");
+                                                    sw.Write(fname);
+                                                    sw.Write(", message.");
+                                                    sw.Write(fname);
+                                                    sw.Write(");");
+                                                    sw.WriteLine();
+                                                }
+                                                else
+                                                {
+                                                    sw.Write(fname);
+                                                    sw.Write(".ConvertField(message.");
+                                                    sw.Write(fname);
+                                                    sw.Write(");");
+                                                    sw.WriteLine();
+                                                }
+                                            }
+                                            else
+                                            {
+                                                sw.Write(fname);
+                                                sw.Write(" = message.");
+                                                sw.Write(fname);
+                                                if (ftype == ProtobufNativeType.TYPE_MESSAGE)
+                                                {
+                                                    sw.Write(".ConvertField(L)");
+                                                }
+                                                sw.WriteLine(";");
+                                            }
+                                        }
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("}");
+                                        sw.WriteIndent(level + 1);
+                                        sw.Write("public override void CopyTo(global::");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.Write(" message)");
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("{");
+                                        foreach (var field in minfo.Desc["field"].Messages)
+                                        {
+                                            sw.WriteIndent(level + 2);
+                                            var fname = field["name"].String;
+                                            if (char.IsLower(fname[0]))
+                                            {
+                                                fname = char.ToUpper(fname[0]) + fname.Substring(1);
+                                            }
+                                            bool repeated = field["label"].AsEnum<ProtobufFieldLabel>() == ProtobufFieldLabel.LABEL_REPEATED;
+                                            var ftype = field["type"].AsEnum<ProtobufNativeType>();
+                                            if (ftype == ProtobufNativeType.TYPE_MESSAGE && repeated)
+                                            {
+                                                sw.Write("this.ConvertField(message.");
+                                                sw.Write(fname);
+                                                sw.Write(", ");
+                                                sw.Write(fname);
+                                                sw.WriteLine(");");
+                                            }
+                                            else if (ftype == ProtobufNativeType.TYPE_MESSAGE)
+                                            {
+                                                sw.Write("message.");
+                                                sw.Write(fname);
+                                                sw.Write(" = ");
+                                                sw.Write(fname);
+                                                sw.WriteLine(".ConvertField();");
+                                            }
+                                            else if (repeated)
+                                            {
+                                                sw.Write("message.");
+                                                sw.Write(fname);
+                                                sw.Write(".ConvertField");
+                                                sw.Write("(");
+                                                sw.Write(fname);
+                                                sw.WriteLine(");");
+                                            }
+                                            else
+                                            {
+                                                sw.Write("message.");
+                                                sw.Write(fname);
+                                                sw.Write(" = ");
+                                                sw.Write(fname);
+                                                sw.WriteLine(";");
+                                            }
+                                        }
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("}");
+                                        ++level;
+                                        for (++mindex; mindex < sorted.Length; ++mindex)
+                                        {
+                                            var sub = sorted[mindex];
+                                            if (sub.IsNested && sub.FullCSharpName.StartsWith(minfo.FullCSharpName + "."))
+                                            {
+                                                WriteMessage();
+                                            }
+                                            else
+                                            {
+                                                break;
+                                            }
+                                        }
+                                        --mindex;
+                                        --level;
+                                        sw.WriteIndent(level);
+                                        sw.WriteLine("}");
+                                        if (!minfo.IsNested)
+                                        {
+                                            foreach (var ns in namespaces)
+                                            {
+                                                --level;
+                                                sw.WriteIndent(level);
+                                                sw.Write("}");
+                                                sw.WriteLine();
+                                            }
+                                            sw.WriteLine("}");
+                                            --level;
+                                        }
+                                        ++mindex;
+                                    };
+                                    while (mindex < sorted.Length)
+                                    {
+                                        WriteMessage();
+                                    }
+
+                                    level = 0;
+                                    mindex = 0;
+                                    sw.WriteLine();
+                                    Action ExtendMessage = null;
+                                    ExtendMessage = () =>
+                                    {
+                                        var minfo = sorted[mindex];
+                                        if (minfo.IsEnum)
+                                        {
+                                            ++mindex;
+                                            return;
+                                        }
+                                        List<string> namespaces = new List<string>();
+                                        if (!minfo.IsNested)
+                                        {
+                                            var lastindex = minfo.FullCSharpName.LastIndexOf(".");
+                                            if (lastindex > 0)
+                                            {
+                                                var pre = minfo.FullCSharpName.Substring(0, lastindex);
+                                                namespaces.AddRange(pre.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries));
+                                            }
+                                        }
+                                        if (!minfo.IsNested)
+                                        {
+                                            foreach (var ns in namespaces)
+                                            {
+                                                sw.WriteIndent(level);
+                                                sw.Write("namespace ");
+                                                sw.Write(ns);
+                                                sw.WriteLine();
+                                                sw.WriteIndent(level);
+                                                sw.Write("{");
+                                                sw.WriteLine();
+                                                ++level;
+                                            }
+                                        }
+                                        sw.WriteIndent(level);
+                                        sw.Write("public sealed partial class ");
+                                        sw.Write(minfo.Name);
+                                        sw.Write(" : LuaProto.IWrapperConvertible<LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.Write(">");
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 1);
+                                        sw.Write("public void CopyFrom(LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.Write(" message)");
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("message.CopyTo(this);");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("}");
+                                        sw.WriteIndent(level + 1);
+                                        sw.Write("public void CopyTo(LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.Write(" message)");
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("message.CopyFrom(this);");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("}");
+                                        sw.WriteIndent(level + 1);
+                                        sw.Write("public LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.Write(" Convert(IntPtr l)");
+                                        sw.WriteLine();
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 2);
+                                        sw.Write("var result = new LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.WriteLine("(l);");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("result.CopyFrom(this);");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("return result;");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("}");
+                                        ++level;
+                                        for (++mindex; mindex < sorted.Length; ++mindex)
+                                        {
+                                            var sub = sorted[mindex];
+                                            if (sub.IsNested && sub.FullCSharpName.StartsWith(minfo.FullCSharpName + "."))
+                                            {
+                                                ExtendMessage();
+                                            }
+                                            else
+                                            {
+                                                break;
+                                            }
+                                        }
+                                        --mindex;
+                                        --level;
+                                        sw.WriteIndent(level);
+                                        sw.WriteLine("}");
+                                        if (!minfo.IsNested)
+                                        {
+                                            foreach (var ns in namespaces)
+                                            {
+                                                --level;
+                                                sw.WriteIndent(level);
+                                                sw.Write("}");
+                                                sw.WriteLine();
+                                            }
+                                        }
+                                        ++mindex;
+                                    };
+                                    while (mindex < sorted.Length)
+                                    {
+                                        ExtendMessage();
+                                    }
                                 }
                             }
                         }

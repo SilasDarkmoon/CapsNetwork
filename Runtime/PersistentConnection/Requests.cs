@@ -1057,6 +1057,17 @@ namespace Capstones.Net
                 _CommonHandlers.AddHandler(handler);
             }
         }
+        public void RegHandler(Request.Handler handler, int order)
+        {
+            if (handler == null)
+            {
+                return;
+            }
+            lock (_CommonHandlers)
+            {
+                _CommonHandlers.AddHandler(handler, order);
+            }
+        }
         public void RegHandler<T>(Request.Handler<T> handler)
         {
             if (handler == null)
@@ -1073,6 +1084,24 @@ namespace Capstones.Net
                     _TypedHandlers[type] = list;
                 }
                 list.AddHandler(handler);
+            }
+        }
+        public void RegHandler<T>(Request.Handler<T> handler, int order)
+        {
+            if (handler == null)
+            {
+                return;
+            }
+            lock (_TypedHandlers)
+            {
+                var type = typeof(T);
+                HandleRequestEvent list;
+                if (!_TypedHandlers.TryGetValue(type, out list))
+                {
+                    list = new HandleRequestEvent();
+                    _TypedHandlers[type] = list;
+                }
+                list.AddHandler(handler, order);
             }
         }
         public void RegHandler(uint type, Request.Handler handler)
@@ -1096,6 +1125,30 @@ namespace Capstones.Net
                         _RawTypedHandlers[type] = list;
                     }
                     list.AddHandler(handler);
+                }
+            }
+        }
+        public void RegHandler(uint type, Request.Handler handler, int order)
+        {
+            if (handler == null)
+            {
+                return;
+            }
+            if (type == 0)
+            {
+                RegHandler(handler, order);
+            }
+            else
+            {
+                lock (_RawTypedHandlers)
+                {
+                    HandleRequestEvent list;
+                    if (!_RawTypedHandlers.TryGetValue(type, out list))
+                    {
+                        list = new HandleRequestEvent();
+                        _RawTypedHandlers[type] = list;
+                    }
+                    list.AddHandler(handler, order);
                 }
             }
         }
