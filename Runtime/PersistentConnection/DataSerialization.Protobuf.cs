@@ -53,10 +53,8 @@ namespace Capstones.Net
     /// <summary>
     /// message Message { fixed32 type = 1; fixed32 flags = 2; fixed32 seq = 3; fixed32 sseq = 4; OtherMessage raw = 5; }
     /// </summary>
-    public class ProtobufSplitter : DataSplitter, IBuffered
+    public class ProtobufSplitter : DataSplitter<ProtobufSplitter>, IBuffered
     {
-        public static readonly DataSplitterFactory Factory = new DataSplitterFactory<ProtobufSplitter>();
-
 #if UNITY_ENGINE || UNITY_5_3_OR_NEWER
         private InsertableStream _ReadBuffer = new NativeBufferStream();
 #else
@@ -828,7 +826,7 @@ namespace Capstones.Net
         }
     }
 
-    public partial class ProtobufReaderAndWriter : DataReaderAndWriter
+    public partial class ProtobufFormatter : DataFormatter
     {
         public override uint GetDataType(object data)
         {

@@ -27,7 +27,8 @@ namespace Capstones.Net
     {
         public DataSplitterFactory SplitterFactory;
         public DataComposer Composer;
-        public DataReaderAndWriter ReaderWriter;
+        public DataFormatter Formatter;
+        public DataFormatterFactory FormatterFactory;
         protected internal readonly List<DataPostProcess> PostProcessors = new List<DataPostProcess>();
 
         public void RemovePostProcess<T>() where T : DataPostProcess
@@ -60,7 +61,7 @@ namespace Capstones.Net
 
         public SerializationConfig Clone()
         {
-            var cloned = new SerializationConfig() { SplitterFactory = SplitterFactory, Composer = Composer, ReaderWriter = ReaderWriter };
+            var cloned = new SerializationConfig() { SplitterFactory = SplitterFactory, Composer = Composer, Formatter = Formatter };
             cloned.PostProcessors.AddRange(PostProcessors);
             return cloned;
         }
@@ -73,8 +74,15 @@ namespace Capstones.Net
         {
             SplitterFactory = ProtobufSplitter.Factory,
             Composer = new ProtobufComposer(),
-            ReaderWriter = new ProtobufReaderAndWriter(),
+            Formatter = new ProtobufFormatter(),
         };
+    }
+    public class Serializer
+    {
+        public DataSplitter Splitter;
+        public DataComposer Composer;
+        public DataFormatter Formatter;
+        public readonly List<DataPostProcess> PostProcessors = new List<DataPostProcess>();
     }
 
     public interface IChannel : IPersistentConnectionLifetime, IServerConnectionLifetime
@@ -87,6 +95,8 @@ namespace Capstones.Net
         //bool IsConnected { get; }
         //event Action OnConnected;
 
+        SerializationConfig SerializationConfig { get; }
+        Serializer Serializer { get; set; }
         event Action OnUpdate;
         event Action OnClose;
     }
@@ -104,8 +114,10 @@ namespace Capstones.Net
         protected IPersistentConnection _Connection;
         protected IServerConnection _ServerConnection;
         protected ConnectionStream _Stream;
-        protected DataSplitter _Splitter;
         protected SerializationConfig _SerConfig;
+        public SerializationConfig SerializationConfig { get { return _SerConfig; } }
+        protected Serializer _Serializer;
+        public Serializer Serializer { get { return _Serializer; } set { _Serializer = value; } }
         protected bool _DeserializeInConnectionThread = false;
         public bool DeserializeInConnectionThread { get { return _DeserializeInConnectionThread; } }
         protected bool _SerializeInConnectionThread = false;
@@ -199,8 +211,18 @@ namespace Capstones.Net
             _ServerConnection = connection as IServerConnection;
             _PositiveConnection = connection as IPositiveConnection;
             _Stream = new ConnectionStream(_Connection, true) { DonotNotifyReceive = !_DeserializeInConnectionThread };
-            _Splitter = sconfig.SplitterFactory.Create(_Stream);
-            _Splitter.OnReceiveBlock += ReceiveBlock;
+            _Serializer = new Serializer()
+            {
+                Splitter = sconfig.SplitterFactory.Create(_Stream),
+                Composer = sconfig.Composer,
+                Formatter = sconfig.Formatter,
+            };
+            _Serializer.Splitter.OnReceiveBlock += ReceiveBlock;
+            if (_Serializer.Formatter == null && sconfig.FormatterFactory != null)
+            {
+                _Serializer.Formatter = sconfig.FormatterFactory.Create(this);
+            }
+            _Serializer.PostProcessors.AddRange(sconfig.PostProcessors);
             _SendSerializer = SerializeMessage;
         }
         public ObjClient(IPersistentConnection connection, SerializationConfig sconfig)
@@ -275,7 +297,7 @@ namespace Capstones.Net
             _LastReceiveTick = Environment.TickCount;
             if (buffer != null && size >= 0 && size <= buffer.Length)
             {
-                var processors = _SerConfig.PostProcessors;
+                var processors = _Serializer.PostProcessors;
                 for (int i = processors.Count - 1; i >= 0; --i)
                 {
                     var processor = processors[i];
@@ -286,7 +308,7 @@ namespace Capstones.Net
                 var pending = new PendingRead()
                 {
                     Type = type,
-                    Obj = _SerConfig.ReaderWriter.Read(type, buffer, 0, size, exFlags),
+                    Obj = _Serializer.Formatter.Read(type, buffer, 0, size, exFlags),
                     Seq = seq,
                     SSeq = sseq,
                 };
@@ -315,7 +337,7 @@ namespace Capstones.Net
             {
                 try
                 {
-                    while (_Connection != null && _Connection.IsAlive && _Splitter.TryReadBlock())
+                    while (_Connection != null && _Connection.IsAlive && _Serializer.Splitter.TryReadBlock())
                     {
                         if (_PendingRead.Obj != null)
                         {
@@ -386,7 +408,7 @@ namespace Capstones.Net
                 {
                     while (_Connection != null && _Connection.IsAlive)
                     {
-                        _Splitter.ReadBlock();
+                        _Serializer.Splitter.ReadBlock();
                         if (_PendingRead.Obj != null)
                         {
                             var obj = _PendingRead.Obj;
@@ -482,7 +504,7 @@ namespace Capstones.Net
             if (!_SerializeInConnectionThread)
             {
                 // type
-                var rw = _SerConfig.ReaderWriter;
+                var rw = _Serializer.Formatter;
                 var type = rw.GetDataType(obj);
                 var exFlags = rw.GetExFlags(obj);
                 // write obj
@@ -490,14 +512,14 @@ namespace Capstones.Net
                 if (stream != null)
                 {
                     // post process (encrypt etc.)
-                    var processors = _SerConfig.PostProcessors;
+                    var processors = _Serializer.PostProcessors;
                     for (int i = 0; i < processors.Count; ++i)
                     {
                         var processor = processors[i];
                         flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer, exFlags);
                     }
                     // compose block
-                    _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq, exFlags);
+                    _Serializer.Composer.PrepareBlock(stream, type, flags, seq, sseq, exFlags);
                     // send
                     _Stream.Write(stream, 0, stream.Count);
 #if DEBUG_PVP
@@ -527,7 +549,7 @@ namespace Capstones.Net
             if (mess != null)
             {
                 // type
-                var rw = _SerConfig.ReaderWriter;
+                var rw = _Serializer.Formatter;
                 var type = rw.GetDataType(mess.Obj);
                 var exFlags = rw.GetExFlags(obj);
                 // seq
@@ -538,14 +560,14 @@ namespace Capstones.Net
                 {
                     // post process (encrypt etc.)
                     var flags = mess.Flags;
-                    var processors = _SerConfig.PostProcessors;
+                    var processors = _Serializer.PostProcessors;
                     for (int i = 0; i < processors.Count; ++i)
                     {
                         var processor = processors[i];
                         flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer, exFlags);
                     }
                     // compose block
-                    _SerConfig.Composer.PrepareBlock(stream, type, flags, seq, sseq, exFlags);
+                    _Serializer.Composer.PrepareBlock(stream, type, flags, seq, sseq, exFlags);
                     // send
                     stream.Seek(0, SeekOrigin.Begin);
                     var count = stream.Count;
@@ -590,13 +612,14 @@ namespace Capstones.Net
                 _ServerConnection = null;
                 _PositiveConnection = null;
                 _Stream = null;
-                if (_Splitter != null)
-                {
-                    _Splitter.OnReceiveBlock -= ReceiveBlock;
-                    _Splitter.Dispose();
-                    _Splitter = null;
-                }
                 _SerConfig = null;
+                if (_Serializer != null && _Serializer.Splitter != null)
+                {
+                    _Serializer.Splitter.OnReceiveBlock -= ReceiveBlock;
+                    _Serializer.Splitter.Dispose();
+                    _Serializer.Splitter = null;
+                }
+                _Serializer = null;
                 _PendingReadQueue = null;
                 _WaitForObjRead.Set();
                 OnClose();
@@ -648,6 +671,9 @@ namespace Capstones.Net
         protected IPersistentConnectionServer _Server;
         public IPersistentConnectionServer Server { get { return _Server; } }
         protected SerializationConfig _SerConfig;
+        public SerializationConfig SerializationConfig { get { return _SerConfig; } }
+        protected Serializer _Serializer; // NOTICE: This is useless for a server. The serializer is one instance per connection.
+        public Serializer Serializer { get { return _Serializer; } set { _Serializer = value; } }
         protected IDictionary<string, object> _ExtraConfig;
 
         public ObjServer(IPersistentConnectionServer raw, SerializationConfig sconfig, IDictionary<string, object> exconfig)
@@ -724,6 +750,7 @@ namespace Capstones.Net
                 }
                 _Server = null;
                 _SerConfig = null;
+                _Serializer = null;
                 OnClose();
             }
         }
