@@ -97,7 +97,7 @@ namespace Capstones.Net
             {
                 FireReceiveBlock(null, 0, (uint)exFlags.Type, (uint)(ushort)exFlags.Flags, 0, 0, exFlags);
             }
-            else if (exFlags.Cate == 2 && exFlags.Type == 1)
+            else if (exFlags.Cate == 2 && exFlags.Type == 10001)
             {
                 bool decodeSuccess = false;
                 uint seq_client = 0;
@@ -474,7 +474,7 @@ namespace Capstones.Net
             if (data != null)
             {
                 CarbonExFlags carbonflags = exFlags as CarbonExFlags;
-                if (carbonflags != null && carbonflags.Cate == 2 && carbonflags.Type == 1)
+                if (carbonflags != null && carbonflags.Cate == 2 && carbonflags.Type == 10001)
                 {
                     // Wrapped-Protobuf
                     base.PrepareBlock(data, type, flags, seq, sseq, exFlags);
@@ -580,7 +580,7 @@ namespace Capstones.Net
                 {
                     Flags = 0,
                     Cate = 2,
-                    Type = 1,
+                    Type = 10001,
                     EndPointID = WrappedProtoEndPointID,
                 };
             }
@@ -610,7 +610,7 @@ namespace Capstones.Net
             CarbonMessage carbonmess = data as CarbonMessage;
             if (carbonmess != null)
             {
-                if (carbonmess.Cate == 2 && carbonmess.Type == 1)
+                if (carbonmess.Cate == 2 && carbonmess.Type == 10001)
                 {
                     return base.GetDataType(carbonmess.ObjMessage);
                 }
@@ -686,7 +686,7 @@ namespace Capstones.Net
                 { // PB
                     message.ObjMessage = ProtobufEncoder.ReadRaw(new ListSegment<byte>(buffer, offset, cnt));
                 }
-                else if (carbonFlags.Cate == 2 && carbonFlags.Type == 1)
+                else if (carbonFlags.Cate == 2 && carbonFlags.Type == 10001)
                 {
                     message.ObjMessage = base.Read(type, buffer, offset, cnt, exFlags);
                     return message.ObjMessage; // Notice: in this condition, we should not return the wrapper. Only the ObjMessage in the wrapper is meaningful.
