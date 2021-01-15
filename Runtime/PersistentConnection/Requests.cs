@@ -1306,6 +1306,8 @@ namespace Capstones.Net
         public abstract bool IsStarted { get; }
         public abstract bool IsAlive { get; }
         public abstract bool IsConnected { get; }
+        public abstract SerializationConfig SerializationConfig { get; }
+        public abstract Serializer Serializer { get; set; }
 
         public event Action OnClose = () => { };
         protected void FireOnClose() { OnClose(); }
@@ -1361,6 +1363,8 @@ namespace Capstones.Net
     {
         protected ObjClient _Channel;
         public ObjClient Channel { get { return _Channel; } }
+        public override SerializationConfig SerializationConfig { get { return _Channel.SerializationConfig; } }
+        public override Serializer Serializer { get { return _Channel.Serializer; } set { _Channel.Serializer = value; } }
 
         public ReqClient(ObjClient channel, IDictionary<string, object> exconfig)
         {
@@ -1824,6 +1828,8 @@ namespace Capstones.Net
     {
         protected ObjServer _Server;
         public ObjServer Channel { get { return _Server; } }
+        public override SerializationConfig SerializationConfig { get { return _Server.SerializationConfig; } }
+        public override Serializer Serializer { get { return _Server.Serializer; } set { _Server.Serializer = value; } }
         protected IDictionary<string, object> _ExtraConfig;
         protected Request.Handler _ChildHandler;
 

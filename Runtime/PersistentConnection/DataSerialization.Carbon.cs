@@ -20,6 +20,7 @@ namespace Capstones.Net
         public short Flags;
         public short Cate;
         public int Type;
+        public long EndPointID;
     }
 
     public class CarbonMessage
@@ -76,10 +77,8 @@ namespace Capstones.Net
     /// Bytes: (4 size)
     /// 2 flags, 2 proto-category, 4 message-type
     /// </summary>
-    public class CarbonSplitter : DataSplitter, IBuffered
+    public class CarbonSplitter : DataSplitter<CarbonSplitter>, IBuffered
     {
-        public static readonly DataSplitterFactory Factory = new DataSplitterFactory<CarbonSplitter>();
-
 #if UNITY_ENGINE || UNITY_5_3_OR_NEWER
         private InsertableStream _ReadBuffer = new NativeBufferStream();
 #else
@@ -98,7 +97,7 @@ namespace Capstones.Net
             {
                 FireReceiveBlock(null, 0, (uint)exFlags.Type, (uint)(ushort)exFlags.Flags, 0, 0, exFlags);
             }
-            else if (exFlags.Cate == 2 && exFlags.Type == 1)
+            else if (exFlags.Cate == 2 && exFlags.Type == 10001)
             {
                 bool decodeSuccess = false;
                 uint seq_client = 0;
@@ -283,7 +282,7 @@ namespace Capstones.Net
             ResetReadBlockContext();
             base.FireReceiveBlock(buffer, size, type, flags, seq, sseq, exFlags);
         }
-        protected void ReadHeaders(out uint size, out short flags, out short cate, out int type)
+        protected void ReadHeaders(out uint size, out short flags, out short cate, out int type, out long endpoint)
         {
             // Read size.(4 bytes)
             size = 0;
@@ -306,6 +305,13 @@ namespace Capstones.Net
                 cate <<= 8;
                 cate += (byte)_InputStream.ReadByte();
             }
+            // Read EndPoint (8 byte)
+            endpoint = 0;
+            for (int i = 0; i < 8; ++i)
+            {
+                endpoint <<= 8;
+                endpoint += (byte)_InputStream.ReadByte();
+            }
             // Read Type. (4 byte)
             type = 0;
             for (int i = 0; i < 4; ++i)
@@ -324,13 +330,15 @@ namespace Capstones.Net
                     short flags;
                     short cate;
                     int type;
-                    ReadHeaders(out size, out flags, out cate, out type);
-                    int realsize = (int)(size - 8);
+                    long endpoint;
+                    ReadHeaders(out size, out flags, out cate, out type, out endpoint);
+                    int realsize = (int)(size - 16);
                     var exFlags = new CarbonExFlags()
                     {
                         Flags = flags,
                         Cate = cate,
                         Type = type,
+                        EndPointID = endpoint,
                     };
                     if (realsize >= 0)
                     {
@@ -391,7 +399,7 @@ namespace Capstones.Net
                     {
                         if (_ExFlags == null)
                         {
-                            if (BufferedSize < 12)
+                            if (BufferedSize < 20)
                             {
                                 return false;
                             }
@@ -399,14 +407,16 @@ namespace Capstones.Net
                             short flags;
                             short cate;
                             int type;
-                            ReadHeaders(out size, out flags, out cate, out type);
+                            long endpoint;
+                            ReadHeaders(out size, out flags, out cate, out type, out endpoint);
                             _ExFlags = new CarbonExFlags()
                             {
                                 Flags = flags,
                                 Cate = cate,
                                 Type = type,
+                                EndPointID = endpoint,
                             };
-                            _Size = (int)(size - 8);
+                            _Size = (int)(size - 16);
                         }
                         else
                         {
@@ -464,7 +474,7 @@ namespace Capstones.Net
             if (data != null)
             {
                 CarbonExFlags carbonflags = exFlags as CarbonExFlags;
-                if (carbonflags != null && carbonflags.Cate == 2 && carbonflags.Type == 1)
+                if (carbonflags != null && carbonflags.Cate == 2 && carbonflags.Type == 10001)
                 {
                     // Wrapped-Protobuf
                     base.PrepareBlock(data, type, flags, seq, sseq, exFlags);
@@ -477,14 +487,16 @@ namespace Capstones.Net
                 short carbonFlags = 0;
                 short carbonCate = 0;
                 int carbonType = 0;
+                long carbonEndpoint = 0;
                 if (carbonflags != null)
                 {
                     carbonFlags = carbonflags.Flags;
                     carbonCate = carbonflags.Cate;
                     carbonType = carbonflags.Type;
+                    carbonEndpoint = carbonflags.EndPointID;
                 }
 
-                uint full_size = (uint)(size + 8);
+                uint full_size = (uint)(size + 16);
 
                 // write size.(4 bytes) (not included in full_size)
                 data.WriteByte((byte)((full_size & (0xFF << 24)) >> 24));
@@ -498,6 +510,15 @@ namespace Capstones.Net
                 // Write Cate.(2 byte)
                 data.WriteByte((byte)((carbonCate & (0xFF << 8)) >> 8));
                 data.WriteByte((byte)(carbonCate & 0xFF));
+                // Write EndPoint (8 byte)
+                data.WriteByte((byte)((carbonEndpoint & (0xFFL << 56)) >> 56));
+                data.WriteByte((byte)((carbonEndpoint & (0xFFL << 48)) >> 48));
+                data.WriteByte((byte)((carbonEndpoint & (0xFFL << 40)) >> 40));
+                data.WriteByte((byte)((carbonEndpoint & (0xFFL << 32)) >> 32));
+                data.WriteByte((byte)((carbonEndpoint & (0xFFL << 24)) >> 24));
+                data.WriteByte((byte)((carbonEndpoint & (0xFFL << 16)) >> 16));
+                data.WriteByte((byte)((carbonEndpoint & (0xFFL << 8)) >> 8));
+                data.WriteByte((byte)(carbonEndpoint & 0xFFL));
                 // Write Type.(4 bytes)
                 data.WriteByte((byte)((carbonType & (0xFF << 24)) >> 24));
                 data.WriteByte((byte)((carbonType & (0xFF << 16)) >> 16));
@@ -507,8 +528,19 @@ namespace Capstones.Net
         }
     }
 
-    public class CarbonReaderAndWriter : ProtobufReaderAndWriter
+    public class CarbonFormatter : ProtobufFormatter
     {
+        public class CarbonFormatterFactory : DataFormatterFactory
+        {
+            public override DataFormatter Create(IChannel connection)
+            {
+                return new CarbonFormatter();
+            }
+        }
+        public static readonly CarbonFormatterFactory Factory = new CarbonFormatterFactory();
+
+        public long WrappedProtoEndPointID;
+
         public override object GetExFlags(object data)
         {
             CarbonMessage carbonmess = data as CarbonMessage;
@@ -519,6 +551,7 @@ namespace Capstones.Net
                     Flags = carbonmess.Flags,
                     Cate = carbonmess.Cate,
                     Type = carbonmess.Type,
+                    EndPointID = 0,
                 };
             }
             else if (data is byte[])
@@ -528,6 +561,7 @@ namespace Capstones.Net
                     Flags = 0,
                     Cate = 2,
                     Type = -128,
+                    EndPointID = 0,
                 };
             }
             else if (data is string)
@@ -537,6 +571,7 @@ namespace Capstones.Net
                     Flags = 0,
                     Cate = 1,
                     Type = -128,
+                    EndPointID = 0,
                 };
             }
             else if (GetDataType(data) != 0)
@@ -545,7 +580,8 @@ namespace Capstones.Net
                 {
                     Flags = 0,
                     Cate = 2,
-                    Type = 1,
+                    Type = 10001,
+                    EndPointID = WrappedProtoEndPointID,
                 };
             }
             else if (data is Google.Protobuf.IMessage)
@@ -555,6 +591,7 @@ namespace Capstones.Net
                     Flags = 0,
                     Cate = 4,
                     Type = -128,
+                    EndPointID = 0,
                 };
             }
             else
@@ -564,6 +601,7 @@ namespace Capstones.Net
                     Flags = 0,
                     Cate = 2,
                     Type = -128,
+                    EndPointID = 0,
                 };
             }
         }
@@ -572,7 +610,7 @@ namespace Capstones.Net
             CarbonMessage carbonmess = data as CarbonMessage;
             if (carbonmess != null)
             {
-                if (carbonmess.Cate == 2 && carbonmess.Type == 1)
+                if (carbonmess.Cate == 2 && carbonmess.Type == 10001)
                 {
                     return base.GetDataType(carbonmess.ObjMessage);
                 }
@@ -648,7 +686,7 @@ namespace Capstones.Net
                 { // PB
                     message.ObjMessage = ProtobufEncoder.ReadRaw(new ListSegment<byte>(buffer, offset, cnt));
                 }
-                else if (carbonFlags.Cate == 2 && carbonFlags.Type == 1)
+                else if (carbonFlags.Cate == 2 && carbonFlags.Type == 10001)
                 {
                     message.ObjMessage = base.Read(type, buffer, offset, cnt, exFlags);
                     return message.ObjMessage; // Notice: in this condition, we should not return the wrapper. Only the ObjMessage in the wrapper is meaningful.
@@ -896,9 +934,9 @@ namespace Capstones.Net
                     {
                         OnMessage(carbon.Cate, carbon.Type, carbon.ObjMessage);
                     }
+                    return PredefinedMessages.NoResponse;
                 }
-
-                return PredefinedMessages.NoResponse;
+                return null;
             }
 
             protected bool _Disposed;
@@ -924,11 +962,11 @@ namespace Capstones.Net
             {
                 SplitterFactory = CarbonSplitter.Factory,
                 Composer = new CarbonComposer(),
-                ReaderWriter = new CarbonReaderAndWriter(),
+                FormatterFactory = CarbonFormatter.Factory,
             },
             ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
             {
-                new ConnectionFactory.ClientAttachmentCreator("Heartbeat", client => new Heartbeat(client, HeartbeatMessage)
+                new ConnectionFactory.ClientAttachmentCreator("CarbonHeartbeat", client => new Heartbeat(client, HeartbeatMessage)
                 {
                     Timeout = -1,
                     Interval = 3000,
@@ -951,7 +989,7 @@ namespace Capstones.Net
             {
                 SplitterFactory = CarbonSplitter.Factory,
                 Composer = new CarbonComposer(),
-                ReaderWriter = new CarbonReaderAndWriter(),
+                FormatterFactory = CarbonFormatter.Factory,
             },
             ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
             {
@@ -982,6 +1020,7 @@ namespace Capstones.Net
                 }
             }
         }
+        public static bool UseCarbonPushConnectionInPVP;
 
         //[EventOrder(80)]
         //public static object QosHandler(IReqClient from, uint type, object reqobj, uint seq)
@@ -1042,9 +1081,11 @@ namespace Capstones.Net
             url = "tcp://" + url;
             return url;
         }
+        private static ReqClient _CarbonPushConnection;
+        public static ReqClient CarbonPushConnection { get { return _CarbonPushConnection; } }
         public static ReqClient Connect(string url)
         {
-            return ConnectionFactory.GetClient<ReqClient>(url, ConnectionConfig);
+            return _CarbonPushConnection = ConnectionFactory.GetClient<ReqClient>(url, ConnectionConfig);
         }
         public static ReqClient Connect(string host, int port)
         {

@@ -73,6 +73,10 @@ namespace Capstones.Net
         }
         #endregion
     }
+    public abstract class DataSplitter<T> : DataSplitter where T : DataSplitter<T>, new()
+    {
+        public static readonly DataSplitterFactory Factory = new DataSplitterFactory<T>();
+    }
 
     public abstract class DataComposer
     {
@@ -92,7 +96,12 @@ namespace Capstones.Net
         public abstract int Order { get; }
     }
 
-    public abstract class DataReaderAndWriter
+    public abstract class DataFormatterFactory
+    {
+        public abstract DataFormatter Create(IChannel connection);
+    }
+
+    public abstract class DataFormatter
     {
         protected Dictionary<uint, Func<uint, InsertableStream, int, int, object>> _TypedReaders = new Dictionary<uint, Func<uint, InsertableStream, int, int, object>>(PredefinedMessages.PredefinedReaders);
         protected Dictionary<Type, Func<object, InsertableStream>> _TypedWriters = new Dictionary<Type, Func<object, InsertableStream>>(PredefinedMessages.PredefinedWriters);
