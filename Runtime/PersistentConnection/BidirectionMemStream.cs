@@ -613,6 +613,10 @@ namespace Capstones.Net
                 {
                     return rcnt;
                 }
+                if (_WriteFinished && Volatile.Read(ref _BufferedSize) <= 0)
+                {
+                    return rcnt;
+                }
 #if MULTITHREAD_SLOW_AND_SAFE
             }
 #endif
@@ -661,6 +665,13 @@ namespace Capstones.Net
 #if MULTITHREAD_SLOW_AND_SAFE
             }
 #endif
+        }
+
+        protected volatile bool _WriteFinished;
+        public void FinishWrite()
+        {
+            _WriteFinished = true;
+            _DataReady.Set();
         }
 
         protected override void Dispose(bool disposing)

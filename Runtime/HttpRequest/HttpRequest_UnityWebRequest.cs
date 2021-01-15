@@ -173,6 +173,7 @@ namespace Capstones.Net
                     _InnerReq.uploadHandler = new UploadHandlerRaw(data);
                 }
 
+                _DestStartOffset = 0;
                 if (_Dest != null)
                 {
                     if (_RangeEnabled)
@@ -247,8 +248,12 @@ namespace Capstones.Net
         }
         protected IEnumerator WaitForDone()
         {
-            while (!_InnerReq.isDone || _IsBackgroundIORunning)
+            while (_Status != HttpRequestStatus.Finished && (!_InnerReq.isDone || _IsBackgroundIORunning))
             {
+                if (_InnerReq.isDone && _IsBackgroundIORunning)
+                {
+                    _ReceiveStream.FinishWrite();
+                }
                 yield return null;
             }
             FinishResponse();
@@ -258,6 +263,29 @@ namespace Capstones.Net
         {
             if (_Status != HttpRequestStatus.Finished)
             {
+                if (_RangeEnabled && _InnerReq != null &&  _InnerReq.isHttpError && _InnerReq.responseCode == 416)
+                {
+                    PlatDependant.LogError("Server does not support Range.");
+                    _RangeEnabled = false;
+                    if (_DestStream != null)
+                    {
+                        try
+                        {
+                            _Status = HttpRequestStatus.NotStarted;
+                            _DestStream.Seek(0, SeekOrigin.Begin);
+                            _DestStream.SetLength(0);
+                            if (_ReceiveStream != null)
+                            {
+                                _ReceiveStream.Dispose();
+                            }
+                            _ReceiveStream = new BidirectionMemStream();
+                            StartRequest();
+                            return;
+                        }
+                        catch (Exception e) { }
+                    }
+                }
+
                 if (_Error == null)
                 {
                     if (_InnerReq == null)
@@ -294,9 +322,12 @@ namespace Capstones.Net
                                 bool rangeRespFound = false;
                                 foreach (var key in rawHeaders.Keys)
                                 {
-                                    if (key.ToLower() == "content-range")
+                                    if (key.ToLower() == "accept-ranges")
                                     {
-                                        rangeRespFound = true;
+                                        if (rawHeaders[key].ToLower() == "bytes")
+                                        {
+                                            rangeRespFound = true;
+                                        }
                                     }
                                 }
                                 if (!rangeRespFound)
@@ -332,7 +363,7 @@ namespace Capstones.Net
                                     }
                                     _FinalDestStream.SetLength((long)realLength);
                                 }
-                                catch (Exception)
+                                catch (Exception e)
                                 {
                                     _Error = "Server does not support Range.";
                                 }
