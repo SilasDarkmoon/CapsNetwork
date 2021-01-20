@@ -52,7 +52,7 @@ namespace Capstones.LuaLib
             return 1;
         }
 
-        private static LuaFramework.FurtherInit _InitLuaProtobufBridge = new LuaFramework.FurtherInit(InitLuaProtobufBridge);
+        private static LuaExLibs.LuaExLibItem _LuaExLib_Protobuf_Instance = new LuaExLibs.LuaExLibItem(InitLuaProtobufBridge, 200);
     }
 }
 
