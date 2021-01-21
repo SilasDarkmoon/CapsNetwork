@@ -602,13 +602,16 @@ namespace Capstones.Net
                     }
                     else
                     {
-                        if (we.Response is System.Net.HttpWebResponse && ((System.Net.HttpWebResponse)we.Response).StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
+                        if (we.Response is System.Net.HttpWebResponse && ((System.Net.HttpWebResponse)we.Response).StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable) // 416
                         {
                             try
                             {
                                 _RangeEnabled = false;
-                                _DestStream.Seek(0, SeekOrigin.Begin);
-                                _DestStream.SetLength(0);
+                                if (_DestStream != null)
+                                {
+                                    _DestStream.Seek(0, SeekOrigin.Begin);
+                                    _DestStream.SetLength(0);
+                                }
                                 RequestWork(state);
                             }
                             catch (Exception e) { }

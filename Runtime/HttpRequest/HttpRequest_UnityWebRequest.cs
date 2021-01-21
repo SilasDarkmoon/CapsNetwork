@@ -263,27 +263,31 @@ namespace Capstones.Net
         {
             if (_Status != HttpRequestStatus.Finished)
             {
-                if (_RangeEnabled && _InnerReq != null &&  _InnerReq.isHttpError && _InnerReq.responseCode == 416)
+                if (_RangeEnabled && _InnerReq != null && _InnerReq.isHttpError && _InnerReq.responseCode == (int)HttpStatusCode.RequestedRangeNotSatisfiable) // 416
                 {
                     PlatDependant.LogError("Server does not support Range.");
-                    _RangeEnabled = false;
-                    if (_DestStream != null)
+                    try
                     {
-                        try
+                        _RangeEnabled = false;
+                        _Status = HttpRequestStatus.NotStarted;
+                        if (_DestStream != null)
                         {
-                            _Status = HttpRequestStatus.NotStarted;
                             _DestStream.Seek(0, SeekOrigin.Begin);
                             _DestStream.SetLength(0);
-                            if (_ReceiveStream != null)
-                            {
-                                _ReceiveStream.Dispose();
-                            }
-                            _ReceiveStream = new BidirectionMemStream();
-                            StartRequest();
-                            return;
                         }
-                        catch (Exception e) { }
+                        if (!ToExternal && _FinalDestStream != null)
+                        {
+                            _FinalDestStream.Dispose();
+                        }
+                        if (_ReceiveStream != null)
+                        {
+                            _ReceiveStream.Dispose();
+                        }
+                        _ReceiveStream = new BidirectionMemStream();
+                        StartRequest();
+                        return;
                     }
+                    catch (Exception e) { }
                 }
 
                 if (_Error == null)
@@ -363,9 +367,15 @@ namespace Capstones.Net
                                     }
                                     _FinalDestStream.SetLength((long)realLength);
                                 }
-                                catch (Exception e)
+                                catch
                                 {
                                     _Error = "Server does not support Range.";
+                                    try
+                                    {
+                                        _FinalDestStream.Seek(0, SeekOrigin.Begin);
+                                        _FinalDestStream.SetLength(0);
+                                    }
+                                    catch { }
                                 }
                             }
                         }
