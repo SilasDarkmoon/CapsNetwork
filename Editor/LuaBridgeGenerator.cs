@@ -1088,6 +1088,48 @@ namespace Capstones.UnityEditorEx.Net
                                         ExtendMessage();
                                     }
                                 }
+
+                                // LuaProto_LuaHub
+                                using (var sw = PlatDependant.OpenWriteText(hubdir + "LuaProto_LuaHubSub" + sbFileNamePart + ".cs"))
+                                {
+                                    sw.WriteLine("namespace Capstones.Net");
+                                    sw.WriteLine("{");
+                                    sw.WriteLine("#if UNITY_ENGINE || UNITY_5_3_OR_NEWER");
+                                    sw.Write("    public static class LuaProto_LuaHubSub");
+                                    sw.WriteLine(sbFileNamePart);
+                                    sw.WriteLine("#else");
+                                    sw.WriteLine("    public static partial class ProtobufReg");
+                                    sw.WriteLine("#endif");
+                                    sw.WriteLine("    {");
+
+                                    for (int i = 0; i < sorted.Length; ++i)
+                                    {
+                                        var minfo = sorted[i];
+                                        if (!minfo.IsEnum)
+                                        {
+                                            sw.Write("        private static LuaProto.");
+                                            sw.Write(minfo.FullCSharpName);
+                                            sw.Write(" _Template");
+                                            sw.Write(minfo.FullCSharpName.Replace('.', '_'));
+                                            sw.Write(" = new LuaProto.");
+                                            sw.Write(minfo.FullCSharpName);
+                                            sw.WriteLine("();");
+                                        }
+                                    }
+
+                                    sw.WriteLine("");
+                                    sw.WriteLine("#if UNITY_EDITOR");
+                                    sw.WriteLine("        [UnityEditor.InitializeOnLoadMethod]");
+                                    sw.WriteLine("#endif");
+                                    sw.WriteLine("#if UNITY_ENGINE || UNITY_EDITOR || UNITY_5_3_OR_NEWER");
+                                    sw.WriteLine("        [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad)]");
+                                    sw.WriteLine("        public static void Init()");
+                                    sw.WriteLine("        {");
+                                    sw.WriteLine("        }");
+                                    sw.WriteLine("#endif");
+                                    sw.WriteLine("    }");
+                                    sw.WriteLine("}");
+                                }
                             }
                         }
                     }
