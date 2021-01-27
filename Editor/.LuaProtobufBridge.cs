@@ -450,10 +450,9 @@ namespace LuaProto
         {
             return Convert().CalculateSize();
         }
-        // not really clone. the cloned wrapper points to the same lua-table.
         public TWrapper Clone()
         {
-            return new TWrapper() { Binding = Binding };
+            return new TWrapper() { Binding = Binding.Clone() };
         }
         // compares whether they point to the same lua-table.
         public bool Equals(TWrapper other)
