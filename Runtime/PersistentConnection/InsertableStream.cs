@@ -489,6 +489,13 @@ namespace Capstones.UnityEngineEx
             _Count = 0;
             _Pos = 0;
         }
+        public ArrayBufferStream(byte[] buffer, int offset, int cnt)
+        {
+            _RealBuffer = buffer;
+            _Offset = offset;
+            _Count = cnt;
+            _Pos = 0;
+        }
         public ArrayBufferStream() : this(0)
         {
         }
