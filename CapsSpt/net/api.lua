@@ -179,7 +179,9 @@ function repostReq(request) -- local
         end)
     end
     if not quiet then
-        request2.blockdlg = res.ShowDialog('Game/UI/Common/Template/Loading/WaitForPost2.prefab', "overlay", false)
+        if api.showBlockDialog then
+            request2.blockdlg = api.showBlockDialog()
+        end
     end
 
     return request2
@@ -194,7 +196,9 @@ function api.post(uri, data, quiet, timeOut)
     request.quiet = quiet
 
     if not quiet then
-        request.blockdlg = res.ShowDialog('Game/UI/Common/Template/Loading/WaitForPost2.prefab', "overlay", false)
+        if api.showBlockDialog then
+            request.blockdlg = api.showBlockDialog()
+        end
     end
 
     return request

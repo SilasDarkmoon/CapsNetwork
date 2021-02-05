@@ -15,8 +15,10 @@ end
 
 local typedMessageHandlers = {}
 local cachedTypedMessage = {}
+local reconnectCount = 0
 
 local function OnTcpMessage(message, messagetype)
+    reconnectCount = 0
     local jsonMess, err = json.decode(message)
     if jsonMess then
         message = jsonMess
@@ -43,6 +45,25 @@ function api.CloseTcpConnect()
     end
 end
 
+function api.TcpReconnect()
+    print("retry tcp connect: "..reconnectCount)
+    if reconnectCount >= 3 then
+        clr.coroutine(function()
+            local waithandle = req.defaultOnFailed({ failed = "tcp_retry", msg = "tcp_retry" })
+            if waithandle then
+                while not waithandle.done do
+                    coroutine.yield()
+                end
+            end
+            reconnectCount = 0
+            api.TcpConnect()
+        end)
+    else
+        reconnectCount = reconnectCount + 1
+        api.TcpConnect()
+    end
+end
+
 function api.TcpConnect()
     local token = api.token
     if not token or token == "" then
@@ -61,7 +82,7 @@ function api.TcpConnect()
         end
         api.tcpClient = CarbonMessageUtils.ConnectWithDifferentPort(api.tcpHost, api.tcpPort)
     end
-    CarbonMessageUtils.OnClose(api.tcpClient, api.TcpConnect)
+    CarbonMessageUtils.OnClose(api.tcpClient, api.TcpReconnect)
     CarbonMessageUtils.OnJson(api.tcpClient, OnTcpMessage)
     CarbonMessageUtils.SendToken(api.tcpClient, token)
 end
