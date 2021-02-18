@@ -390,18 +390,31 @@ namespace LuaProto
     using pbr = global::Google.Protobuf.Reflection;
     using scg = global::System.Collections.Generic;
 
+    public interface IBidirectionConvertible
+    {
+        void CopyFrom(object message);
+        void CopyTo(object message);
+    }
     public interface IBidirectionConvertible<T>
     {
         void CopyFrom(T message);
         void CopyTo(T message);
     }
-    public interface IProtoConvertible<T> : IBidirectionConvertible<T>
+    public interface IProtoConvertible : IBidirectionConvertible
     {
-        T Convert();
+        object Convert();
     }
-    public interface IWrapperConvertible<T> : IBidirectionConvertible<T>
+    public interface IProtoConvertible<T> : IBidirectionConvertible<T>, IProtoConvertible
     {
-        T Convert(IntPtr l);
+        new T Convert();
+    }
+    public interface IWrapperConvertible : IBidirectionConvertible
+    {
+        object Convert(IntPtr l);
+    }
+    public interface IWrapperConvertible<T> : IBidirectionConvertible<T>, IWrapperConvertible
+    {
+        new T Convert(IntPtr l);
     }
 
     public abstract class BaseLuaProtoWrapper<TWrapper, TProto> : BaseLuaWrapper<TWrapper>, pb::IMessage<TWrapper>, IProtoConvertible<TProto>
@@ -484,6 +497,25 @@ namespace LuaProto
 
         public abstract void CopyFrom(TProto message);
         public abstract void CopyTo(TProto message);
+
+        void IBidirectionConvertible.CopyFrom(object message)
+        {
+            if (message is TProto)
+            {
+                CopyFrom((TProto)message);
+            }
+        }
+        void IBidirectionConvertible.CopyTo(object message)
+        {
+            if (message is TProto)
+            {
+                CopyTo((TProto)message);
+            }
+        }
+        object IProtoConvertible.Convert()
+        {
+            return Convert();
+        }
     }
 
     public static class LuaProtoWrapperExtensions

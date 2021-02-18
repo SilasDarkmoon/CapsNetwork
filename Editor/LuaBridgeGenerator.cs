@@ -558,7 +558,15 @@ namespace Capstones.UnityEditorEx.Net
                                             foreach (var ev in minfo.Desc["value"].Messages)
                                             {
                                                 var frawname = ev["name"].String;
-                                                var fname = ToCSharpEnumName(frawname);
+                                                var fname = frawname;
+                                                if (fname.StartsWith(minfo.Name + "_"))
+                                                {
+                                                    fname = fname.Substring(minfo.Name.Length + 1);
+                                                }
+                                                else
+                                                {
+                                                    fname = ToCSharpEnumName(fname);
+                                                }
                                                 sw.Write("                _StaticFieldsIndex[\"");
                                                 sw.Write(fname);
                                                 sw.Write("\"] = new LuaMetaCallWithPrecompiled() { _Method = _StaticFieldsIndex[\"");
@@ -583,7 +591,14 @@ namespace Capstones.UnityEditorEx.Net
                                             foreach (var ev in minfo.Desc["value"].Messages)
                                             {
                                                 var fname = ev["name"].String;
-                                                fname = ToCSharpEnumName(fname);
+                                                if (fname.StartsWith(minfo.Name + "_"))
+                                                {
+                                                    fname = fname.Substring(minfo.Name.Length + 1);
+                                                }
+                                                else
+                                                {
+                                                    fname = ToCSharpEnumName(fname);
+                                                }
                                                 sw.Write("            private static readonly lua.CFunction ___sgf_");
                                                 sw.Write(fname);
                                                 sw.Write(" = new lua.CFunction(___sgm_");
@@ -1052,6 +1067,50 @@ namespace Capstones.UnityEditorEx.Net
                                         sw.WriteLine("result.CopyFrom(this);");
                                         sw.WriteIndent(level + 2);
                                         sw.WriteLine("return result;");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("}");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("void LuaProto.IBidirectionConvertible.CopyFrom(object message)");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 2);
+                                        sw.Write("if (message is LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.WriteLine(")");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 3);
+                                        sw.Write("CopyFrom((LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.WriteLine(")message);");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("}");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("}");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("void LuaProto.IBidirectionConvertible.CopyTo(object message)");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 2);
+                                        sw.Write("if (message is LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.WriteLine(")");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 3);
+                                        sw.Write("CopyTo((LuaProto.");
+                                        sw.Write(minfo.FullCSharpName);
+                                        sw.WriteLine(")message);");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("}");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("}");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("object LuaProto.IWrapperConvertible.Convert(IntPtr l)");
+                                        sw.WriteIndent(level + 1);
+                                        sw.WriteLine("{");
+                                        sw.WriteIndent(level + 2);
+                                        sw.WriteLine("return Convert(l);");
                                         sw.WriteIndent(level + 1);
                                         sw.WriteLine("}");
                                         ++level;
