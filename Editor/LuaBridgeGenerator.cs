@@ -831,7 +831,12 @@ namespace Capstones.UnityEditorEx.Net
                                             sw.Write(typename);
                                             sw.Write(">(\"");
                                             sw.Write(field["name"].String);
-                                            sw.Write("\"); }");
+                                            sw.Write("\")");
+                                            if (typename == "string")
+                                            {
+                                                sw.Write(" ?? \"\"");
+                                            }
+                                            sw.Write("; }");
                                             sw.WriteLine();
                                             if (!repeated)
                                             {
