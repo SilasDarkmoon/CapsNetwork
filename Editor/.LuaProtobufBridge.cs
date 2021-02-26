@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Runtime.InteropServices;
 using Capstones.UnityEngineEx;
 
 using Capstones.LuaExt;
@@ -21,6 +22,15 @@ namespace Capstones.LuaLib
             l.pushcfunction(ProtoDelCreateMessage);
             l.SetField(-2, "new");
             l.SetGlobal("proto");
+
+            if (LuaProtobufNative.InitFunc != null)
+            {
+                try
+                {
+                    LuaProtobufNative.InitFunc(l);
+                }
+                catch { }
+            }
         }
 
         public static readonly lua.CFunction ProtoDelCreateMessage = new lua.CFunction(ProtoFuncCreateMessage);
@@ -53,6 +63,32 @@ namespace Capstones.LuaLib
         }
 
         private static LuaExLibs.LuaExLibItem _LuaExLib_Protobuf_Instance = new LuaExLibs.LuaExLibItem(InitLuaProtobufBridge, 200);
+
+        public static class LuaProtobufNative
+        {
+            public static readonly Action<IntPtr> InitFunc;
+
+#if UNITY_IPHONE && !UNITY_EDITOR
+            public const string LIB_PATH = "__Internal";
+#else
+            public const string LIB_PATH = "LuaProtobuf";
+#endif
+            static LuaProtobufNative()
+            {
+                InitFunc = null;
+#if !UNITY_ENGINE && !UNITY_5_3_OR_NEWER
+                UnityEngineEx.PluginManager.LoadLib(LIB_PATH);
+#endif
+                try
+                {
+                    InitFunc = InitLuaProtobufPlugin;
+                }
+                catch { }
+            }
+
+            [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
+            public static extern void InitLuaProtobufPlugin(IntPtr l);
+        }
     }
 }
 
