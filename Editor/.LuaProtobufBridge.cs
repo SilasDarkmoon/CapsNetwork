@@ -112,7 +112,7 @@ namespace Capstones.LuaLib
                 { ProtobufNativeType.TYPE_BOOL, (l, val) => l.pushboolean(val.Boolean) },
                 { ProtobufNativeType.TYPE_STRING, (l, val) => l.pushstring(val.String) },
                 { ProtobufNativeType.TYPE_MESSAGE, (l, val) => PushLuaRaw(l, val.Message) },
-                { ProtobufNativeType.TYPE_BYTES, (l, val) => l.pushstring(val.Bytes) },
+                { ProtobufNativeType.TYPE_BYTES, (l, val) => l.pushbuffer(val.Bytes) },
                 { ProtobufNativeType.TYPE_UINT32, (l, val) => l.pushnumber(val.UInt32) },
                 { ProtobufNativeType.TYPE_ENUM, (l, val) => l.pushnumber(val.UInt64) },
                 { ProtobufNativeType.TYPE_SFIXED32, (l, val) => l.pushnumber(val.Int32) },
