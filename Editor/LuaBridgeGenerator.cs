@@ -13,6 +13,20 @@ namespace Capstones.UnityEditorEx.Net
 
     public static class LuaBridgeGenerator
     {
+        public static string EscapeToLuaString(byte[] data)
+        {
+            if (data == null)
+            {
+                return null;
+            }
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            for (int i = 0; i < data.Length; ++i)
+            {
+                sb.Append("\\");
+                sb.Append(data[i].ToString("000"));
+            }
+            return sb.ToString();
+        }
         public static string ToCSharpEnumName(string ename)
         {
             StringBuilder csname = new StringBuilder();
@@ -133,6 +147,12 @@ namespace Capstones.UnityEditorEx.Net
                             var allmessages = CapsNetworkEditor.GetAllMessages(mess_set);
                             var sorted = CapsNetworkEditor.ParseExInfo(allmessages, txtcontent);
                             allmessagesinallfiles.Merge(allmessages);
+
+                            var luacontent = EscapeToLuaString(bincontent);
+                            luacontent = "return '" + luacontent + "'";
+                            var luafile = System.IO.Path.GetDirectoryName(protodir);
+                            luafile += "/CapsSpt/protocols" + part + ".lua";
+                            PlatDependant.WriteAllText(luafile, luacontent);
                         }
                     }
                 }

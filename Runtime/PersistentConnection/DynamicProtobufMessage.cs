@@ -1405,7 +1405,7 @@ namespace Capstones.Net
         public ProtobufHighLevelType Type;
         public ProtobufFieldLabel Label;
     }
-    public class ProtobufMessage // TODO: IDictionary, ICloneable
+    public class ProtobufMessage : ICloneable
     {
         protected internal class FieldSlot
         {
@@ -1769,6 +1769,21 @@ namespace Capstones.Net
                 var slot = _HighFields[num];
                 WriteToJson(sb, slot, indent, alreadyHandledNodes);
             }
+            List<string> tempkeys = new List<string>();
+            foreach (var kvp in _FieldMap)
+            {
+                if (kvp.Value.Desc.Number < 0)
+                {
+                    tempkeys.Add(kvp.Key);
+                }
+            }
+            tempkeys.Sort();
+            for (int i = 0; i < tempkeys.Count; ++i)
+            {
+                var key = tempkeys[i];
+                var slot = _FieldMap[key];
+                WriteToJson(sb, slot, indent, alreadyHandledNodes);
+            }
             { // eat last ','
                 if (sb[sb.Length - 1] == ',')
                 {
@@ -1819,6 +1834,21 @@ namespace Capstones.Net
         }
 
         protected Dictionary<string, FieldSlot> _FieldMap = new Dictionary<string, FieldSlot>();
+        protected internal FieldSlot GetSlot(string name)
+        {
+            FieldSlot slot;
+            _FieldMap.TryGetValue(name, out slot);
+            return slot;
+        }
+        protected internal FieldSlot GetOrCreateSlot(string name)
+        {
+            FieldSlot slot;
+            if (!_FieldMap.TryGetValue(name, out slot))
+            {
+                _FieldMap[name] = slot = new FieldSlot() { Desc = new ProtobufFieldDesc() { Number = -1, Name = name } };
+            }
+            return slot;
+        }
         protected internal virtual void FinishBuild()
         {
             _FieldMap.Clear();
@@ -1960,13 +1990,57 @@ namespace Capstones.Net
                 return new SlotEnumAccessor<T>(_Slot);
             }
 
+            public ProtobufNativeType NativeType
+            {
+                get
+                {
+                    var first = _Slot.FirstValue;
+                    if (!first.Parsed.IsEmpty)
+                    {
+                        return first.Parsed.NativeType;
+                    }
+                    else
+                    {
+                        return _Slot.Desc.Type.KnownType;
+                    }
+                }
+            }
+            public bool IsRepeated
+            {
+                get
+                {
+                    if (_Slot.Desc.Label == ProtobufFieldLabel.LABEL_REPEATED)
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        return Count > 1;
+                    }
+                }
+            }
+            public ProtobufParsedValue FirstValue
+            {
+                get
+                {
+                    return _Slot.FirstValue.Parsed;
+                }
+            }
             public T Get<T>()
             {
                 return _Slot.FirstValue.Parsed.Get<T>();
             }
+            public object Get()
+            {
+                return _Slot.FirstValue.Parsed.Get();
+            }
             public void Set<T>(T val)
             {
                 var old = _Slot.FirstValue; old.Parsed.Set<T>(val); _Slot.FirstValue = old;
+            }
+            public void Set(object val)
+            {
+                var old = _Slot.FirstValue; old.Parsed.Set(val); _Slot.FirstValue = old;
             }
             public T GetEnum<T>() where T : struct
             {
@@ -2337,8 +2411,7 @@ namespace Capstones.Net
         {
             get
             {
-                FieldSlot slot = null;
-                _FieldMap.TryGetValue(name, out slot);
+                var slot = GetOrCreateSlot(name);
                 return new SlotValueAccessor(slot);
             }
         }
@@ -2349,6 +2422,936 @@ namespace Capstones.Net
                 FieldSlot slot = GetSlot(fieldindex);
                 return new SlotValueAccessor(slot);
             }
+        }
+
+        public struct DictWrapper : ICollection<KeyValuePair<string, SlotValueAccessor>>, IEnumerable<KeyValuePair<string, SlotValueAccessor>>, IEnumerable, IDictionary<string, SlotValueAccessor>, IReadOnlyCollection<KeyValuePair<string, SlotValueAccessor>>, IReadOnlyDictionary<string, SlotValueAccessor>, ICollection, IDictionary,
+            UnityEngineEx.IConvertibleDictionary
+        {
+            private ProtobufMessage _Parent;
+
+            internal DictWrapper(ProtobufMessage parent)
+            {
+                _Parent = parent;
+            }
+
+            public SlotValueAccessor this[string key]
+            {
+                get
+                {
+                    return _Parent[key];
+                }
+                set
+                {
+                    var slot = _Parent.GetOrCreateSlot(key);
+                    slot.Values.Clear();
+                    if (value._Slot != null)
+                    {
+                        slot.Values.Merge(value._Slot.Values);
+                    }
+                }
+            }
+            public int Count
+            {
+                get
+                {
+                    return _Parent._FieldMap.Count;
+                }
+            }
+            public void Add(string key, SlotValueAccessor value)
+            {
+                this[key] = value;
+            }
+            public void Clear()
+            {
+                List<string> pendingDelete = new List<string>();
+                foreach (var kvp in _Parent._FieldMap)
+                {
+                    if (kvp.Value.Desc.Number < 0)
+                    {
+                        pendingDelete.Add(kvp.Key);
+                    }
+                }
+                for (int i = 0; i < pendingDelete.Count; ++i)
+                {
+                    var key = pendingDelete[i];
+                    _Parent._FieldMap.Remove(key);
+                }
+            }
+            public bool ContainsKey(string key)
+            {
+                return _Parent._FieldMap.ContainsKey(key);
+            }
+            public bool Remove(string key)
+            {
+                var slot = _Parent.GetSlot(key);
+                if (slot != null && slot.Desc.Number < 0)
+                {
+                    _Parent._FieldMap.Remove(key);
+                    return true;
+                }
+                return false;
+            }
+            public bool TryGetValue(string key, out SlotValueAccessor value)
+            {
+                value = _Parent[key];
+                return true;
+            }
+            public bool ContainsValue(SlotValueAccessor value)
+            {
+                if (value._Slot != null)
+                {
+                    var name = value._Slot.Desc.Name;
+                    return _Parent.GetSlot(name) != null;
+                }
+                return false;
+            }
+
+            public void CopyTo(Array array, int arrayIndex)
+            {
+                int count = 0;
+                foreach (var kvp in _Parent._FieldMap)
+                {
+                    array.SetValue(new KeyValuePair<string, SlotValueAccessor>(kvp.Key, new SlotValueAccessor(kvp.Value)), arrayIndex + count++);
+                }
+            }
+            public void CopyTo(KeyValuePair<string, SlotValueAccessor>[] array, int arrayIndex)
+            {
+                int count = 0;
+                foreach (var kvp in _Parent._FieldMap)
+                {
+                    array[arrayIndex + count++] = new KeyValuePair<string, SlotValueAccessor>(kvp.Key, new SlotValueAccessor(kvp.Value));
+                }
+            }
+            public void Add(KeyValuePair<string, SlotValueAccessor> item)
+            {
+                Add(item.Key, item.Value);
+            }
+            public bool Contains(KeyValuePair<string, SlotValueAccessor> item)
+            {
+                return _Parent.GetSlot(item.Key) != null;
+            }
+            public bool Remove(KeyValuePair<string, SlotValueAccessor> item)
+            {
+                return Remove(item.Key);
+            }
+
+            public struct Enumerator : IEnumerator<KeyValuePair<string, SlotValueAccessor>>, IEnumerator, IDisposable, IDictionaryEnumerator
+            {
+                private Dictionary<string, FieldSlot>.Enumerator _Inner;
+                private ProtobufMessage _Parent;
+
+                public Enumerator(ProtobufMessage parent)
+                {
+                    _Parent = parent;
+                    _Inner = parent._FieldMap.GetEnumerator();
+                }
+
+                public KeyValuePair<string, SlotValueAccessor> Current
+                {
+                    get
+                    {
+                        var cur = _Inner.Current;
+                        return new KeyValuePair<string, SlotValueAccessor>(cur.Key, new SlotValueAccessor(cur.Value));
+                    }
+                }
+
+                object IEnumerator.Current { get { return Current; } }
+
+                DictionaryEntry IDictionaryEnumerator.Entry { get { return new DictionaryEntry(Current.Key, Current.Value); } }
+
+                object IDictionaryEnumerator.Key { get { return Current.Key; } }
+
+                object IDictionaryEnumerator.Value { get { return Current.Value; } }
+
+                public void Dispose()
+                {
+                }
+                public bool MoveNext()
+                {
+                    return _Inner.MoveNext();
+                }
+                public void Reset()
+                {
+                    _Inner = _Parent._FieldMap.GetEnumerator();
+                }
+            }
+            public Enumerator GetEnumerator()
+            {
+                return new Enumerator(_Parent);
+            }
+            IEnumerator<KeyValuePair<string, SlotValueAccessor>> IEnumerable<KeyValuePair<string, SlotValueAccessor>>.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+            IDictionaryEnumerator IDictionary.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+
+            public KeyCollection Keys { get { return new KeyCollection(_Parent); } }
+            public ValueCollection Values { get { return new ValueCollection(_Parent); } }
+            ICollection<string> IDictionary<string, SlotValueAccessor>.Keys { get { return Keys; } }
+            ICollection<SlotValueAccessor> IDictionary<string, SlotValueAccessor>.Values { get { return Values; } }
+            IEnumerable<string> IReadOnlyDictionary<string, SlotValueAccessor>.Keys { get { return Keys; } }
+            IEnumerable<SlotValueAccessor> IReadOnlyDictionary<string, SlotValueAccessor>.Values { get { return Values; } }
+            ICollection IDictionary.Keys { get { return Keys; } }
+            ICollection IDictionary.Values { get { return Values; } }
+            public struct KeyCollection : ICollection<string>, IEnumerable<string>, IEnumerable, IReadOnlyCollection<string>, ICollection
+            {
+                private ProtobufMessage _Parent;
+                private Dictionary<string, FieldSlot>.KeyCollection _Inner;
+
+                public KeyCollection(ProtobufMessage parent)
+                {
+                    _Parent = parent;
+                    _Inner = _Parent._FieldMap.Keys;
+                }
+                public int Count { get { return _Inner.Count; } }
+                public void CopyTo(string[] array, int index)
+                {
+                    _Inner.CopyTo(array, index);
+                }
+                public bool Contains(string key)
+                {
+                    return _Parent._FieldMap.ContainsKey(key);
+                }
+                public bool IsReadOnly { get { return true; } }
+
+                public Enumerator GetEnumerator()
+                {
+                    return new Enumerator(this);
+                }
+                IEnumerator<string> IEnumerable<string>.GetEnumerator()
+                {
+                    return GetEnumerator();
+                }
+                IEnumerator IEnumerable.GetEnumerator()
+                {
+                    return GetEnumerator();
+                }
+
+                public struct Enumerator : IEnumerator<string>, IEnumerator, IDisposable
+                {
+                    private Dictionary<string, FieldSlot>.KeyCollection.Enumerator _Inner;
+                    public Enumerator(KeyCollection parent)
+                    {
+                        _Inner = parent._Inner.GetEnumerator();
+                    }
+                    public string Current { get { return _Inner.Current; } }
+                    object IEnumerator.Current { get { return Current; } }
+
+                    public void Dispose()
+                    {
+                        _Inner.Dispose();
+                    }
+                    public bool MoveNext()
+                    {
+                        return _Inner.MoveNext();
+                    }
+                    public void Reset()
+                    {
+                        ((IEnumerator)_Inner).Reset();
+                    }
+                }
+
+                void ICollection<string>.Add(string item)
+                {
+                    throw new NotSupportedException();
+                }
+                void ICollection<string>.Clear()
+                {
+                    throw new NotSupportedException();
+                }
+                bool ICollection<string>.Remove(string item)
+                {
+                    throw new NotSupportedException();
+                }
+                public bool IsSynchronized { get { return false; } }
+                public object SyncRoot { get { return _Parent._HighFields; } }
+                public void CopyTo(Array array, int index)
+                {
+                    ((ICollection)_Inner).CopyTo(array, index);
+                }
+            }
+            public sealed class ValueCollection : ICollection<SlotValueAccessor>, IEnumerable<SlotValueAccessor>, IEnumerable, IReadOnlyCollection<SlotValueAccessor>, ICollection
+            {
+                private ProtobufMessage _Parent;
+                private Dictionary<string, FieldSlot>.ValueCollection _Inner;
+
+                public ValueCollection(ProtobufMessage parent)
+                {
+                    _Parent = parent;
+                    _Inner = _Parent._FieldMap.Values;
+                }
+                public int Count { get { return _Inner.Count; } }
+                public void CopyTo(SlotValueAccessor[] array, int index)
+                {
+                    int count = 0;
+                    foreach (var slot in _Inner)
+                    {
+                        array[index + count++] = new SlotValueAccessor(slot);
+                    }
+                }
+                public bool Contains(SlotValueAccessor val)
+                {
+                    if (val._Slot != null)
+                    {
+                        var name = val._Slot.Desc.Name;
+                        return _Parent.GetSlot(name) != null;
+                    }
+                    return false;
+                }
+                public bool IsReadOnly { get { return true; } }
+
+                public Enumerator GetEnumerator()
+                {
+                    return new Enumerator(this);
+                }
+                IEnumerator<SlotValueAccessor> IEnumerable<SlotValueAccessor>.GetEnumerator()
+                {
+                    return GetEnumerator();
+                }
+                IEnumerator IEnumerable.GetEnumerator()
+                {
+                    return GetEnumerator();
+                }
+
+                public struct Enumerator : IEnumerator<SlotValueAccessor>, IEnumerator, IDisposable
+                {
+                    private Dictionary<string, FieldSlot>.ValueCollection.Enumerator _Inner;
+                    public Enumerator(ValueCollection parent)
+                    {
+                        _Inner = parent._Inner.GetEnumerator();
+                    }
+                    public SlotValueAccessor Current { get { return new SlotValueAccessor(_Inner.Current); } }
+                    object IEnumerator.Current { get { return Current; } }
+
+                    public void Dispose()
+                    {
+                        _Inner.Dispose();
+                    }
+                    public bool MoveNext()
+                    {
+                        return _Inner.MoveNext();
+                    }
+                    public void Reset()
+                    {
+                        ((IEnumerator)_Inner).Reset();
+                    }
+                }
+
+                void ICollection<SlotValueAccessor>.Add(SlotValueAccessor item)
+                {
+                    throw new NotSupportedException();
+                }
+                void ICollection<SlotValueAccessor>.Clear()
+                {
+                    throw new NotSupportedException();
+                }
+                bool ICollection<SlotValueAccessor>.Remove(SlotValueAccessor item)
+                {
+                    throw new NotSupportedException();
+                }
+                public bool IsSynchronized { get { return false; } }
+                public object SyncRoot { get { return _Parent._HighFields; } }
+                public void CopyTo(Array array, int index)
+                {
+                    int count = 0;
+                    foreach (var slot in _Inner)
+                    {
+                        array.SetValue(new SlotValueAccessor(slot), index + count++);
+                    }
+                }
+            }
+
+            public bool IsSynchronized { get { return false; } }
+            public object SyncRoot { get { return _Parent._HighFields; } }
+            public bool IsReadOnly { get { return false; } }
+            public bool IsFixedSize { get { return false; } }
+
+            void IDictionary.Add(object key, object value)
+            {
+                Add((string)key, (SlotValueAccessor)value);
+            }
+            bool IDictionary.Contains(object key)
+            {
+                if (key is string)
+                {
+                    return ContainsKey((string)key);
+                }
+                return false;
+            }
+            void IDictionary.Remove(object key)
+            {
+                if (key is string)
+                {
+                    Remove((string)key);
+                }
+            }
+            object IDictionary.this[object key]
+            {
+                get { return this[(string)key]; }
+                set
+                {
+                    if (value is SlotValueAccessor)
+                    {
+                        this[(string)key] = (SlotValueAccessor)value;
+                    }
+                    else
+                    {
+                        this[(string)key].Set(value);
+                    }
+                }
+            }
+
+            public T Get<T>(string key)
+            {
+                return this[key].Get<T>();
+            }
+            public void Set<T>(string key, T val)
+            {
+                this[key].Set<T>(val);
+            }
+        }
+        public DictWrapper AsDict()
+        {
+            return new DictWrapper(this);
+        }
+
+        public struct ListWrapper : ICollection<SlotValueAccessor>, IEnumerable<SlotValueAccessor>, IEnumerable, IList<SlotValueAccessor>, IReadOnlyCollection<SlotValueAccessor>, IReadOnlyList<SlotValueAccessor>, ICollection, IList
+        {
+            private ProtobufMessage _Parent;
+
+            internal ListWrapper(ProtobufMessage parent)
+            {
+                _Parent = parent;
+            }
+
+            public bool IsSynchronized { get { return false; } }
+            public object SyncRoot { get { return _Parent._HighFields; } }
+
+            public void CopyTo(Array array, int index)
+            {
+                var cnt = Count;
+                for (int i = 0; i < cnt; ++i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    array.SetValue(new SlotValueAccessor(slot), index + i);
+                }
+            }
+
+            public SlotValueAccessor this[int index]
+            {
+                get
+                {
+                    var slot = _Parent.GetSlot(index + 1);
+                    return new SlotValueAccessor(slot);
+                }
+                set
+                {
+                    var slot = _Parent.GetSlot(index + 1);
+                    if (slot != null)
+                    {
+                        slot.Values.Clear();
+                        if (value._Slot != null)
+                        {
+                            slot.Values.Merge(value._Slot.Values);
+                        }
+                    }
+                }
+            }
+
+            public int Count
+            {
+                get
+                {
+                    int max = 16;
+                    foreach (var kvp in _Parent._HighFields)
+                    {
+                        if (kvp.Key > max)
+                        {
+                            max = kvp.Key;
+                        }
+                    }
+                    return max;
+                }
+            }
+
+            public int Capacity { get { return int.MaxValue; } }
+            public bool IsReadOnly { get { return false; } }
+            public bool IsFixedSize { get { return true; } }
+
+            object IList.this[int index]
+            {
+                get { return this[index]; }
+                set
+                {
+                    if (value is SlotValueAccessor)
+                    {
+                        this[index] = (SlotValueAccessor)value;
+                    }
+                    else
+                    {
+                        this[index].Set(value);
+                    }
+                }
+            }
+
+            public void Add(SlotValueAccessor item)
+            {
+                throw new NotSupportedException();
+            }
+            //public void AddRange(IEnumerable<SlotValueAccessor> collection)
+            //{
+            //    throw new NotSupportedException();
+            //}
+            public void Clear()
+            {
+                throw new NotSupportedException();
+            }
+            public bool Contains(SlotValueAccessor item)
+            {
+                if (item._Slot != null)
+                {
+                    var num = item._Slot.Desc.Number;
+                    return _Parent.GetSlot(num) == item._Slot;
+                }
+                return false;
+            }
+            public void CopyTo(int index, SlotValueAccessor[] array, int arrayIndex, int count)
+            {
+                for (int i = 0; i < count; ++i)
+                {
+                    var slot = _Parent.GetSlot(index + i + 1);
+                    array[arrayIndex + i] = new SlotValueAccessor(slot);
+                }
+            }
+            public void CopyTo(SlotValueAccessor[] array, int arrayIndex)
+            {
+                CopyTo(0, array, arrayIndex, Count);
+            }
+            public void CopyTo(SlotValueAccessor[] array)
+            {
+                CopyTo(array, 0);
+            }
+
+            public bool Exists(Predicate<SlotValueAccessor> match)
+            {
+                var cnt = Count;
+                for (int i = 0; i < cnt; ++i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    if (match(new SlotValueAccessor(slot)))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            public SlotValueAccessor Find(Predicate<SlotValueAccessor> match)
+            {
+                var cnt = Count;
+                for (int i = 0; i < cnt; ++i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    var acc = new SlotValueAccessor(slot);
+                    if (match(acc))
+                    {
+                        return acc;
+                    }
+                }
+                return default(SlotValueAccessor);
+            }
+            public List<SlotValueAccessor> FindAll(Predicate<SlotValueAccessor> match)
+            {
+                List<SlotValueAccessor> results = new List<SlotValueAccessor>();
+                var cnt = Count;
+                for (int i = 0; i < cnt; ++i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    var acc = new SlotValueAccessor(slot);
+                    if (match(acc))
+                    {
+                        results.Add(acc);
+                    }
+                }
+                return results;
+            }
+            public int FindIndex(int startIndex, int count, Predicate<SlotValueAccessor> match)
+            {
+                for (int i = 0; i < count; ++i)
+                {
+                    var slot = _Parent.GetSlot(startIndex + i + 1);
+                    var acc = new SlotValueAccessor(slot);
+                    if (match(acc))
+                    {
+                        return startIndex + i;
+                    }
+                }
+                return -1;
+            }
+            public int FindIndex(int startIndex, Predicate<SlotValueAccessor> match)
+            {
+                var cnt = Count;
+                for (int i = startIndex; i < cnt; ++i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    var acc = new SlotValueAccessor(slot);
+                    if (match(acc))
+                    {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            public int FindIndex(Predicate<SlotValueAccessor> match)
+            {
+                return FindIndex(0, match);
+            }
+            public SlotValueAccessor FindLast(Predicate<SlotValueAccessor> match)
+            {
+                var cnt = Count;
+                for (int i = cnt - 1; i >= 0; --i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    var acc = new SlotValueAccessor(slot);
+                    if (match(acc))
+                    {
+                        return acc;
+                    }
+                }
+                return default(SlotValueAccessor);
+            }
+            public int FindLastIndex(int startIndex, int count, Predicate<SlotValueAccessor> match)
+            {
+                for (int i = 0; i < count; ++i)
+                {
+                    var slot = _Parent.GetSlot(startIndex + 1 - i);
+                    var val = new SlotValueAccessor(slot);
+                    if (match(val))
+                    {
+                        return startIndex - i;
+                    }
+                }
+                return -1;
+            }
+            public int FindLastIndex(int startIndex, Predicate<SlotValueAccessor> match)
+            {
+                return FindLastIndex(startIndex, Count, match);
+            }
+            public int FindLastIndex(Predicate<SlotValueAccessor> match)
+            {
+                var cnt = Count;
+                for (int i = cnt - 1; i >= 0; --i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    var acc = new SlotValueAccessor(slot);
+                    if (match(acc))
+                    {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            public void ForEach(Action<SlotValueAccessor> action)
+            {
+                var cnt = Count;
+                for (int i = 0; i < cnt; ++i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    var acc = new SlotValueAccessor(slot);
+                    action(acc);
+                }
+            }
+
+            public struct Enumerator : IEnumerator<SlotValueAccessor>
+            {
+                private ProtobufMessage _Parent;
+                private int Index;
+
+                public SlotValueAccessor Current
+                {
+                    get
+                    {
+                        var slot = _Parent.GetSlot(Index);
+                        return new SlotValueAccessor(slot);
+                    }
+                }
+
+                object IEnumerator.Current
+                {
+                    get
+                    {
+                        return Current;
+                    }
+                }
+
+                public Enumerator(ProtobufMessage parent)
+                {
+                    Index = 0;
+                    _Parent = parent;
+                }
+
+                public void Dispose()
+                {
+                    Index = 0;
+                    _Parent = null;
+                }
+
+                public bool MoveNext()
+                {
+                    var index = ++Index;
+                    return index <= _Parent.GetAllValues().Count;
+                }
+
+                public void Reset()
+                {
+                    Index = 0;
+                }
+            }
+            public IEnumerator<SlotValueAccessor> GetEnumerator()
+            {
+                return new Enumerator(_Parent);
+            }
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+
+            public List<SlotValueAccessor> GetRange(int index, int count)
+            {
+                List<SlotValueAccessor> results = new List<SlotValueAccessor>();
+                for (int i = 0; i < count; ++i)
+                {
+                    var slot = _Parent.GetSlot(index + i + 1);
+                    var acc = new SlotValueAccessor(slot);
+                    results.Add(acc);
+                }
+                return results;
+            }
+            public int IndexOf(SlotValueAccessor item, int index, int count)
+            {
+                var found = IndexOf(item);
+                if (found < 0)
+                {
+                    return found;
+                }
+                if (found >= index && found - index < count)
+                {
+                    return found;
+                }
+                return -1;
+            }
+            public int IndexOf(SlotValueAccessor item, int index)
+            {
+                var found = IndexOf(item);
+                if (found < 0)
+                {
+                    return found;
+                }
+                if (found >= index)
+                {
+                    return found;
+                }
+                return -1;
+            }
+            public int IndexOf(SlotValueAccessor item)
+            {
+                if (item._Slot != null)
+                {
+                    return item._Slot.Desc.Number - 1;
+                }
+                return -1;
+            }
+            public void Insert(int index, SlotValueAccessor item)
+            {
+                throw new NotSupportedException();
+            }
+            //public void InsertRange(int index, IEnumerable<SlotValueAccessor> collection)
+            //{
+            //    throw new NotSupportedException();
+            //}
+            public int LastIndexOf(SlotValueAccessor item)
+            {
+                return IndexOf(item);
+            }
+            public int LastIndexOf(SlotValueAccessor item, int index)
+            {
+                var found = IndexOf(item);
+                if (found < 0)
+                {
+                    return found;
+                }
+                if (found <= index)
+                {
+                    return found;
+                }
+                return -1;
+            }
+            public int LastIndexOf(SlotValueAccessor item, int index, int count)
+            {
+                var found = IndexOf(item);
+                if (found < 0)
+                {
+                    return found;
+                }
+                if (found <= index && index - found < count)
+                {
+                    return found;
+                }
+                return -1;
+            }
+            public bool Remove(SlotValueAccessor item)
+            {
+                throw new NotSupportedException();
+            }
+            //public int RemoveAll(Predicate<SlotValueAccessor> match)
+            //{
+            //    throw new NotSupportedException();
+            //}
+            public void RemoveAt(int index)
+            {
+                throw new NotSupportedException();
+            }
+            //public void RemoveRange(int index, int count)
+            //{
+            //    throw new NotSupportedException();
+            //}
+            public SlotValueAccessor[] ToArray()
+            {
+                var cnt = Count;
+                SlotValueAccessor[] result = new SlotValueAccessor[cnt];
+                for (int i = 0; i < cnt; ++i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    var val = new SlotValueAccessor(slot);
+                    result[i] = val;
+                }
+                return result;
+            }
+            public bool TrueForAll(Predicate<SlotValueAccessor> match)
+            {
+                var cnt = Count;
+                for (int i = 0; i < cnt; ++i)
+                {
+                    var slot = _Parent.GetSlot(i + 1);
+                    var val = new SlotValueAccessor(slot);
+                    if (!match(val))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            int IList.Add(object value)
+            {
+                throw new NotSupportedException();
+            }
+            bool IList.Contains(object value)
+            {
+                if (value is SlotValueAccessor)
+                {
+                    return Contains((SlotValueAccessor)value);
+                }
+                else
+                {
+                    var cnt = Count;
+                    for (int i = 0; i < cnt; ++i)
+                    {
+                        var slot = _Parent.GetSlot(i + 1);
+                        if (slot.FirstValue.Parsed.Get() == value)
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            int IList.IndexOf(object value)
+            {
+                if (value is SlotValueAccessor)
+                {
+                    return IndexOf((SlotValueAccessor)value);
+                }
+                else
+                {
+                    var cnt = Count;
+                    for (int i = 0; i < cnt; ++i)
+                    {
+                        var slot = _Parent.GetSlot(i + 1);
+                        if (slot.FirstValue.Parsed.Get() == value)
+                        {
+                            return i;
+                        }
+                    }
+                    return -1;
+                }
+            }
+            void IList.Insert(int index, object value)
+            {
+                throw new NotSupportedException();
+            }
+            void IList.Remove(object value)
+            {
+                throw new NotSupportedException();
+            }
+        }
+        public ListWrapper GetAllValues()
+        {
+            return new ListWrapper(this);
+        }
+
+        protected virtual ProtobufMessage Create()
+        {
+            return new ProtobufMessage();
+        }
+        public object Clone()
+        {
+            var to = Create();
+            for (int i = 0; i < _LowFields.Length; ++i)
+            {
+                var slot = _LowFields[i];
+                var toslot = to._LowFields[i];
+                toslot.Desc = slot.Desc;
+                toslot.Values.Clear();
+                toslot.Values.Merge(slot.Values);
+                var name = slot.Desc.Name;
+                if (!string.IsNullOrEmpty(name))
+                {
+                    to._FieldMap[slot.Desc.Name] = toslot;
+                }
+            }
+            foreach (var kvp in _HighFields)
+            {
+                var slot = kvp.Value;
+                var toslot = to.GetOrCreateSlot(kvp.Key);
+                toslot.Desc = slot.Desc;
+                toslot.Values.Clear();
+                toslot.Values.Merge(slot.Values);
+                var name = slot.Desc.Name;
+                if (!string.IsNullOrEmpty(name))
+                {
+                    to._FieldMap[slot.Desc.Name] = toslot;
+                }
+            }
+            foreach (var kvp in _FieldMap)
+            {
+                var slot = kvp.Value;
+                var name = slot.Desc.Name;
+                if (slot.Desc.Number < 0 && !string.IsNullOrEmpty(name))
+                {
+                    var toslot = to._FieldMap[name] = new FieldSlot();
+                    toslot.Desc = slot.Desc;
+                    toslot.Values.Clear();
+                    toslot.Values.Merge(slot.Values);
+                }
+            }
+            return to;
         }
 
         public ProtobufMessage ApplyTemplate(ProtobufMessage template)
@@ -2788,7 +3791,12 @@ namespace Capstones.Net
 
         public IEnumerator GetEnumerator()
         {
-            throw new NotImplementedException();
+            return GetAllValues().GetEnumerator();
+        }
+
+        protected override ProtobufMessage Create()
+        {
+            return new TemplateProtobufMessage(Name) { _BuildFinished = _BuildFinished };
         }
     }
 
@@ -3368,6 +4376,236 @@ namespace Capstones.Net
                 }
             },
         };
+        private static Dictionary<Pack<ProtobufNativeType, ProtobufNativeType>, Func<ProtobufParsedValue, ProtobufParsedValue>> _ConvertParsedValueFuncs = new Dictionary<Pack<ProtobufNativeType, ProtobufNativeType>, Func<ProtobufParsedValue, ProtobufParsedValue>>()
+        {
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_FLOAT), from => (float)from.Double },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_INT64), from => (long)from.Double },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.Double },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_INT32), from => (int)from.Double },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.Double } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.Double } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_BOOL), from => from.Double != 0.0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_STRING), from => from.Double.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_UINT32), from => (uint)from.Double },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Double } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.Double } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.Double } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.Double } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_DOUBLE, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.Double } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.Single },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_INT64), from => (long)from.Single },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.Single },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_INT32), from => (int)from.Single },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.Single } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.Single } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_BOOL), from => from.Single != 0.0f },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_STRING), from => from.Single.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_UINT32), from => (uint)from.Single },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Single } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.Single } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.Single } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.Single } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FLOAT, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.Single } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_FLOAT), from => (float)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_INT32), from => (int)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_BOOL), from => from.Int64 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_STRING), from => from.Int64.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_UINT32), from => (uint)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT64, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.Int64 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_FLOAT), from => (float)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_INT64), from => (long)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_INT32), from => (int)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_BOOL), from => from.UInt64 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_STRING), from => from.UInt64.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_UINT32), from => (uint)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT64, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.UInt64 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_FLOAT), from => (float)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_INT64), from => (long)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_BOOL), from => from.Int32 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_STRING), from => from.Int32.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_UINT32), from => (uint)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_INT32, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.Int32 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_FLOAT), from => (float)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_INT64), from => (long)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_INT32), from => (int)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_BOOL), from => from.UInt64 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_STRING), from => from.UInt64.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_UINT32), from => (uint)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED64, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.UInt64 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_FLOAT), from => (float)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_INT64), from => (long)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_INT32), from => (int)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_BOOL), from => from.UInt32 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_STRING), from => from.UInt32.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_UINT32), from => (uint)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_FIXED32, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.UInt32 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_FLOAT), from => (float)(from.Boolean ? 1 : 0) },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_INT64), from => (long)(from.Boolean ? 1 : 0) },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_UINT64), from => (ulong)(from.Boolean ? 1 : 0) },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_INT32), from => (int)(from.Boolean ? 1 : 0) },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)(from.Boolean ? 1 : 0) } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)(from.Boolean ? 1 : 0) } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_DOUBLE), from => (double)(from.Boolean ? 1 : 0) },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_STRING), from => from.Boolean.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_UINT32), from => (uint)(from.Boolean ? 1 : 0) },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)(from.Boolean ? 1 : 0) } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)(from.Boolean ? 1 : 0) } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)(from.Boolean ? 1 : 0) } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)(from.Boolean ? 1 : 0) } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BOOL, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)(from.Boolean ? 1 : 0) } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_FLOAT), from => { float v; float.TryParse(from.String, out v); return v; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_INT64), from => { long v; long.TryParse(from.String, out v); return v; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_UINT64), from => { ulong v; ulong.TryParse(from.String, out v); return v; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_INT32), from => { int v; int.TryParse(from.String, out v); return v; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_FIXED64), from => { ulong v; ulong.TryParse(from.String, out v); return new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = v }; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_FIXED32), from => { uint v; uint.TryParse(from.String, out v); return new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = v }; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_BOOL), from => !string.IsNullOrEmpty(from.String) && !string.Equals(from.String, "false", StringComparison.InvariantCultureIgnoreCase) && !string.Equals(from.String, "no", StringComparison.InvariantCultureIgnoreCase) },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_DOUBLE), from => { double v; double.TryParse(from.String, out v); return v; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_UINT32), from =>  { uint v; uint.TryParse(from.String, out v); return v; } },
+            //{ new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Double } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_SFIXED32), from => { int v; int.TryParse(from.String, out v); return new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = v }; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_SFIXED64), from => { long v; long.TryParse(from.String, out v); return new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = v }; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_SINT32), from => { int v; int.TryParse(from.String, out v); return new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = v }; } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_SINT64), from => { long v; long.TryParse(from.String, out v); return new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = v }; } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_FLOAT), from => (float)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_INT64), from => (long)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_INT32), from => (int)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_BOOL), from => from.UInt32 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_STRING), from => from.UInt32.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.UInt32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.UInt32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_UINT32, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.UInt32 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_FLOAT), from => (float)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_INT64), from => (long)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_INT32), from => (int)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_BOOL), from => from.UInt64 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_STRING), from => { if (from._ObjectVal is Type) return Enum.GetName((Type)from._ObjectVal, Convert.ChangeType(from.UInt64, (Type)from._ObjectVal)); else return from.UInt64.ToString(); } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_UINT32), from => (uint)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.UInt64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.UInt64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_ENUM, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.UInt64 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_FLOAT), from => (float)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_INT64), from => (long)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_INT32), from => (int)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_BOOL), from => from.Int32 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_STRING), from => from.Int32.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_UINT32), from => (uint)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED32, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.Int32 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_FLOAT), from => (float)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_INT64), from => (long)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_INT32), from => (int)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_BOOL), from => from.Int64 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_STRING), from => from.Int64.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_UINT32), from => (uint)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SFIXED64, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.Int64 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_FLOAT), from => (float)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_INT64), from => (long)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_INT32), from => (int)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_BOOL), from => from.Int32 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_STRING), from => from.Int32.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_UINT32), from => (uint)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.Int32 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.Int32 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT32, ProtobufNativeType.TYPE_SINT64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT64) { Int64 = (long)from.Int32 } },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_FLOAT), from => (float)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_INT64), from => (long)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_UINT64), from => (ulong)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_INT32), from => (int)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_FIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt64 = (ulong)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_FIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_FIXED64) { UInt32 = (uint)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_BOOL), from => from.Int64 != 0 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_STRING), from => from.Int64.ToString() },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_UINT32), from => (uint)from.Int64 },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_ENUM), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_ENUM) { UInt64 = (ulong)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_SFIXED32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED32) { Int32 = (int)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_SFIXED64), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SFIXED64) { Int64 = (long)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_SINT32), from => new ProtobufParsedValue(ProtobufNativeType.TYPE_SINT32) { Int32 = (int)from.Int64 } },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_SINT64, ProtobufNativeType.TYPE_DOUBLE), from => (double)from.Int64 },
+
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_BYTES, ProtobufNativeType.TYPE_STRING), from => System.Text.Encoding.UTF8.GetString(from.Bytes) },
+            { new Pack<ProtobufNativeType, ProtobufNativeType>(ProtobufNativeType.TYPE_STRING, ProtobufNativeType.TYPE_BYTES), from => System.Text.Encoding.UTF8.GetBytes(from.String) },
+        };
         public static bool Decode(ProtobufValue raw, ProtobufNativeType knownType, out ProtobufParsedValue value)
         {
             value = default(ProtobufParsedValue);
@@ -3386,6 +4624,17 @@ namespace Capstones.Net
             }
             return false;
         }
+        public static bool ConvertParsed(ProtobufValue raw, ProtobufNativeType knownType, out ProtobufParsedValue value)
+        {
+            Func<ProtobufParsedValue, ProtobufParsedValue> convertFunc;
+            if (_ConvertParsedValueFuncs.TryGetValue(new Pack<ProtobufNativeType, ProtobufNativeType>(raw.Parsed.NativeType, knownType), out convertFunc))
+            {
+                value = convertFunc(raw.Parsed);
+                return true;
+            }
+            value = default(ProtobufParsedValue);
+            return false;
+        }
         private static void ApplyTemplate(ProtobufMessage.FieldSlot rslot, ProtobufMessage.FieldSlot tslot)
         {
             if (rslot != null && tslot != null)
@@ -3399,10 +4648,10 @@ namespace Capstones.Net
                         for (int j = 0; j < rslot.Values.Count; ++j)
                         {
                             var subraw = rslot.Values[j];
-                            ProtobufParsedValue newval;
-                            if (Decode(subraw, knownType, out newval))
+                            ProtobufParsedValue newval = subraw.Parsed;
+                            if (!subraw.Parsed.IsEmpty)
                             {
-                                if (knownType == ProtobufNativeType.TYPE_ENUM)
+                                if (subraw.Parsed.NativeType == ProtobufNativeType.TYPE_STRING && knownType == ProtobufNativeType.TYPE_ENUM)
                                 {
                                     Type etype = tslot.FirstValue.Parsed._ObjectVal as Type;
                                     if (etype == null)
@@ -3413,10 +4662,65 @@ namespace Capstones.Net
                                             etype = eval.GetType();
                                         }
                                     }
-                                    newval._ObjectVal = etype;
+                                    if (etype != null)
+                                    {
+                                        var eval = Enum.Parse(etype, subraw.Parsed.String);
+                                        if (eval != null)
+                                        {
+                                            newval.UInt64 = Convert.ToUInt64(eval);
+                                        }
+                                        else
+                                        {
+                                            newval.UInt64 = 0;
+                                        }
+                                        newval.NativeType = ProtobufNativeType.TYPE_ENUM;
+                                        newval._ObjectVal = etype;
+                                        subraw.Parsed = newval;
+                                        rslot.Values[j] = subraw;
+                                    }
                                 }
-                                subraw.Parsed = newval;
-                                rslot.Values[j] = subraw;
+                                else
+                                {
+                                    if (ConvertParsed(subraw, knownType, out newval))
+                                    {
+                                        if (knownType == ProtobufNativeType.TYPE_ENUM)
+                                        {
+                                            Type etype = tslot.FirstValue.Parsed._ObjectVal as Type;
+                                            if (etype == null)
+                                            {
+                                                var eval = tslot.FirstValue.Parsed.Get();
+                                                if (eval is Enum)
+                                                {
+                                                    etype = eval.GetType();
+                                                }
+                                            }
+                                            newval._ObjectVal = etype;
+                                        }
+                                        subraw.Parsed = newval;
+                                        rslot.Values[j] = subraw;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                if (Decode(subraw, knownType, out newval))
+                                {
+                                    if (knownType == ProtobufNativeType.TYPE_ENUM)
+                                    {
+                                        Type etype = tslot.FirstValue.Parsed._ObjectVal as Type;
+                                        if (etype == null)
+                                        {
+                                            var eval = tslot.FirstValue.Parsed.Get();
+                                            if (eval is Enum)
+                                            {
+                                                etype = eval.GetType();
+                                            }
+                                        }
+                                        newval._ObjectVal = etype;
+                                    }
+                                    subraw.Parsed = newval;
+                                    rslot.Values[j] = subraw;
+                                }
                             }
                         }
                     }
@@ -3443,14 +4747,34 @@ namespace Capstones.Net
         {
             for (int i = 1; i <= 16; ++i)
             {
-                var rslot = raw.GetSlot(i);
                 var tslot = template.GetSlot(i);
+                var name = tslot.Desc.Name;
+                var rslot = raw.GetSlot(name);
+                if (rslot != null && rslot.Desc.Number < 0)
+                { // this is the temporary slot. freeze it to its position
+                    //rslot.Desc.Number = i;
+                    raw._LowFields[i - 1] = rslot;
+                }
+                else
+                {
+                    rslot = raw.GetSlot(i);
+                }
                 ApplyTemplate(rslot, tslot);
             }
             foreach (var tslotkvp in template._HighFields)
             {
                 var tslot = tslotkvp.Value;
-                var rslot = raw.GetOrCreateSlot(tslot.Desc.Number);
+                var name = tslot.Desc.Name;
+                var rslot = raw.GetSlot(name);
+                if (rslot != null && rslot.Desc.Number < 0)
+                { // this is the temporary slot. freeze it to its position
+                    //rslot.Desc.Number = tslot.Desc.Number;
+                    raw._HighFields[tslot.Desc.Number] = rslot;
+                }
+                else
+                {
+                    rslot = raw.GetOrCreateSlot(tslot.Desc.Number);
+                }
                 ApplyTemplate(rslot, tslot);
             }
             raw.FinishBuild();
@@ -3770,6 +5094,39 @@ namespace Capstones.Net
             }
             return cnt;
         }
+
+        private static HashSet<ProtobufNativeType> _NumericNativeTypes = new HashSet<ProtobufNativeType>()
+        {
+            ProtobufNativeType.TYPE_DOUBLE,
+            ProtobufNativeType.TYPE_FLOAT,
+            ProtobufNativeType.TYPE_INT64,
+            ProtobufNativeType.TYPE_UINT64,
+            ProtobufNativeType.TYPE_INT32,
+            ProtobufNativeType.TYPE_FIXED64,
+            ProtobufNativeType.TYPE_FIXED32,
+            ProtobufNativeType.TYPE_UINT32,
+            ProtobufNativeType.TYPE_SFIXED32,
+            ProtobufNativeType.TYPE_SFIXED64,
+            ProtobufNativeType.TYPE_SINT32,
+            ProtobufNativeType.TYPE_SINT64,
+        };
+        public static bool IsNumericNativeType(ProtobufNativeType type)
+        {
+            return _NumericNativeTypes.Contains(type);
+        }
+        public static double GetNumericValue(ProtobufParsedValue val)
+        {
+            if (IsNumericNativeType(val.NativeType))
+            {
+                Func<ProtobufParsedValue, ProtobufParsedValue> convertFunc;
+                if (_ConvertParsedValueFuncs.TryGetValue(new Pack<ProtobufNativeType, ProtobufNativeType>(val.NativeType, ProtobufNativeType.TYPE_DOUBLE), out convertFunc))
+                {
+                    var cval = convertFunc(val);
+                    return cval.Double;
+                }
+            }
+            return double.NaN;
+        }
     }
 
     public static class ProtobufMessagePool
@@ -4075,7 +5432,6 @@ namespace Capstones.Net
                 UnityEngine.Debug.Log(kvp.Value.ToString());
             }
         }
-#endif
 
         #region Descriptor Data
         public static byte[] TestDescriptorFileData = global::System.Convert.FromBase64String(
@@ -4438,6 +5794,7 @@ namespace Capstones.Net
             "EFBpdGNoZXJEb21pbmF0ZTgQEhIUChBQaXRjaGVyRG9taW5hdGU5EBMSFQoR",
             "UGl0Y2hlckRvbWluYXRlMTAQFBoCEAFiBnByb3RvMw=="));
         #endregion
+#endif
     }
     #endregion
 #endif

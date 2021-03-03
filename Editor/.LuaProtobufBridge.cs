@@ -92,6 +92,247 @@ namespace Capstones.LuaLib
     }
 }
 
+namespace Capstones.LuaLib
+{
+    using Capstones.Net;
+    public static partial class LuaHubEx
+    {
+        private class DynamicProtobufMessageHub : LuaTypeHub.TypeHubValueType, ILuaTrans<ProtobufMessage>, ILuaPush<ProtobufMessage>
+        {
+            public override bool Nonexclusive { get { return true; } }
+            private static Dictionary<ProtobufNativeType, Action<IntPtr, ProtobufParsedValue>> _TypedSlotValuePushFuncs = new Dictionary<ProtobufNativeType, Action<IntPtr, ProtobufParsedValue>>()
+            {
+                { ProtobufNativeType.TYPE_DOUBLE, (l, val) => l.pushnumber(val.Double) },
+                { ProtobufNativeType.TYPE_FLOAT, (l, val) => l.pushnumber(val.Single) },
+                { ProtobufNativeType.TYPE_INT64, (l, val) => l.pushnumber(val.Int64) },
+                { ProtobufNativeType.TYPE_UINT64, (l, val) => l.pushnumber(val.UInt64) },
+                { ProtobufNativeType.TYPE_INT32, (l, val) => l.pushnumber(val.Int32) },
+                { ProtobufNativeType.TYPE_FIXED64, (l, val) => l.pushnumber(val.UInt64) },
+                { ProtobufNativeType.TYPE_FIXED32, (l, val) => l.pushnumber(val.UInt32) },
+                { ProtobufNativeType.TYPE_BOOL, (l, val) => l.pushboolean(val.Boolean) },
+                { ProtobufNativeType.TYPE_STRING, (l, val) => l.pushstring(val.String) },
+                { ProtobufNativeType.TYPE_MESSAGE, (l, val) => PushLuaRaw(l, val.Message) },
+                { ProtobufNativeType.TYPE_BYTES, (l, val) => l.pushstring(val.Bytes) },
+                { ProtobufNativeType.TYPE_UINT32, (l, val) => l.pushnumber(val.UInt32) },
+                { ProtobufNativeType.TYPE_ENUM, (l, val) => l.pushnumber(val.UInt64) },
+                { ProtobufNativeType.TYPE_SFIXED32, (l, val) => l.pushnumber(val.Int32) },
+                { ProtobufNativeType.TYPE_SFIXED64, (l, val) => l.pushnumber(val.Int64) },
+                { ProtobufNativeType.TYPE_SINT32, (l, val) => l.pushnumber(val.Int32) },
+                { ProtobufNativeType.TYPE_SINT64, (l, val) => l.pushnumber(val.Int64) },
+            };
+            private static void PushSlotValue(IntPtr l, ProtobufParsedValue val)
+            {
+                Action<IntPtr, ProtobufParsedValue> pushFunc;
+                if (_TypedSlotValuePushFuncs.TryGetValue(val.NativeType, out pushFunc))
+                {
+                    pushFunc(l, val);
+                }
+                else
+                {
+                    l.pushnil();
+                }
+            }
+            private static void PushSlotValue(IntPtr l, ProtobufMessage.SlotValueAccessor val)
+            {
+                Action<IntPtr, ProtobufParsedValue> pushFunc;
+                if (_TypedSlotValuePushFuncs.TryGetValue(val.NativeType, out pushFunc))
+                {
+                    pushFunc(l, val.FirstValue);
+                }
+                else
+                {
+                    l.pushnil();
+                }
+            }
+            public static void SetDataRaw(IntPtr l, int index, ProtobufMessage val)
+            {
+                l.pushvalue(index);
+                foreach (var kvp in val.AsDict())
+                {
+                    l.PushString(kvp.Key);
+                    if (kvp.Value.IsRepeated)
+                    {
+                        l.newtable();
+                        for (int i = 0; i < kvp.Value.Count; ++i)
+                        {
+                            l.pushnumber(i + 1);
+                            var slotval = kvp.Value[i];
+                            PushSlotValue(l, slotval);
+                            l.rawset(-3);
+                        }
+                    }
+                    else
+                    {
+                        PushSlotValue(l, kvp.Value);
+                    }
+                    l.rawset(-3);
+                }
+                l.pop(1);
+            }
+            private static void AddMessageValue(IntPtr l, int index, ProtobufMessage.SlotValueAccessor slot)
+            {
+                switch (l.type(-1))
+                {
+                    case lua.LUA_TBOOLEAN:
+                        slot.Booleans.Add(l.toboolean(index));
+                        break;
+                    case lua.LUA_TLIGHTUSERDATA:
+                        slot.IntPtrs.Add(l.touserdata(index));
+                        break;
+                    case lua.LUA_TNUMBER:
+                        slot.Doubles.Add(l.tonumber(index));
+                        break;
+                    case lua.LUA_TSTRING:
+                        slot.Strings.Add(l.GetString(index));
+                        break;
+                    case lua.LUA_TTABLE:
+                        slot.Messages.Add(GetLuaRaw(l, index));
+                        break;
+                    case lua.LUA_TNONE:
+                    case lua.LUA_TNIL:
+                        slot.Objects.Add(null);
+                        break;
+                    case lua.LUA_TFUNCTION:
+                    case lua.LUA_TUSERDATA:
+                    case lua.LUA_TTHREAD:
+                        break;
+                    default:
+                        break;
+                }
+            }
+            private static void GetMessageValue(IntPtr l, int index, ProtobufMessage.SlotValueAccessor slot)
+            {
+                switch (l.type(-1))
+                {
+                    case lua.LUA_TBOOLEAN:
+                        slot.Boolean = l.toboolean(index);
+                        break;
+                    case lua.LUA_TLIGHTUSERDATA:
+                        slot.IntPtr = l.touserdata(index);
+                        break;
+                    case lua.LUA_TNUMBER:
+                        slot.Double = l.tonumber(index);
+                        break;
+                    case lua.LUA_TSTRING:
+                        slot.String = l.GetString(index);
+                        break;
+                    case lua.LUA_TTABLE:
+                        {
+                            if (l.IsArray(index))
+                            {
+                                var cnt = l.getn(index);
+                                l.pushvalue(index);
+                                for (int i = 1; i <= cnt; ++i)
+                                {
+                                    l.pushnumber(i);
+                                    l.rawget(-2);
+                                    AddMessageValue(l, -1, slot);
+                                    l.pop(1);
+                                }
+                                l.pop(1);
+                            }
+                            else
+                            {
+                                slot.Message = GetLuaRaw(l, index);
+                            }
+                        }
+                        break;
+                    case lua.LUA_TNONE:
+                    case lua.LUA_TNIL:
+                    case lua.LUA_TFUNCTION:
+                    case lua.LUA_TUSERDATA:
+                    case lua.LUA_TTHREAD:
+                        break;
+                    default:
+                        break;
+                }
+            }
+            public static ProtobufMessage GetLuaRaw(IntPtr l, int index)
+            {
+                if (!l.istable(index))
+                {
+                    return null;
+                }
+                using (var lr = l.CreateStackRecover())
+                {
+                    ProtobufMessage message = new ProtobufMessage();
+                    l.pushvalue(-1);
+                    l.pushnil();
+                    while (l.next(-2))
+                    {
+                        string key = l.GetString(-2);
+                        if (!string.IsNullOrEmpty(key))
+                        {
+                            var slot = message[key];
+                            GetMessageValue(l, -1, slot);
+                        }
+                        l.pop(1);
+                    }
+                    return message;
+                }
+            }
+            public static void PushLuaRaw(IntPtr l, ProtobufMessage val)
+            {
+                l.newtable();
+                SetDataRaw(l, -1, val);
+            }
+
+            public class DynamicProtobufMessageHubNative : LuaHub.LuaPushNativeBase<ProtobufMessage>
+            {
+                public override ProtobufMessage GetLua(IntPtr l, int index)
+                {
+                    return GetLuaRaw(l, index);
+                }
+                public override IntPtr PushLua(IntPtr l, ProtobufMessage val)
+                {
+                    PushLuaRaw(l, val);
+                    return IntPtr.Zero;
+                }
+            }
+            public static readonly DynamicProtobufMessageHubNative LuaHubNative = new DynamicProtobufMessageHubNative();
+
+            public DynamicProtobufMessageHub() : base(null)
+            {
+                t = typeof(ProtobufMessage);
+                PutIntoCache();
+            }
+            protected override bool UpdateDataAfterCall
+            {
+                get { return true; }
+            }
+
+            public override IntPtr PushLua(IntPtr l, object val)
+            {
+                PushLuaRaw(l, (ProtobufMessage)val);
+                return IntPtr.Zero;
+            }
+            public override void SetData(IntPtr l, int index, object val)
+            {
+                SetDataRaw(l, index, (ProtobufMessage)val);
+            }
+            public override object GetLua(IntPtr l, int index)
+            {
+                return GetLuaRaw(l, index);
+            }
+            public IntPtr PushLua(IntPtr l, ProtobufMessage val)
+            {
+                PushLuaRaw(l, val);
+                return IntPtr.Zero;
+            }
+            public void SetData(IntPtr l, int index, ProtobufMessage val)
+            {
+                SetDataRaw(l, index, val);
+            }
+            ProtobufMessage ILuaTrans<ProtobufMessage>.GetLua(IntPtr l, int index)
+            {
+                return GetLuaRaw(l, index);
+            }
+        }
+
+        private static DynamicProtobufMessageHub _DynamicProtobufMessageHub = new DynamicProtobufMessageHub();
+    }
+}
+
 namespace Capstones.LuaExt
 {
     public static partial class LuaProtobufBridge
@@ -394,25 +635,20 @@ namespace Capstones.LuaExt
     public static class LuaBridgeGeneratorTest
     {
 #if UNITY_EDITOR
-        //[UnityEditor.MenuItem("Test/Protobuf Converter/Test Lua", priority = 200010)]
-        //public static void TestLua()
-        //{
-        //    UnityEditor.AssetDatabase.OpenAsset(UnityEditor.AssetDatabase.LoadMainAssetAtPath(ResManager.__ASSET__), ResManager.__LINE__);
+        [UnityEditor.MenuItem("Test/Protobuf Converter/Test Lua", priority = 200010)]
+        public static void TestLua()
+        {
+            var l = GlobalLua.L.L;
+            Capstones.Net.ProtobufMessage val;
+            l.DoString(out val, "return { field1 = 0, field2 = 'dsadfgdf', field3 = { field1 = 666 } }");
+            UnityEngine.Debug.LogError(val.ToJson());
 
-        //    var l = GlobalLua.L.L;
-        //    using (var lr = l.CreateStackRecover())
-        //    {
-        //        l.CallGlobal<LuaPack<Protocols.Test.test3>, LuaPack>("dump", new Protocols.Test.test3() { TEST = 100, TEstTestTEST = 200 });
+            UnityEngine.Debug.LogError(val["field2"].String);
 
-        //        l.PushProtocol(new Protocols.Test.test3());
-        //        l.pushnumber(100);
-        //        l.SetField(-2, "tEST");
-        //        l.pushnumber(200);
-        //        l.SetField(-2, "TEstTestTEST");
-        //        var obj = l.GetLua(-1);
-        //        PlatDependant.LogError(obj);
-        //    }
-        //}
+            l.PushLua(val);
+            l.CallGlobal("dump", LuaPack.Pack(l.OnStackTop()));
+            l.pop(1);
+        }
 #endif
     }
     #endregion
