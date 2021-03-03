@@ -640,7 +640,7 @@ namespace Capstones.LuaExt
         {
             var l = GlobalLua.L.L;
             Capstones.Net.ProtobufMessage val;
-            l.DoString(out val, "return { field1 = 0, field2 = 'dsadfgdf', field3 = { field1 = 666 } }");
+            l.DoString(out val, "return { field1 = 0, field2 = 'dsadfgdf', field3 = { field1 = 666, field4 = {1,2,3,4,5} } }");
             UnityEngine.Debug.LogError(val.ToJson());
 
             UnityEngine.Debug.LogError(val["field2"].String);
