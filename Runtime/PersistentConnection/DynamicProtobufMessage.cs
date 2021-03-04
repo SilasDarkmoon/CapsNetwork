@@ -5197,7 +5197,15 @@ namespace Capstones.Net
         };
         public readonly static TemplateProtobufMessage MessageOptionsTemplate = new TemplateProtobufMessage("google.protobuf.MessageOptions")
         {
-            //
+            //optional bool message_set_wire_format = 1 [default = false];
+            //optional bool no_standard_descriptor_accessor = 2 [default = false];
+            //optional bool deprecated = 3 [default = false];
+            //optional bool map_entry = 7;
+            //reserved 8;  // javalite_serializable
+            //reserved 9;  // javanano_as_lite
+            { 999, "uninterpreted_option", UninterpretedOptionTemplate },
+            { 999, ProtobufFieldLabel.LABEL_REPEATED },
+            //extensions 1000 to max;
         };
         public readonly static TemplateProtobufMessage MessageDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.DescriptorProto")
         {
@@ -5212,7 +5220,7 @@ namespace Capstones.Net
             { 4, ProtobufFieldLabel.LABEL_REPEATED },
             //repeated ExtensionRange extension_range = 5;
             //repeated OneofDescriptorProto oneof_decl = 8;
-            //optional MessageOptions options = 7;
+            { 7, "options", MessageOptionsTemplate },
             //repeated ReservedRange reserved_range = 9;
             { 10, "reserved_name", ProtobufNativeType.TYPE_STRING },
             { 10, ProtobufFieldLabel.LABEL_REPEATED },
