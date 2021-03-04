@@ -1836,12 +1836,20 @@ namespace Capstones.Net
         protected Dictionary<string, FieldSlot> _FieldMap = new Dictionary<string, FieldSlot>();
         protected internal FieldSlot GetSlot(string name)
         {
+            if (string.IsNullOrEmpty(name))
+            {
+                return null;
+            }
             FieldSlot slot;
             _FieldMap.TryGetValue(name, out slot);
             return slot;
         }
         protected internal FieldSlot GetOrCreateSlot(string name)
         {
+            if (string.IsNullOrEmpty(name))
+            {
+                return null;
+            }
             FieldSlot slot;
             if (!_FieldMap.TryGetValue(name, out slot))
             {
@@ -1870,7 +1878,7 @@ namespace Capstones.Net
                     }
                 }
                 var name = slot.Desc.Name;
-                if (name != null)
+                if (!string.IsNullOrEmpty(name))
                 {
                     _FieldMap[name] = slot;
                 }
