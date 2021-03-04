@@ -349,7 +349,7 @@ namespace Capstones.LuaExt
 
             protected TypedDataBridge() { }
         }
-        private class TypedDataBridgeReg : TypedDataBridge
+        public class TypedDataBridgeReg : TypedDataBridge
         {
             public TypedDataBridgeReg(Type type, string name, SyncDataFunc pushFunc, SyncDataFunc readFunc, CreateFunc create)
             {

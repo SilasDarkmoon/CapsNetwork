@@ -5150,7 +5150,11 @@ namespace Capstones.Net
             { 2, ProtobufFieldLabel.LABEL_REPEATED },
 
             { 3, "identifier_value", ProtobufNativeType.TYPE_STRING },
-            //{ 4, "" }
+            { 4, "positive_int_value", ProtobufNativeType.TYPE_UINT64 },
+            { 5, "negative_int_value", ProtobufNativeType.TYPE_INT64 },
+            { 6, "double_value", ProtobufNativeType.TYPE_DOUBLE },
+            { 7, "string_value", ProtobufNativeType.TYPE_BYTES },
+            { 8, "aggregate_value", ProtobufNativeType.TYPE_STRING },
         };
         public readonly static TemplateProtobufMessage FieldOptionsTemplate = new TemplateProtobufMessage("google.protobuf.FieldOptions")
         {
@@ -5160,7 +5164,8 @@ namespace Capstones.Net
             //optional bool lazy = 5 [default=false];
             //optional bool deprecated = 3 [default=false];
             //optional bool weak = 10 [default=false];
-            //repeated UninterpretedOption uninterpreted_option = 999;
+            { 999, "uninterpreted_option", UninterpretedOptionTemplate },
+            { 999, ProtobufFieldLabel.LABEL_REPEATED },
         };
         public readonly static TemplateProtobufMessage EnumValueDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.EnumValueDescriptorProto")
         {
@@ -5189,6 +5194,10 @@ namespace Capstones.Net
             { 9, "oneof_index", ProtobufNativeType.TYPE_INT32 },
             { 10, "json_name", ProtobufNativeType.TYPE_STRING },
             { 8, "options", FieldOptionsTemplate },
+        };
+        public readonly static TemplateProtobufMessage MessageOptionsTemplate = new TemplateProtobufMessage("google.protobuf.MessageOptions")
+        {
+            //
         };
         public readonly static TemplateProtobufMessage MessageDescriptorTemplate = new TemplateProtobufMessage("google.protobuf.DescriptorProto")
         {

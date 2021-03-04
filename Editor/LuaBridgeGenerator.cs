@@ -528,11 +528,24 @@ namespace Capstones.UnityEditorEx.Net
                                     sbfile.AppendLine("using Capstones.LuaExt;");
                                     sbfile.AppendLine("using Capstones.LuaLib;");
                                     sbfile.AppendLine("using Capstones.LuaWrap;");
+                                    sbfile.AppendLine("using Capstones.UnityEngineEx;");
                                     sbfile.AppendLine("");
                                     sbfile.AppendLine("namespace Capstones.LuaExt");
                                     sbfile.AppendLine("{");
+                                    sbfile.AppendLine("    using static Capstones.LuaExt.LuaProtobufBridge;");
                                     sbfile.AppendLine("    public static partial class LuaProtobufBridge");
                                     sbfile.AppendLine("    {");
+                                    sbfile.Append("        private static InitializedInitializer _SubInitializer");
+                                    sbfile.Append(sbFileNamePart.ToString());
+                                    sbfile.Append(" = new InitializedInitializer(LuaProtobufBridge");
+                                    sbfile.Append(sbFileNamePart.ToString());
+                                    sbfile.AppendLine(".Init);");
+                                    sbfile.AppendLine("    }");
+                                    sbfile.Append("    public static class LuaProtobufBridge");
+                                    sbfile.AppendLine(sbFileNamePart.ToString());
+                                    sbfile.AppendLine("    {");
+                                    sbfile.AppendLine("        public static void Init() { }");
+                                    sbfile.AppendLine();
                                     foreach (var minfo in sorted)
                                     {
                                         if (!minfo.IsEnum)
