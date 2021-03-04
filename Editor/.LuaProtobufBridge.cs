@@ -11,6 +11,7 @@ using Capstones.LuaWrap;
 using lua = Capstones.LuaLib.LuaCoreLib;
 using lual = Capstones.LuaLib.LuaAuxLib;
 using luae = Capstones.LuaLib.LuaLibEx;
+using static Capstones.LuaWrap.LuaPack;
 
 namespace Capstones.LuaLib
 {
@@ -646,7 +647,7 @@ namespace Capstones.LuaExt
             UnityEngine.Debug.LogError(val["field2"].String);
 
             l.PushLua(val);
-            l.CallGlobal("dump", LuaPack.Pack(l.OnStackTop()));
+            l.CallGlobal("dump", Pack(l.OnStackTop()));
             l.pop(1);
         }
 #endif
