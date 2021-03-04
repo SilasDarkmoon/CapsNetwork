@@ -4657,7 +4657,7 @@ namespace Capstones.Net
                         {
                             var subraw = rslot.Values[j];
                             ProtobufParsedValue newval = subraw.Parsed;
-                            if (!subraw.Parsed.IsEmpty)
+                            if (!subraw.Parsed.IsEmpty && subraw.RawData.List == null)
                             {
                                 if (subraw.Parsed.NativeType == ProtobufNativeType.TYPE_STRING && knownType == ProtobufNativeType.TYPE_ENUM)
                                 {
@@ -5139,6 +5139,19 @@ namespace Capstones.Net
 
     public static class ProtobufMessagePool
     {
+        public readonly static TemplateProtobufMessage UninterpretedOption_NamePart_Template = new TemplateProtobufMessage("google.protobuf.UninterpretedOption.NamePart")
+        {
+            { 1, "name_part", ProtobufNativeType.TYPE_STRING },
+            { 2, "is_extension", ProtobufNativeType.TYPE_BOOL },
+        };
+        public readonly static TemplateProtobufMessage UninterpretedOptionTemplate = new TemplateProtobufMessage("google.protobuf.UninterpretedOption")
+        {
+            { 2, "name", UninterpretedOption_NamePart_Template },
+            { 2, ProtobufFieldLabel.LABEL_REPEATED },
+
+            { 3, "identifier_value", ProtobufNativeType.TYPE_STRING },
+            //{ 4, "" }
+        };
         public readonly static TemplateProtobufMessage FieldOptionsTemplate = new TemplateProtobufMessage("google.protobuf.FieldOptions")
         {
             //optional CType ctype = 1 [default = STRING];
