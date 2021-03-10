@@ -1888,9 +1888,11 @@ namespace Capstones.Net
         public struct SlotValueAccessor : IList<ProtobufParsedValue>
         {
             internal FieldSlot _Slot;
+            //private ProtobufParsedValue _RValue;
             internal SlotValueAccessor(FieldSlot slot)
             {
                 _Slot = slot;
+                //_RValue = default(ProtobufParsedValue);
             }
 
             public bool IsValid { get { return _Slot != null; } }
@@ -1905,6 +1907,38 @@ namespace Capstones.Net
                     var old = _Slot.Values[index];
                     old.Parsed = value;
                     _Slot.Values[index] = old;
+                }
+            }
+            public SlotValueAccessor this[string key]
+            {
+                get
+                {
+                    var sub = Message;
+                    if (sub != null)
+                    {
+                        return sub[key];
+                    }
+                    return default(SlotValueAccessor);
+                }
+                set
+                {
+                    var sub = Message;
+                    if (sub != null)
+                    {
+                        var slot = sub[key]._Slot;
+                        if (slot != null)
+                        {
+                            slot.Values.Clear();
+                            if (value._Slot != null)
+                            {
+                                slot.Values.Merge(value._Slot.Values);
+                            }
+                            //else if (!value._RValue.IsEmpty)
+                            //{
+                            //    slot.Values.Add(new ProtobufValue() { Parsed = value._RValue });
+                            //}
+                        }
+                    }
                 }
             }
             public int IndexOf(ProtobufParsedValue item)
@@ -2223,6 +2257,145 @@ namespace Capstones.Net
                 get { return new SlotValueAccessor<ProtobufMessage>(_Slot); }
             }
             // TODO: implicit operators
+
+            #region Converters
+            public static implicit operator bool(SlotValueAccessor thiz)
+            {
+                return thiz.Boolean;
+            }
+            //public static implicit operator SlotValueAccessor(bool val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator byte(SlotValueAccessor thiz)
+            {
+                return thiz.Byte;
+            }
+            //public static implicit operator SlotValueAccessor(byte val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator sbyte(SlotValueAccessor thiz)
+            {
+                return thiz.SByte;
+            }
+            //public static implicit operator SlotValueAccessor(sbyte val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator short(SlotValueAccessor thiz)
+            {
+                return thiz.Int16;
+            }
+            //public static implicit operator SlotValueAccessor(short val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator ushort(SlotValueAccessor thiz)
+            {
+                return thiz.UInt16;
+            }
+            //public static implicit operator SlotValueAccessor(ushort val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator int(SlotValueAccessor thiz)
+            {
+                return thiz.Int32;
+            }
+            //public static implicit operator SlotValueAccessor(int val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator uint(SlotValueAccessor thiz)
+            {
+                return thiz.UInt32;
+            }
+            //public static implicit operator SlotValueAccessor(uint val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator long(SlotValueAccessor thiz)
+            {
+                return thiz.Int64;
+            }
+            //public static implicit operator SlotValueAccessor(long val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator ulong(SlotValueAccessor thiz)
+            {
+                return thiz.UInt64;
+            }
+            //public static implicit operator SlotValueAccessor(ulong val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator IntPtr(SlotValueAccessor thiz)
+            {
+                return thiz.IntPtr;
+            }
+            //public static implicit operator SlotValueAccessor(IntPtr val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator UIntPtr(SlotValueAccessor thiz)
+            {
+                return thiz.UIntPtr;
+            }
+            //public static implicit operator SlotValueAccessor(UIntPtr val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator float(SlotValueAccessor thiz)
+            {
+                return thiz.Single;
+            }
+            //public static implicit operator SlotValueAccessor(float val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator double(SlotValueAccessor thiz)
+            {
+                return thiz.Double;
+            }
+            //public static implicit operator SlotValueAccessor(double val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator string(SlotValueAccessor thiz)
+            {
+                return thiz.String;
+            }
+            //public static implicit operator SlotValueAccessor(string val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator byte[](SlotValueAccessor thiz)
+            {
+                return thiz.Bytes;
+            }
+            //public static implicit operator SlotValueAccessor(byte[] val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator ProtobufMessage(SlotValueAccessor thiz)
+            {
+                return thiz.Message;
+            }
+            //public static implicit operator SlotValueAccessor(ProtobufMessage val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            public static implicit operator ProtobufUnknowValue(SlotValueAccessor thiz)
+            {
+                return thiz.Unknown;
+            }
+            //public static implicit operator SlotValueAccessor(ProtobufUnknowValue val)
+            //{
+            //    return new SlotValueAccessor() { _RValue = val };
+            //}
+            #endregion
         }
         public struct SlotValueAccessor<T> : IList<T>
         {
@@ -5453,6 +5626,15 @@ namespace Capstones.Net
             tsslot.Desc.Type.KnownType = ProtobufNativeType.TYPE_FLOAT;
 
             message.ApplyTemplate(tmessage);
+
+            UnityEngine.Debug.Log(message.ToString());
+
+            float t = message["submessage"]["floatval"][1];
+            UnityEngine.Debug.Log(t);
+            t = 6.6f;
+            message["submessage"]["floatval"].Set(t + 1f);
+            t = message["submessage"]["floatval"];
+            UnityEngine.Debug.Log(t);
 
             UnityEngine.Debug.Log(message.ToString());
         }
