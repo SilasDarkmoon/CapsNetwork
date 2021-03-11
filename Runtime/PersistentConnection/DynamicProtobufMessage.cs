@@ -1896,6 +1896,13 @@ namespace Capstones.Net
             }
 
             public bool IsValid { get { return _Slot != null; } }
+            public bool IsEmpty
+            {
+                get
+                {
+                    return _Slot != null && _Slot.FirstValue.Parsed.IsEmpty;
+                }
+            }
 
             public int Count { get { return _Slot.Values.Count; } }
             public bool IsReadOnly { get { return false; } }
