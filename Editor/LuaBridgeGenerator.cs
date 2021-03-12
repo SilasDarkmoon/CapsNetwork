@@ -537,9 +537,9 @@ namespace Capstones.UnityEditorEx.Net
                                     sbfile.AppendLine("    {");
                                     sbfile.Append("        private static InitializedInitializer _SubInitializer");
                                     sbfile.Append(sbFileNamePart.ToString());
-                                    sbfile.Append(" = new InitializedInitializer(LuaProtobufBridge");
+                                    sbfile.Append(" = new InitializedInitializer(() => LuaProtobufBridge");
                                     sbfile.Append(sbFileNamePart.ToString());
-                                    sbfile.AppendLine(".Init);");
+                                    sbfile.AppendLine(".Init());");
                                     sbfile.AppendLine("    }");
                                     sbfile.Append("    public static class LuaProtobufBridge");
                                     sbfile.AppendLine(sbFileNamePart.ToString());

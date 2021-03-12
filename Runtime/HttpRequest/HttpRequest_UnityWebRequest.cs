@@ -48,12 +48,12 @@ namespace Capstones.Net
             {
                 _Req = req;
             }
-
+            [UnityPreserve]
             protected override void ReceiveContentLengthHeader(ulong contentLength)
             {
                 _Req._Total += contentLength;
             }
-
+            [UnityPreserve]
             protected override bool ReceiveData(byte[] data, int dataLength)
             {
                 _Req._ReceiveStream.Write(data, 0, dataLength);
