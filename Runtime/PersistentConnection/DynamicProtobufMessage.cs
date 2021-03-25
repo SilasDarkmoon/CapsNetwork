@@ -1885,6 +1885,29 @@ namespace Capstones.Net
             }
         }
 
+        protected static Dictionary<Type, ProtobufNativeType> _ClrTypeToProtobufNativeTypeMap = new Dictionary<Type, ProtobufNativeType>()
+        {
+            { typeof(bool), ProtobufNativeType.TYPE_BOOL },
+            { typeof(byte), ProtobufNativeType.TYPE_UINT32 },
+            { typeof(sbyte), ProtobufNativeType.TYPE_INT32 },
+            { typeof(short), ProtobufNativeType.TYPE_INT32 },
+            { typeof(ushort), ProtobufNativeType.TYPE_UINT32 },
+            { typeof(int), ProtobufNativeType.TYPE_INT32 },
+            { typeof(uint), ProtobufNativeType.TYPE_UINT32 },
+            { typeof(long), ProtobufNativeType.TYPE_INT64 },
+            { typeof(ulong), ProtobufNativeType.TYPE_UINT64 },
+            { typeof(IntPtr), ProtobufNativeType.TYPE_INT64 },
+            { typeof(UIntPtr), ProtobufNativeType.TYPE_UINT64 },
+            { typeof(float), ProtobufNativeType.TYPE_FLOAT },
+            { typeof(double), ProtobufNativeType.TYPE_DOUBLE },
+        };
+        public static ProtobufNativeType GetNativeType(Type type)
+        {
+            ProtobufNativeType ntype;
+            _ClrTypeToProtobufNativeTypeMap.TryGetValue(type, out ntype);
+            return ntype;
+        }
+
         public struct SlotValueAccessor : IList<ProtobufParsedValue>
         {
             internal FieldSlot _Slot;
@@ -2022,23 +2045,6 @@ namespace Capstones.Net
                 return arr;
             }
 
-            public T As<T>()
-            {
-                return Get<T>();
-            }
-            public T AsEnum<T>() where T : struct
-            {
-                return GetEnum<T>();
-            }
-            public SlotValueAccessor<T> AsList<T>()
-            {
-                return new SlotValueAccessor<T>(_Slot);
-            }
-            public SlotEnumAccessor<T> AsEnums<T>() where T : struct
-            {
-                return new SlotEnumAccessor<T>(_Slot);
-            }
-
             public ProtobufNativeType NativeType
             {
                 get
@@ -2098,6 +2104,14 @@ namespace Capstones.Net
             public void SetEnum<T>(T val) where T : struct
             {
                 var old = _Slot.FirstValue; old.Parsed.SetEnum<T>(val); _Slot.FirstValue = old;
+            }
+            public SlotValueAccessor<T> GetList<T>()
+            {
+                return new SlotValueAccessor<T>(_Slot);
+            }
+            public SlotEnumAccessor<T> GetEnums<T>() where T : struct
+            {
+                return new SlotEnumAccessor<T>(_Slot);
             }
 
             public bool Boolean
@@ -2263,9 +2277,8 @@ namespace Capstones.Net
             {
                 get { return new SlotValueAccessor<ProtobufMessage>(_Slot); }
             }
-            // TODO: implicit operators
 
-            #region Converters
+            #region implicit converters
             public static implicit operator bool(SlotValueAccessor thiz)
             {
                 return thiz.Boolean;
@@ -2402,6 +2415,630 @@ namespace Capstones.Net
             //{
             //    return new SlotValueAccessor() { _RValue = val };
             //}
+            #endregion
+
+            #region Converters - change the parsed value's "NativeType". As - return a copy, the data in the slot is unchanged. Convert - change the data stored in the slot.
+            public ProtobufParsedValue As(ProtobufNativeType ntype, int index)
+            {
+                ProtobufParsedValue converted = default(ProtobufParsedValue);
+                if (_Slot == null)
+                {
+                    return converted;
+                }
+                if (index >= 0 && index < _Slot.Values.Count)
+                {
+                    var value = _Slot.Values[index];
+                    ProtobufNativeType cntype;
+                    if (!value.Parsed.IsEmpty)
+                    {
+                        cntype = value.Parsed.NativeType;
+                    }
+                    else
+                    {
+                        cntype = _Slot.Desc.Type.KnownType;
+                    }
+                    if (ntype == cntype)
+                    {
+                        return value.Parsed;
+                    }
+                    ProtobufEncoder.ConvertParsed(value, ntype, out converted);
+                }
+                return converted;
+            }
+            public ProtobufParsedValue As(ProtobufNativeType ntype)
+            {
+                if (ntype == NativeType)
+                {
+                    return FirstValue;
+                }
+                ProtobufParsedValue converted = default(ProtobufParsedValue);
+                if (_Slot != null)
+                {
+                    ProtobufEncoder.ConvertParsed(_Slot.FirstValue, ntype, out converted);
+                }
+                return converted;
+            }
+            public object As(Type type)
+            {
+                if (type == null)
+                {
+                    return null;
+                }
+                if (_Slot == null)
+                {
+                    return null;
+                }
+                if (type.IsEnum)
+                {
+                    if (NativeType == ProtobufNativeType.TYPE_STRING)
+                    {
+                        try
+                        {
+                            return Enum.Parse(type, String);
+                        }
+                        catch
+                        {
+                            return null;
+                        }
+                    }
+                    else
+                    {
+                        var newval = As(ProtobufNativeType.TYPE_ENUM);
+                        newval._ObjectVal = type;
+                        return newval.Get();
+                    }
+                }
+                else
+                {
+                    ProtobufNativeType ntype;
+                    if (_ClrTypeToProtobufNativeTypeMap.TryGetValue(type, out ntype))
+                    {
+                        return As(ntype).Get();
+                    }
+                    else
+                    {
+                        var obj = Object;
+                        if (type.IsInstanceOfType(obj))
+                        {
+                            return obj;
+                        }
+                    }
+                }
+                return null;
+            }
+            public T As<T>()
+            {
+                if (_Slot == null)
+                {
+                    return default(T);
+                }
+                var type = typeof(T);
+                if (type.IsEnum)
+                {
+                    if (NativeType == ProtobufNativeType.TYPE_STRING)
+                    {
+                        return EnumUtils.ConvertToEnum<T>(String);
+                    }
+                    else
+                    {
+                        var newval = As(ProtobufNativeType.TYPE_ENUM);
+                        newval._ObjectVal = type;
+                        return newval.Get<T>();
+                    }
+                }
+                else
+                {
+                    ProtobufNativeType ntype;
+                    if (_ClrTypeToProtobufNativeTypeMap.TryGetValue(type, out ntype))
+                    {
+                        return As(ntype).Get<T>();
+                    }
+                    else
+                    {
+                        var obj = Object;
+                        if (type.IsInstanceOfType(obj))
+                        {
+                            return (T)obj;
+                        }
+                    }
+                }
+                return default(T);
+            }
+            public T AsEnum<T>() where T : struct
+            {
+                if (_Slot == null)
+                {
+                    return default(T);
+                }
+                if (NativeType == ProtobufNativeType.TYPE_STRING)
+                {
+                    return EnumUtils.ConvertToEnum<T>(String);
+                }
+                else
+                {
+                    var newval = As(ProtobufNativeType.TYPE_ENUM);
+                    newval._ObjectVal = typeof(T);
+                    return newval.GetEnum<T>();
+                }
+            }
+            public T[] AsList<T>()
+            {
+                if (_Slot == null)
+                {
+                    return null;
+                }
+                List<T> results = new List<T>();
+                var type = typeof(T);
+                if (type.IsEnum)
+                {
+                    if (NativeType == ProtobufNativeType.TYPE_STRING)
+                    {
+                        var vals = Strings;
+                        for (int i = 0; i < vals.Count; ++i)
+                        {
+                            results.Add(EnumUtils.ConvertToEnum<T>(vals[i]));
+                        }
+                    }
+                    else
+                    {
+                        for (int i = 0; i < _Slot.Values.Count; ++i)
+                        {
+                            var newval = As(ProtobufNativeType.TYPE_ENUM, i);
+                            newval._ObjectVal = type;
+                            results.Add(newval.Get<T>());
+                        }
+                    }
+                }
+                else
+                {
+                    ProtobufNativeType ntype;
+                    if (_ClrTypeToProtobufNativeTypeMap.TryGetValue(type, out ntype))
+                    {
+                        for (int i = 0; i < _Slot.Values.Count; ++i)
+                        {
+                            results.Add(As(ntype, i).Get<T>());
+                        }
+                    }
+                    else
+                    {
+                        var objs = Objects;
+                        for (int i = 0; i < objs.Count; ++i)
+                        {
+                            var obj = objs[i];
+                            if (type.IsInstanceOfType(obj))
+                            {
+                                results.Add((T)obj);
+                            }
+                            else
+                            {
+                                results.Add(default(T));
+                            }
+                        }
+                    }
+                }
+                return results.ToArray();
+            }
+            public T[] AsEnums<T>() where T : struct
+            {
+                if (_Slot == null)
+                {
+                    return null;
+                }
+                List<T> results = new List<T>();
+                var type = typeof(T);
+                if (NativeType == ProtobufNativeType.TYPE_STRING)
+                {
+                    var vals = Strings;
+                    for (int i = 0; i < vals.Count; ++i)
+                    {
+                        results.Add(EnumUtils.ConvertToEnum<T>(vals[i]));
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < _Slot.Values.Count; ++i)
+                    {
+                        var newval = As(ProtobufNativeType.TYPE_ENUM, i);
+                        newval._ObjectVal = type;
+                        results.Add(newval.GetEnum<T>());
+                    }
+                }
+                return results.ToArray();
+            }
+
+            public bool Convert(ProtobufNativeType ntype, int index)
+            {
+                if (_Slot == null)
+                {
+                    return false;
+                }
+                if (index >= 0 && index < _Slot.Values.Count)
+                {
+                    var value = _Slot.Values[index];
+                    ProtobufNativeType cntype;
+                    if (!value.Parsed.IsEmpty)
+                    {
+                        cntype = value.Parsed.NativeType;
+                    }
+                    else
+                    {
+                        cntype = _Slot.Desc.Type.KnownType;
+                    }
+                    if (ntype == cntype)
+                    {
+                        return true;
+                    }
+                    ProtobufParsedValue converted = default(ProtobufParsedValue);
+                    if (ProtobufEncoder.ConvertParsed(value, ntype, out converted))
+                    {
+                        value.Parsed = converted;
+                        _Slot.Values[index] = value;
+                        _Slot.Desc.Type.KnownType = ntype;
+                        return true;
+                    }
+                }
+                return false;
+            }
+            public bool Convert(ProtobufNativeType ntype)
+            {
+                if (ntype == NativeType)
+                {
+                    return true;
+                }
+                ProtobufParsedValue converted = default(ProtobufParsedValue);
+                if (_Slot != null)
+                {
+                    if (ProtobufEncoder.ConvertParsed(_Slot.FirstValue, ntype, out converted))
+                    {
+                        var val = _Slot.FirstValue;
+                        val.Parsed = converted;
+                        _Slot.FirstValue = val;
+                        _Slot.Desc.Type.KnownType = ntype;
+                        return true;
+                    }
+                }
+                return false;
+            }
+            public object Convert(Type type)
+            {
+                if (type == null)
+                {
+                    return null;
+                }
+                if (_Slot == null)
+                {
+                    return null;
+                }
+                if (type.IsEnum)
+                {
+                    if (NativeType == ProtobufNativeType.TYPE_STRING)
+                    {
+                        try
+                        {
+                            var eval = Enum.Parse(type, String);
+                            var newval = FirstValue;
+                            newval.UInt64 = System.Convert.ToUInt64(eval);
+                            newval.NativeType = ProtobufNativeType.TYPE_ENUM;
+                            newval._ObjectVal = type;
+                            var val = _Slot.FirstValue;
+                            val.Parsed = newval;
+                            _Slot.FirstValue = val;
+                            _Slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_ENUM;
+                            _Slot.Desc.Type.CLRType = type;
+                            return eval;
+                        }
+                        catch
+                        {
+                            return null;
+                        }
+                    }
+                    else
+                    {
+                        if (Convert(ProtobufNativeType.TYPE_ENUM))
+                        {
+                            var newval = FirstValue;
+                            newval._ObjectVal = type;
+                            var val = _Slot.FirstValue;
+                            val.Parsed = newval;
+                            _Slot.FirstValue = val;
+                            _Slot.Desc.Type.CLRType = type;
+                            return Get();
+                        }
+                        else
+                        {
+                            return null;
+                        }
+                    }
+                }
+                else
+                {
+                    ProtobufNativeType ntype;
+                    if (_ClrTypeToProtobufNativeTypeMap.TryGetValue(type, out ntype))
+                    {
+                        if (Convert(ntype))
+                        {
+                            return Get();
+                        }
+                        else
+                        {
+                            return null;
+                        }
+                    }
+                    else
+                    {
+                        var obj = Object;
+                        if (type.IsInstanceOfType(obj))
+                        {
+                            return obj;
+                        }
+                    }
+                }
+                return null;
+            }
+            public T Convert<T>()
+            {
+                if (_Slot == null)
+                {
+                    return default(T);
+                }
+                var type = typeof(T);
+                if (type.IsEnum)
+                {
+                    if (NativeType == ProtobufNativeType.TYPE_STRING)
+                    {
+                        try
+                        { 
+                            var eval = Enum.Parse(type, String);
+                            var newval = FirstValue;
+                            newval.UInt64 = System.Convert.ToUInt64(eval);
+                            newval.NativeType = ProtobufNativeType.TYPE_ENUM;
+                            newval._ObjectVal = type;
+                            var val = _Slot.FirstValue;
+                            val.Parsed = newval;
+                            _Slot.FirstValue = val;
+                            _Slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_ENUM;
+                            _Slot.Desc.Type.CLRType = type;
+                            return (T)eval;
+                        }
+                        catch
+                        {
+                            return default(T);
+                        }
+                    }
+                    else
+                    {
+                        if (Convert(ProtobufNativeType.TYPE_ENUM))
+                        {
+                            var newval = FirstValue;
+                            newval._ObjectVal = type;
+                            var val = _Slot.FirstValue;
+                            val.Parsed = newval;
+                            _Slot.FirstValue = val;
+                            _Slot.Desc.Type.CLRType = type;
+                            return Get<T>();
+                        }
+                        else
+                        {
+                            return default(T);
+                        }
+                    }
+                }
+                else
+                {
+                    ProtobufNativeType ntype;
+                    if (_ClrTypeToProtobufNativeTypeMap.TryGetValue(type, out ntype))
+                    {
+                        if (Convert(ntype))
+                        {
+                            return Get<T>();
+                        }
+                        else
+                        {
+                            return default(T);
+                        }
+                    }
+                    else
+                    {
+                        var obj = Object;
+                        if (type.IsInstanceOfType(obj))
+                        {
+                            return (T)obj;
+                        }
+                    }
+                }
+                return default(T);
+            }
+            public T ConvertToEnum<T>() where T : struct
+            {
+                if (_Slot == null)
+                {
+                    return default(T);
+                }
+                var type = typeof(T);
+                if (NativeType == ProtobufNativeType.TYPE_STRING)
+                {
+                    try
+                    { 
+                        var eval = Enum.Parse(type, String);
+                        var newval = FirstValue;
+                        newval.UInt64 = System.Convert.ToUInt64(eval);
+                        newval.NativeType = ProtobufNativeType.TYPE_ENUM;
+                        newval._ObjectVal = type;
+                        var val = _Slot.FirstValue;
+                        val.Parsed = newval;
+                        _Slot.FirstValue = val;
+                        _Slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_ENUM;
+                        _Slot.Desc.Type.CLRType = type;
+                        return (T)eval;
+                    }
+                    catch
+                    {
+                        return default(T);
+                    }
+                }
+                else
+                {
+                    if (Convert(ProtobufNativeType.TYPE_ENUM))
+                    {
+                        var newval = FirstValue;
+                        newval._ObjectVal = type;
+                        var val = _Slot.FirstValue;
+                        val.Parsed = newval;
+                        _Slot.FirstValue = val;
+                        _Slot.Desc.Type.CLRType = type;
+                        return Get<T>();
+                    }
+                    else
+                    {
+                        return default(T);
+                    }
+                }
+            }
+            public SlotValueAccessor<T> ConvertList<T>()
+            {
+                if (_Slot == null)
+                {
+                    return GetList<T>();
+                }
+                var type = typeof(T);
+                if (type.IsEnum)
+                {
+                    if (NativeType == ProtobufNativeType.TYPE_STRING)
+                    {
+                        for (int i = 0; i < _Slot.Values.Count; ++i)
+                        {
+                            var newval = _Slot.Values[i].Parsed;
+                            try
+                            { 
+                                var eval = Enum.Parse(type, newval.String);
+                                newval.UInt64 = System.Convert.ToUInt64(eval);
+                            }
+                            catch
+                            {
+                                newval.UInt64 = 0;
+                            }
+                            newval.NativeType = ProtobufNativeType.TYPE_ENUM;
+                            newval._ObjectVal = type;
+                            var val = _Slot.Values[i];
+                            val.Parsed = newval;
+                            _Slot.Values[i] = val;
+                        }
+                        _Slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_ENUM;
+                        _Slot.Desc.Type.CLRType = type;
+                    }
+                    else
+                    {
+                        for (int i = 0; i < _Slot.Values.Count; ++i)
+                        {
+                            if (Convert(ProtobufNativeType.TYPE_ENUM, i))
+                            {
+                                var newval = _Slot.Values[i].Parsed;
+                                newval._ObjectVal = type;
+                                var val = _Slot.Values[i];
+                                val.Parsed = newval;
+                                _Slot.Values[i] = val;
+                            }
+                            else
+                            {
+                                var newval = _Slot.Values[i].Parsed;
+                                newval.UInt64 = 0;
+                                newval.NativeType = ProtobufNativeType.TYPE_ENUM;
+                                newval._ObjectVal = type;
+                                var val = _Slot.Values[i];
+                                val.Parsed = newval;
+                                _Slot.Values[i] = val;
+                            }
+                        }
+                        _Slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_ENUM;
+                        _Slot.Desc.Type.CLRType = type;
+                    }
+                }
+                else
+                {
+                    ProtobufNativeType ntype;
+                    if (_ClrTypeToProtobufNativeTypeMap.TryGetValue(type, out ntype))
+                    {
+                        for (int i = 0; i < _Slot.Values.Count; ++i)
+                        {
+                            if (!Convert(ntype, i))
+                            {
+                                this[i].Set(default(T));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var objs = Objects;
+                        for (int i = 0; i < objs.Count; ++i)
+                        {
+                            var obj = objs[i];
+                            if (!type.IsInstanceOfType(obj))
+                            {
+                                this[i].Set(default(T));
+                            }
+                        }
+                    }
+                }
+                return GetList<T>();
+            }
+            public SlotEnumAccessor<T> ConvertEnums<T>() where T : struct
+            {
+                if (_Slot == null)
+                {
+                    return GetEnums<T>();
+                }
+                var type = typeof(T);
+                if (NativeType == ProtobufNativeType.TYPE_STRING)
+                {
+                    for (int i = 0; i < _Slot.Values.Count; ++i)
+                    {
+                        var newval = _Slot.Values[i].Parsed;
+                        try
+                        { 
+                            var eval = Enum.Parse(type, newval.String);
+                            newval.UInt64 = System.Convert.ToUInt64(eval);
+                        }
+                        catch
+                        {
+                            newval.UInt64 = 0;
+                        }
+                        newval.NativeType = ProtobufNativeType.TYPE_ENUM;
+                        newval._ObjectVal = type;
+                        var val = _Slot.Values[i];
+                        val.Parsed = newval;
+                        _Slot.Values[i] = val;
+                    }
+                    _Slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_ENUM;
+                    _Slot.Desc.Type.CLRType = type;
+                }
+                else
+                {
+                    for (int i = 0; i < _Slot.Values.Count; ++i)
+                    {
+                        if (Convert(ProtobufNativeType.TYPE_ENUM, i))
+                        {
+                            var newval = _Slot.Values[i].Parsed;
+                            newval._ObjectVal = type;
+                            var val = _Slot.Values[i];
+                            val.Parsed = newval;
+                            _Slot.Values[i] = val;
+                        }
+                        else
+                        {
+                            var newval = _Slot.Values[i].Parsed;
+                            newval.UInt64 = 0;
+                            newval.NativeType = ProtobufNativeType.TYPE_ENUM;
+                            newval._ObjectVal = type;
+                            var val = _Slot.Values[i];
+                            val.Parsed = newval;
+                            _Slot.Values[i] = val;
+                        }
+                    }
+                    _Slot.Desc.Type.KnownType = ProtobufNativeType.TYPE_ENUM;
+                    _Slot.Desc.Type.CLRType = type;
+                }
+                return GetEnums<T>();
+            }
             #endregion
         }
         public struct SlotValueAccessor<T> : IList<T>
@@ -4852,12 +5489,12 @@ namespace Capstones.Net
                                     }
                                     if (etype != null)
                                     {
-                                        var eval = Enum.Parse(etype, subraw.Parsed.String);
-                                        if (eval != null)
-                                        {
+                                        try
+                                        { 
+                                            var eval = Enum.Parse(etype, subraw.Parsed.String);
                                             newval.UInt64 = Convert.ToUInt64(eval);
                                         }
-                                        else
+                                        catch
                                         {
                                             newval.UInt64 = 0;
                                         }
