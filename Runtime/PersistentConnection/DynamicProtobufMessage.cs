@@ -870,26 +870,40 @@ namespace Capstones.Net
             }
             public T Get<T>(ref ProtobufParsedValue pval)
             {
-                object val;
-                if (Get(ref pval, out val))
+                if (!typeof(T).IsEnum)
                 {
-                    if (val is T)
-                    {
-                        return (T)val;
-                    }
-                    else if (val is ulong)
-                    {
-                        if (typeof(T).IsEnum)
-                        {
-                            return (T)Enum.ToObject(typeof(T), (ulong)val);
-                        }
-                    }
+                    return default(T);
                 }
-                return default(T);
+                else if (pval.IsObject)
+                {
+                    return default(T);
+                }
+                else
+                {
+                    var val = pval._Union._UInt64Val;
+#if CONVERT_ENUM_SAFELY
+                    return (T)Enum.ToObject(typeof(T), val);
+#else
+                    return EnumUtils.ConvertToEnumForcibly<T>(val);
+#endif
+                }
             }
             public void Set<T>(ref ProtobufParsedValue pval, T val)
             {
-                Set(ref pval, (object)val);
+                var type = val.GetType();
+                if (type.IsEnum)
+                {
+                    if (pval._Type == 0 || pval._Type == ProtobufNativeType.TYPE_ENUM)
+                    {
+                        pval._Type = ProtobufNativeType.TYPE_ENUM;
+                        pval._ObjectVal = type;
+#if CONVERT_ENUM_SAFELY
+                        pval._Union._UInt64Val = Convert.ToUInt64(val);
+#else
+                        pval._Union._UInt64Val = EnumUtils.ConvertFromEnumForcibly<T>(val);
+#endif
+                    }
+                }
             }
             public T GetEnum<T>(ref ProtobufParsedValue pval) where T : struct
             {
@@ -972,7 +986,7 @@ namespace Capstones.Net
             { ProtobufNativeType.TYPE_UINT64, _UInt64Accessor },
             { ProtobufNativeType.TYPE_UNKNOWN, _ObjAccessor },
         };
-        #endregion
+#endregion
         public T Get<T>()
         {
             var type = typeof(T);
@@ -1100,7 +1114,7 @@ namespace Capstones.Net
             return !v1.Equals(v2);
         }
 
-        #region Converters
+#region Converters
         public static implicit operator ProtobufMessage(ProtobufParsedValue thiz)
         {
             return thiz.Get<ProtobufMessage>();
@@ -1281,7 +1295,7 @@ namespace Capstones.Net
             pval.Set(val);
             return pval;
         }
-        #endregion
+#endregion
     }
 
     public struct ProtobufValue
@@ -2278,7 +2292,7 @@ namespace Capstones.Net
                 get { return new SlotValueAccessor<ProtobufMessage>(_Slot); }
             }
 
-            #region implicit converters
+#region implicit converters
             public static implicit operator bool(SlotValueAccessor thiz)
             {
                 return thiz.Boolean;
@@ -2415,9 +2429,9 @@ namespace Capstones.Net
             //{
             //    return new SlotValueAccessor() { _RValue = val };
             //}
-            #endregion
+#endregion
 
-            #region Converters - change the parsed value's "NativeType". As - return a copy, the data in the slot is unchanged. Convert - change the data stored in the slot.
+#region Converters - change the parsed value's "NativeType". As - return a copy, the data in the slot is unchanged. Convert - change the data stored in the slot.
             public ProtobufParsedValue As(ProtobufNativeType ntype, int index)
             {
                 ProtobufParsedValue converted = default(ProtobufParsedValue);
@@ -3039,7 +3053,7 @@ namespace Capstones.Net
                 }
                 return GetEnums<T>();
             }
-            #endregion
+#endregion
         }
         public struct SlotValueAccessor<T> : IList<T>
         {
@@ -6240,7 +6254,7 @@ namespace Capstones.Net
     }
 
 #if UNITY_INCLUDE_TESTS
-    #region TESTS
+#region TESTS
     public static class ProtobufDynamicMessageTest
     {
 #if UNITY_EDITOR
@@ -6297,7 +6311,7 @@ namespace Capstones.Net
             }
         }
 
-        #region Descriptor Data
+#region Descriptor Data
         public static byte[] TestDescriptorFileData = global::System.Convert.FromBase64String(
           string.Concat(
             "ChJTcmMvQ29tYmluZWQucHJvdG8SCXByb3RvY29scyIQCg5TZXJ2ZXJTdGF0",
@@ -6657,9 +6671,9 @@ namespace Capstones.Net
             "ChBQaXRjaGVyRG9taW5hdGU2EBASFAoQUGl0Y2hlckRvbWluYXRlNxAREhQK",
             "EFBpdGNoZXJEb21pbmF0ZTgQEhIUChBQaXRjaGVyRG9taW5hdGU5EBMSFQoR",
             "UGl0Y2hlckRvbWluYXRlMTAQFBoCEAFiBnByb3RvMw=="));
-        #endregion
+#endregion
 #endif
     }
-    #endregion
+#endregion
 #endif
 }
