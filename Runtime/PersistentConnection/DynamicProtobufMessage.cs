@@ -2531,7 +2531,7 @@ namespace Capstones.Net
                 {
                     if (NativeType == ProtobufNativeType.TYPE_STRING)
                     {
-                        return EnumUtils.ConvertToEnum<T>(String);
+                        return EnumUtils.ConvertStrToEnum<T>(String);
                     }
                     else
                     {
@@ -2566,7 +2566,7 @@ namespace Capstones.Net
                 }
                 if (NativeType == ProtobufNativeType.TYPE_STRING)
                 {
-                    return EnumUtils.ConvertToEnum<T>(String);
+                    return EnumUtils.ConvertStrToEnum<T>(String);
                 }
                 else
                 {
@@ -2590,7 +2590,7 @@ namespace Capstones.Net
                         var vals = Strings;
                         for (int i = 0; i < vals.Count; ++i)
                         {
-                            results.Add(EnumUtils.ConvertToEnum<T>(vals[i]));
+                            results.Add(EnumUtils.ConvertStrToEnum<T>(vals[i]));
                         }
                     }
                     else
@@ -2645,7 +2645,7 @@ namespace Capstones.Net
                     var vals = Strings;
                     for (int i = 0; i < vals.Count; ++i)
                     {
-                        results.Add(EnumUtils.ConvertToEnum<T>(vals[i]));
+                        results.Add(EnumUtils.ConvertStrToEnum<T>(vals[i]));
                     }
                 }
                 else
