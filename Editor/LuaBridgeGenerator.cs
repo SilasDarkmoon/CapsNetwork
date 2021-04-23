@@ -544,6 +544,9 @@ namespace Capstones.UnityEditorEx.Net
                                     sbfile.Append("    public static class LuaProtobufBridge");
                                     sbfile.AppendLine(sbFileNamePart.ToString());
                                     sbfile.AppendLine("    {");
+                                    sbfile.Append("        static LuaProtobufBridge");
+                                    sbfile.Append(sbFileNamePart.ToString());
+                                    sbfile.AppendLine("() { }");
                                     sbfile.AppendLine("        public static void Init() { }");
                                     sbfile.AppendLine();
                                     foreach (var minfo in sorted)
