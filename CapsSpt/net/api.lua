@@ -191,7 +191,7 @@ function api.post(uri, data, quiet, timeOut)
     uri = api.normalizeUrl(uri)
     local label = "Request = " .. nextRequestSeq .. ": " .. uri .. "\nData"
     dump(data, label)
-
+    dump(json.encode(data),"RequestJson\nData")
     local request = createRequest(uri, data, nil, timeOut)
     request.quiet = quiet
 
