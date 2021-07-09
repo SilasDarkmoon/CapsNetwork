@@ -298,24 +298,173 @@ function lua2pb.convertCompactDataToProtobuf(tab)
         end
     end
 
-    if type(tab) == "table" then
+    if type(tab) == "table" or table.isudtable(tab) then
         return {
             Keys = tab.k,
             Val = convertValue(tab.v),
         }
     else
-        return convertValue(tab)
+        return {
+            Val = convertValue(tab),
+        }
     end
 end
 
 function lua2pb.encode(tab)
-    local data = lua2pb.extractDataFromTable(tab)
-    local plain = lua2pb.convertDataTableToPlain(data)
-    local compact = lua2pb.convertPlainDataToCompact(plain)
-    local ptab = lua2pb.convertCompactDataToProtobuf(compact)
+    if type(tab) == "table" or table.isudtable(tab) then
+        local data = lua2pb.extractDataFromTable(tab)
+        local plain = lua2pb.convertDataTableToPlain(data)
+        local compact = lua2pb.convertPlainDataToCompact(plain)
+        local ptab = lua2pb.convertCompactDataToProtobuf(compact)
 
-    local raw = pb.encode("protocols.CompactLuaValueProto", ptab)
-    return raw
+        local raw = pb.encode("protocols.CompactLuaValueProto", ptab)
+        return raw
+    else
+        local ptab = lua2pb.convertCompactDataToProtobuf(tab)
+
+        local raw = pb.encode("protocols.CompactLuaValueProto", ptab)
+        return raw
+    end
+end
+
+function lua2pb.convertProtobufToCompactData(tab)
+    local function convertValue(val)
+        local ptype = val.Type
+        if ptype == proto_LuaValueTypeEnum.Deleted then
+            return "\024"
+        elseif ptype == proto_LuaValueTypeEnum.String then
+            return val.ValStr
+        elseif ptype == proto_LuaValueTypeEnum.Number then
+            return val.ValNum
+        elseif ptype == proto_LuaValueTypeEnum.Boolean then
+            return val.ValBool
+        elseif ptype == proto_LuaValueTypeEnum.Object or ptype == proto_LuaValueTypeEnum.Array or ptype == proto_LuaValueTypeEnum.Reference then
+            local valtab = val.ValTable
+            local converted = {
+                t = proto_LuaValueTypeEnumNames[ptype],
+                i = valtab.Id,
+                k = valtab.KeyIds,
+            }
+            if valtab.Vals and #valtab.Vals > 0 then
+                local convertedVals = {}
+                converted.v = convertedVals
+                for i, v in ipairs(valtab.Vals) do
+                    convertedVals[#convertedVals + 1] = convertValue(v)
+                end
+            end
+            return converted
+        end
+    end
+
+    if tab.Keys and #tab.Keys > 0 then
+        -- this is a table
+        return {
+            k = tab.Keys,
+            v = convertValue(tab.Val)
+        }, true
+    elseif (type(tab.Val) == "table" or table.isudtable(tab.Val)) and tab.Val.Type then
+        -- this is a simple value stored in CompactLuaValueProto
+        return convertValue(tab.Val), false
+    else
+        -- this is a simple value
+        return convertValue(tab), false
+    end
+end
+
+function lua2pb.convertCompactToPlainData(tab)
+    local keylist = tab.k
+    local data = tab.v
+
+    local function convertTable(tab)
+        local tar = { i = tab.i, t = tab.t }
+        if tab.v then
+            tar.v = {}
+            if tab.t == "a" then
+                for i, v in ipairs(tab.v) do
+                    if type(v) == "table" or table.isudtable(v) then
+                        tar.v[i] = convertTable(v)
+                    else
+                        tar.v[i] = v
+                    end
+                end
+            elseif tab.t == "o" then
+                for i, kid in ipairs(tab.k) do
+                    local v = tab.v[i]
+                    local key = keylist[kid] or tostring(kid)
+                    if type(v) == "table" or table.isudtable(v) then
+                        tar.v[key] = convertTable(v)
+                    else
+                        tar.v[key] = v
+                    end
+                end
+            end
+        end
+        return tar
+    end
+
+    return convertTable(data)
+end
+
+function lua2pb.convertPlainToDataTable(tab)
+    local id2tar = {}
+    local tar2id = {}
+
+    local function convertTable(tab)
+        local id = tab.i
+        local tar
+        local shouldConvertChildren = true
+        if not id or id == 0 then
+            tar = {}
+        else
+            tar = id2tar[id]
+            if tar then
+                shouldConvertChildren = tar2id[tar]
+            else
+                tar = {}
+                id2tar[id] = tar
+                tar2id[tar] = id
+            end
+        end
+        if not shouldConvertChildren then
+            return tar
+        end
+        if tab.t == "r" then
+            return tar
+        end
+        tar2id[tar] = nil
+        if tab.t == "a" then
+            for i, v in ipairs(tab.v) do
+                if type(v) == "table" or table.isudtable(v) then
+                    tar[i] = convertTable(v)
+                else
+                    tar[i] = v
+                end
+            end
+        elseif tab.t == "o" then
+            for k, v in pairs(tab.v) do
+                if type(v) == "table" or table.isudtable(v) then
+                    tar[k] = convertTable(v)
+                else
+                    tar[k] = v
+                end
+            end
+        end
+        return tar
+    end
+
+    return convertTable(tab)
+end
+
+function lua2pb.decode(raw)
+    local ptab = pb.decode("protocols.CompactLuaValueProto", raw)
+    local compact, istable = lua2pb.convertProtobufToCompactData(ptab)
+    if not istable then
+        return compact
+    else
+        local plain = lua2pb.convertCompactToPlainData(compact)
+        local data = lua2pb.convertPlainToDataTable(plain)
+        return data
+    end
 end
 
 return lua2pb
