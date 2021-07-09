@@ -345,11 +345,13 @@ function lua2pb.convertProtobufToCompactData(tab)
                 i = valtab.Id,
                 k = valtab.KeyIds,
             }
-            if valtab.Vals and #valtab.Vals > 0 then
+            if ptype ~= proto_LuaValueTypeEnum.Reference then
                 local convertedVals = {}
                 converted.v = convertedVals
-                for i, v in ipairs(valtab.Vals) do
-                    convertedVals[#convertedVals + 1] = convertValue(v)
+                if valtab.Vals then
+                    for i, v in ipairs(valtab.Vals) do
+                        convertedVals[#convertedVals + 1] = convertValue(v)
+                    end
                 end
             end
             return converted
@@ -364,7 +366,7 @@ function lua2pb.convertProtobufToCompactData(tab)
         }, true
     elseif (type(tab.Val) == "table" or table.isudtable(tab.Val)) and tab.Val.Type then
         -- this is a simple value stored in CompactLuaValueProto
-        return convertValue(tab.Val), false
+        return convertValue(tab.Val), tab.Val.Type == proto_LuaValueTypeEnum.Object or tab.Val.Type == proto_LuaValueTypeEnum.Array or tab.Val.Type == proto_LuaValueTypeEnum.Reference
     else
         -- this is a simple value
         return convertValue(tab), false
