@@ -93,6 +93,7 @@ namespace Capstones.LuaLib
     }
 }
 
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER || LUA_STANDALONE_USE_PB_IN_CS
 namespace Capstones.LuaLib
 {
     using Capstones.Net;
@@ -333,6 +334,7 @@ namespace Capstones.LuaLib
         private static DynamicProtobufMessageHub _DynamicProtobufMessageHub = new DynamicProtobufMessageHub();
     }
 }
+#endif
 
 namespace Capstones.LuaExt
 {
@@ -629,6 +631,10 @@ namespace Capstones.LuaExt
                 return IntPtr.Zero;
             }
         }
+
+#if !UNITY_ENGINE && !UNITY_5_3_OR_NEWER && !LUA_STANDALONE_USE_PB_IN_CS
+        public static readonly LuaString LS_messageName = new LuaString("messageName");
+#endif
     }
 
 #if UNITY_INCLUDE_TESTS
@@ -656,6 +662,7 @@ namespace Capstones.LuaExt
 #endif
 }
 
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER || LUA_STANDALONE_USE_PB_IN_CS
 namespace LuaProto
 {
     using pb = global::Google.Protobuf;
@@ -898,3 +905,4 @@ namespace LuaProto
         }
     }
 }
+#endif
