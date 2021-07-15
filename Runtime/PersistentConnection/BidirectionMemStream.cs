@@ -486,6 +486,10 @@ namespace Capstones.Net
             {
                 return 0;
             }
+            if (count == 0)
+            {
+                return 0;
+            }
             while (true)
             {
                 if (_Timeout < 0)
