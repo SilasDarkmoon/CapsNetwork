@@ -29,33 +29,38 @@ local nextRealSeq = 1
 local repostReq -- function
 local restartReq -- function
 
-local function createRequest(uri, data, seq, timeOut)
+local function createRequest(uri, data, seq, timeout)
     local datamt = getmetatable(data)
     local www
     local request
-    -- TODO:扩展创建请求时候设置超时
     local wwwTimeout = api.timeout
-    if timeOut ~= nil and type(timeOut) == "number" and timeOut > 0 then
+    if type(timeout) == "number" and timeout > 0 then -- TODO: could we set timeout to -1 (never timeout)?
         wwwTimeout = timeOut
     end
 
     if datamt and datamt.rawpost then
-        -- TODO:是对外部服务器的请求
-        local rawdata = data
+        -- call external server.
         local form = clr.Capstones.Net.HttpRequestData()
         local headers = clr.Capstones.Net.HttpRequestData()
         www = clr.Capstones.Net.HttpRequestBase.Create(uri, headers, form, nil)
+
+        if data.headers then
+            for k, v in pairs(data.headers) do
+                headers:Add(k, v)
+            end
+        end
+
+        form.PrepareMethod = "default"
+        form.Encoded = data.data
+
         www.Timeout = wwwTimeout * 1000
-        -----------------------------------
-        form.PrepareMethod = "json"
-        form:Add("", json.encode(data))
 
         www:StartRequest()
         request = {}
         setmetatable(request, {__isobject = true})
         request.www = www
         request.uri = uri
-        request.pdata = rawdata
+        request.pdata = data
         request.token = api.token
         request.seq = seq
         request.repost = repostReq
@@ -68,30 +73,18 @@ local function createRequest(uri, data, seq, timeOut)
         local rseq = nextRealSeq
         nextRealSeq = nextRealSeq + 1
 
-        local rawdata = data
-        -- local fulldata = { d = data }
-        -- local fulldata = { data }
-        local fulldata = data
-        -- data = json.encode(data)
         local form = clr.Capstones.Net.HttpRequestData()
         local headers = clr.Capstones.Net.HttpRequestData()
         www = clr.Capstones.Net.HttpRequestBase.Create(uri, headers, form, nil)
 
         if api.token then
-            fulldata.t = tostring(api.token)
-            www.Token = fulldata.t
+            www.Token = tostring(api.token)
         end
-
-        -- fulldata.seq = tostring(seq)
-        -- www.Seq = fulldata.seq
         www.Seq = tostring(seq)
-
-        -- fulldata.rseq = tostring(rseq)
-        -- www.RSeq = fulldata.rseq
         www.RSeq = tostring(rseq)
 
         form.PrepareMethod = "json"
-        form:Add("", json.encode(fulldata))
+        form:Add("", json.encode(data))
 
         www.Timeout = wwwTimeout * 1000
 
@@ -100,7 +93,7 @@ local function createRequest(uri, data, seq, timeOut)
         setmetatable(request, {__isobject = true})
         request.www = www
         request.uri = uri
-        request.pdata = rawdata
+        request.pdata = data
         request.token = api.token
         request.seq = seq
         request.repost = repostReq
@@ -111,7 +104,7 @@ local function createRequest(uri, data, seq, timeOut)
         local error, done
         while not done do
             if clr.isobj(www) then
-                local isMyTimedout = nil
+                local timedoutInLua = nil
                 local startTime = UnityEngine.Time.realtimeSinceStartup
                 while true do
                     if www.IsDone then
@@ -119,13 +112,13 @@ local function createRequest(uri, data, seq, timeOut)
                     end
                     unity.waitForNextEndOfFrame()
                     if UnityEngine.Time.realtimeSinceStartup - startTime > (wwwTimeout + 2) then
-                        dumpe("createRequest =====> 等待超时")
-                        isMyTimedout = true
+                        printe("api timedout in lua")
+                        timedoutInLua = true
                         break
                     end
                 end
-                api.result(request,isMyTimedout)
-                if request.failed or isMyTimedout == true then
+                api.result(request, timedoutInLua)
+                if request.failed or timedoutInLua then
                     error = true
                     done = true
                 else
@@ -189,9 +182,14 @@ end
 
 function api.post(uri, data, quiet, timeOut)
     uri = api.normalizeUrl(uri)
-    local label = "Request = " .. nextRequestSeq .. ": " .. uri .. "\nData"
+    local label = "Request #"..nextRequestSeq..": "..uri.."\nData"
     dump(data, label)
-    dump(json.encode(data),"RequestJson\nData")
+    local datamt = getmetatable(data)
+    if datamt and datamt.rawpost then
+        dump(clr.datastr(data.data), "Raw")
+    else
+        dump(json.encode(data), "Json")
+    end
     local request = createRequest(uri, data, nil, timeOut)
     request.quiet = quiet
 
@@ -202,6 +200,11 @@ function api.post(uri, data, quiet, timeOut)
     end
 
     return request
+end
+
+function api.rawpost(data, headers)
+    local result = { data = data, headers = headers }
+    return setmetatable(result, { rawpost = true })
 end
 
 api.timeout = 20
@@ -277,13 +280,13 @@ function api.bool(val)
     return val and val ~= '' and val ~= 0
 end
 
-function api.result(request,isMyTimedout)
-    if request.www.IsDone or isMyTimedout == true then
-        if not request.done or isMyTimedout == true then
+function api.result(request, timedoutInLua)
+    if request.www.IsDone or timedoutInLua then
+        if not request.done or timedoutInLua then
             request.done = true
             local failed, msg, event = false, nil, nil
             local error = request.www.Error
-            if error == 'timedout' or isMyTimedout == true then
+            if error == 'timedout' or timedoutInLua then
                 failed = 'timedout'
                 event = "none"
                 msg = clr.transstr('timedOut')
