@@ -186,7 +186,7 @@ function api.post(uri, data, quiet, timeOut)
     mess_data = mess_data..dumpq(data, "Data").."\n"
     local datamt = getmetatable(data)
     if datamt and datamt.rawpost then
-        mess_data = mess_data..dumpq(clr.datastr(data.data), "Raw")
+        mess_data = mess_data..dumprawq(clr.datastr(data.data), "Raw")
     else
         mess_data = mess_data..dumpq(clr.wrap(json.encode(data)), "Json")
     end
