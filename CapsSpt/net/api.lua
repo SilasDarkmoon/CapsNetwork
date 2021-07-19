@@ -183,13 +183,14 @@ end
 function api.post(uri, data, quiet, timeOut)
     uri = api.normalizeUrl(uri)
     local label = "Request #"..nextRequestSeq..": "..uri.."\nData"
-    dump(data, label)
+    local mess_data = dumpq(data, label).."\n"
     local datamt = getmetatable(data)
     if datamt and datamt.rawpost then
-        dump(clr.datastr(data.data), "Raw")
+        mess_data = mess_data..dumpq(clr.datastr(data.data), "Raw")
     else
-        dump(json.encode(data), "Json")
+        mess_data = mess_data..dumpq(clr.wrap(json.encode(data)), "Json")
     end
+    print(mess_data)
     local request = createRequest(uri, data, nil, timeOut)
     request.quiet = quiet
 
@@ -326,7 +327,7 @@ function api.result(request, timedoutInLua)
                     event = "none"
                     msg = clr.transstr(msg)
                 else
-                    dump(tab)
+                    dump(tab, "Response #"..request.seq)
                     local datamt = getmetatable(request.pdata)
                     if datamt and datamt.rawpost then
                         request.val = tab
@@ -349,7 +350,7 @@ function api.result(request, timedoutInLua)
             end
             request.msg = msg
             if failed then
-                dump(msg)
+                dump(msg, "Response #"..request.seq.." Failed")
                 if event then
                     request.event = event
                 end
