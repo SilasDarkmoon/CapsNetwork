@@ -182,8 +182,8 @@ end
 
 function api.post(uri, data, quiet, timeOut)
     uri = api.normalizeUrl(uri)
-    local label = "Request #"..nextRequestSeq..": "..uri.."\nData"
-    local mess_data = dumpq(data, label).."\n"
+    local mess_data = "Request #"..nextRequestSeq..": "..uri.."\n"
+    mess_data = mess_data..dumpq(data, "Data").."\n"
     local datamt = getmetatable(data)
     if datamt and datamt.rawpost then
         mess_data = mess_data..dumpq(clr.datastr(data.data), "Raw")
