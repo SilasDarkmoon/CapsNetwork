@@ -861,6 +861,14 @@ namespace LuaProto
                 dest.Add(item);
             });
         }
+        public static void ConvertField(this pbc.RepeatedField<pb.ByteString> dest, LuaList<byte[]> src)
+        {
+            dest.Clear();
+            src.ForEach(item =>
+            {
+                dest.Add(pb.ByteString.CopyFrom(item));
+            });
+        }
         public static void ConvertField<TDest, TSrc>(this ILuaWrapper thiz, LuaList<TDest> dest, pbc.RepeatedField<TSrc> src)
         {
             dest.Clear();
@@ -879,6 +887,26 @@ namespace LuaProto
             {
                 var item = src[i];
                 dest.Add(item);
+            }
+        }
+        public static void ConvertField(this LuaList<byte[]> dest, pbc.RepeatedField<pb.ByteString> src)
+        {
+            dest.Clear();
+            for (int i = 0; i < src.Count; ++i)
+            {
+                var item = src[i];
+                dest.Add(item.ToByteArray());
+            }
+        }
+        public static pb.ByteString ToByteString(this byte[] data)
+        {
+            if (data == null)
+            {
+                return pb.ByteString.Empty;
+            }
+            else
+            {
+                return pb.ByteString.CopyFrom(data);
             }
         }
         //public static LuaList<TDest> ConvertField<TDest, TSrc>(this pbc.RepeatedField<TSrc> src, IntPtr l)

@@ -230,7 +230,7 @@ namespace Capstones.UnityEditorEx.Net
                                                 sbfile.AppendLine(prefix + "            }");
                                                 sbfile.AppendLine(prefix + "            else");
                                                 sbfile.AppendLine(prefix + "            {");
-                                                sbfile.AppendLine(prefix + "                l.pushbuffer(data." + fname + ");");
+                                                sbfile.AppendLine(prefix + "                l.pushbuffer(data." + fname + ".ToByteArray());");
                                                 sbfile.AppendLine(prefix + "            }");
                                                 break;
                                             case ProtobufNativeType.TYPE_DOUBLE:
@@ -308,6 +308,10 @@ namespace Capstones.UnityEditorEx.Net
                                         {
                                             return "\"\"";
                                         }
+                                        else if (ftype == ProtobufNativeType.TYPE_BYTES)
+                                        {
+                                            return "Google.Protobuf.ByteString.Empty";
+                                        }
                                         if (FieldType2CSName.TryGetValue(ftype, out typename))
                                         {
                                             if (typename != null)
@@ -356,7 +360,7 @@ namespace Capstones.UnityEditorEx.Net
                                                     sbfile.AppendLine("l.toboolean(-1);");
                                                     break;
                                                 case ProtobufNativeType.TYPE_BYTES:
-                                                    sbfile.AppendLine("l.tolstring(-1);");
+                                                    sbfile.AppendLine("Google.Protobuf.ByteString.CopyFrom(l.tolstring(-1));");
                                                     break;
                                                 case ProtobufNativeType.TYPE_DOUBLE:
                                                 case ProtobufNativeType.TYPE_FIXED32:
@@ -435,7 +439,7 @@ namespace Capstones.UnityEditorEx.Net
                                         //}
                                         else if (ftype == ProtobufNativeType.TYPE_BYTES)
                                         {
-                                            sbfile.AppendLine("                    data." + fname + ".Add(EmptyBuffer);");
+                                            sbfile.AppendLine("                    data." + fname + ".Add(Google.Protobuf.ByteString.Empty);");
                                         }
                                         else
                                         {
@@ -932,6 +936,10 @@ namespace Capstones.UnityEditorEx.Net
                                                 {
                                                     sw.Write(".ConvertField(L)");
                                                 }
+                                                else if (ftype == ProtobufNativeType.TYPE_BYTES)
+                                                {
+                                                    sw.Write(".ToByteArray()");
+                                                }
                                                 sw.WriteLine(";");
                                             }
                                         }
@@ -985,6 +993,10 @@ namespace Capstones.UnityEditorEx.Net
                                                 sw.Write(fname);
                                                 sw.Write(" = ");
                                                 sw.Write(fname);
+                                                if (ftype == ProtobufNativeType.TYPE_BYTES)
+                                                {
+                                                    sw.Write(".ToByteString()");
+                                                }
                                                 sw.WriteLine(";");
                                             }
                                         }
