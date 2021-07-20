@@ -185,8 +185,19 @@ namespace Capstones.LuaLib
                         slot.Doubles.Add(l.tonumber(index));
                         break;
                     case lua.LUA_TSTRING:
-                        slot.Strings.Add(l.GetString(index));
-                        break;
+                        {
+                            var data = l.tolstring(index);
+                            var chars = PlatDependant.GetCharsDataString(data);
+                            if (PlatDependant.ContainUTF8DecodeFailure(chars))
+                            {
+                                slot.RepeatedBytes.Add(data);
+                            }
+                            else
+                            {
+                                slot.Strings.Add(new string(chars));
+                            }
+                            break;
+                        }
                     case lua.LUA_TTABLE:
                         slot.Messages.Add(GetLuaRaw(l, index));
                         break;
@@ -216,8 +227,19 @@ namespace Capstones.LuaLib
                         slot.Double = l.tonumber(index);
                         break;
                     case lua.LUA_TSTRING:
-                        slot.String = l.GetString(index);
-                        break;
+                        {
+                            var data = l.tolstring(index);
+                            var chars = PlatDependant.GetCharsDataString(data);
+                            if (PlatDependant.ContainUTF8DecodeFailure(chars))
+                            {
+                                slot.Bytes = data;
+                            }
+                            else
+                            {
+                                slot.String = new string(chars);
+                            }
+                            break;
+                        }
                     case lua.LUA_TTABLE:
                         {
                             if (l.IsArray(index))
@@ -647,7 +669,7 @@ namespace Capstones.LuaExt
         {
             var l = GlobalLua.L.L;
             Capstones.Net.ProtobufMessage val;
-            l.DoString(out val, "return { field1 = 0, field2 = 'dsadfgdf', field3 = { field1 = 666, field4 = {1,2,3,4,5} } }");
+            l.DoString(out val, "return { field1 = 0, field2 = 'dsadfgdf', field3 = { field1 = 666, field2 = '\\1\\217\\3大家', field3 = '\\1\\2\\3大家', field4 = {1,2,3,4,5} } }");
             UnityEngine.Debug.LogError(val.ToJson());
 
             UnityEngine.Debug.LogError(val["field2"].String);

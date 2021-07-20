@@ -1321,7 +1321,15 @@ namespace Capstones.Net
         {
             if (!Parsed.IsEmpty)
             {
-                return Parsed.Get().ToString();
+                var val = Parsed.Get();
+                if (val is byte[])
+                {
+                    return PlatDependant.FormatDataString((byte[])val);
+                }
+                else
+                {
+                    return Parsed.Get().ToString();
+                }
             }
             else if (!IsValid)
             {
@@ -1329,7 +1337,7 @@ namespace Capstones.Net
             }
             else
             {
-                return string.Format("*RawData[{0}]*", RawData.Count);
+                return string.Format("*RawData[{0}]*{1}", RawData.Count, PlatDependant.FormatJsonString(RawData.ToArray()));
             }
         }
     }
@@ -1338,7 +1346,7 @@ namespace Capstones.Net
         public ListSegment<byte> Raw;
         public override string ToString()
         {
-            return string.Format("*Unknown[{0}]*", Raw == null ? 0 : Raw.Count);
+            return string.Format("*Unknown[{0}]*{1}", Raw == null ? 0 : Raw.Count, PlatDependant.FormatJsonString(Raw.ToArray()));
         }
     }
 
@@ -1664,14 +1672,16 @@ namespace Capstones.Net
             {
                 sb.Append("\"*RawData(");
                 sb.Append(value.RawData.Count);
-                sb.Append(")*\"");
+                sb.Append(")*");
+                sb.Append(PlatDependant.FormatJsonString(value.RawData.ToArray()));
+                sb.Append("\"");
             }
             else
             {
                 var val = value.Parsed.Get();
                 if (val == null)
                 {
-                    ;
+                    sb.Append("null");
                 }
                 if (val is ProtobufMessage)
                 {
@@ -1706,7 +1716,13 @@ namespace Capstones.Net
                 else if (val is string)
                 {
                     sb.Append("\"");
-                    sb.Append((string)val);
+                    sb.Append(PlatDependant.FormatJsonString((string)val));
+                    sb.Append("\"");
+                }
+                else if (val is byte[])
+                {
+                    sb.Append("\"");
+                    sb.Append(PlatDependant.FormatJsonString((byte[])val));
                     sb.Append("\"");
                 }
                 else
@@ -6273,6 +6289,9 @@ namespace Capstones.Net
             sslot.Values.Add(new ProtobufValue { Parsed = 1u });
             sslot.Values.Add(new ProtobufValue { Parsed = 2u });
             sslot.Values.Add(new ProtobufValue { Parsed = 3u });
+            sslot = sub.GetOrCreateSlot(1);
+            sslot.Values.Add(new ProtobufValue { RawData = new ListSegment<byte>(new byte[] { 1, 2, 3 }) });
+
 
             var tmessage = new ProtobufMessage();
             var tslot = tmessage.GetOrCreateSlot(1);
@@ -6282,10 +6301,16 @@ namespace Capstones.Net
             var tsslot = tsub.GetOrCreateSlot(2);
             tsslot.Desc.Name = "floatval";
             tsslot.Desc.Type.KnownType = ProtobufNativeType.TYPE_FLOAT;
+            tsslot = tsub.GetOrCreateSlot(1);
+            tsslot.Desc.Name = "strval";
+            tsslot.Desc.Type.KnownType = ProtobufNativeType.TYPE_BYTES;
 
             message.ApplyTemplate(tmessage);
 
             UnityEngine.Debug.Log(message.ToString());
+
+            var rawdata = message["submessage"]["strval"].Bytes;
+            UnityEngine.Debug.Log(PlatDependant.FormatDataString(rawdata));
 
             float t = message["submessage"]["floatval"][1];
             UnityEngine.Debug.Log(t);
@@ -6302,7 +6327,7 @@ namespace Capstones.Net
         {
             UnityEditor.AssetDatabase.OpenAsset(UnityEditor.AssetDatabase.LoadMainAssetAtPath(ResManager.__ASSET__), ResManager.__LINE__);
 
-            UnityEditor.EditorUtility.OpenWithDefaultApp(new System.Diagnostics.StackTrace(0, true).GetFrame(0).GetFileName());
+            //UnityEditor.EditorUtility.OpenWithDefaultApp(new System.Diagnostics.StackTrace(0, true).GetFrame(0).GetFileName());
 
             var templates = ProtobufMessagePool.ReadTemplates(new ListSegment<byte>(TestDescriptorFileData));
             foreach (var kvp in templates)
