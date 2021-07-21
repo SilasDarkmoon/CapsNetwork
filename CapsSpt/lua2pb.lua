@@ -133,6 +133,7 @@ end
 -- if we have more than one reference to one same table, the following references will be converted like: { i = id, t = "r" }
 -- this will ensure that the encoder (json encoder for example) will not fall into dead recursion.
 -- this should be used on result of lua2pb.extractDataFromTable(tab)
+-- TODO: how to make id stable. (won't change between different machines)
 function lua2pb.convertDataTableToPlain(tab)
     local tab2idinfo = {}
     local nextid = 1
@@ -209,7 +210,7 @@ function lua2pb.convertDataTableToPlain(tab)
 end
 
 -- the string of field keys will be stored in a global array
--- if a table is not an array, it will be like { i = id, t = "o", k = { 1,3,5 }, v = { v1, v2, v3} }. The 1,3,5 in 'k' means the field key is the 1st/3rd/5th string in the global key array.
+-- if a table is not an array, it will be like { i = id, t = "o", k = { 1,3,5 }, v = { v1, v2, v3 } }. The 1,3,5 in 'k' means the field key is the 1st/3rd/5th string in the global key array.
 -- this will decrease the data amount to transfer. this will also ensure the sequence to apply to the receiver lua table object.
 -- this should be used on result of lua2pb.convertDataTableToPlain(tab)
 function lua2pb.convertPlainDataToCompact(tab)
@@ -469,61 +470,62 @@ function lua2pb.decode(raw)
     end
 end
 
-function lua2pb.removeDuplicatedReferenceFromTable(tab)
-    local visited = {}
-    local workList = {}
-    local workIndex = 0
-    local function removeDuplicatedReference()
-        while workIndex <= #workList do
-            local tab = workList[workIndex]
-            workIndex = workIndex + 1
+function lua2pb.cloneDataWithReference(tab)
+    local parsed = {}
+    local function cloneTable(tab)
+        if type(tab) ~= "table" and not table.isudtable(tab) then
+            return tab
+        else
+            local cloned = parsed[tab]
+            if not cloned then
+                cloned = {}
+                parsed[tab] = cloned
 
-            local keys = {}
-            for k, v in pairs(tab) do
-                keys[#keys + 1] = k
-            end
-            table.sort(keys)
-            for i, k in ipairs(keys) do
-                local v = tab[k]
-                if type(v) == "table" or table.isudtable(v) then
-                    if visited[v] then
-                        tab[k] = nil
-                    else
-                        visited[v] = true
-                        workList[#workList + 1] = v
-                    end
+                for k, v in pairs(tab) do
+                    cloned[k] = cloneTable(v)
                 end
             end
+            return cloned
         end
     end
 
-    if type(tab) ~= "table" and not table.isudtable(tab) then
-        return tab
-    else
-        visited[tab] = true
-        workList[1] = tab
-        workIndex = 1
-        removeDuplicatedReference()
-        return tab
-    end
+    return cloneTable(tab)
 end
 
 function lua2pb.extractDiffTable(src, dst)
     -- first we clone the dst and then directly modify the cloned dst and then use the cloned dst as diff.
-    local diff = cloneData(dst)
+    local diff = lua2pb.cloneDataWithReference(dst)
     local parsed = {}
+    local parsed_src = {}
+    local tables_used_as_new_value = {}
     local function extractDiff(src, dst)
         if src == dst then
+            -- in this condition, dst and src can not be tables because dst is a cloned copy
             return nil
         else
             if dst == nil then
                 return "\024"
             elseif type(dst) == "table" or table.isudtable(dst) then
-                if parsed[dst] or type(src) ~= "table" and not table.isudtable(src) then
+                if type(src) ~= "table" and not table.isudtable(src) then
+                    tables_used_as_new_value[dst] = true
+                    return dst
+                    -- in this condition, we do not mark parsed[dst]
+                    -- if it is not referenced by other field, we'd better keep its full data
+                end
+                if parsed[dst] ~= parsed_src[src] then
+                    tables_used_as_new_value[dst] = true
+                    return dst
+                    -- the reference relation is changed...
+                    -- perhaps: src's two field refer same tab but dst's fields refer different tables.
+                    -- perhaps: dst's two field refer same tab but src's fields refer different tables.
+                end
+                if parsed[dst] then
+                    -- this dst table is already checked. 
+                    -- we keep the table and then try to remove it (if it's empty) later in trimEmptyTable
                     return dst
                 end
                 parsed[dst] = true
-                local havechilddiff = false
+                parsed_src[src] = true
                 local isarray = dst[1] ~= nil or not next(dst) and src[1] ~= nil
                 if isarray then
                     local srccount = #src
@@ -573,15 +575,52 @@ function lua2pb.extractDiffTable(src, dst)
         if next(tab) then
             return tab
         else
-            emptytabs[tab] = true
-            return nil
+            if tables_used_as_new_value[tab] then
+                return tab
+            else
+                emptytabs[tab] = true
+                return nil
+            end
         end
     end
 
     local fulldiff = extractDiff(src, diff)
-    local plaindiff = lua2pb.removeDuplicatedReferenceFromTable(fulldiff)
-    local trimeddiff = trimEmptyTable(plaindiff)
+    local trimeddiff = trimEmptyTable(fulldiff)
     return trimeddiff
+end
+
+-- this is a simple diff method. the dst must be plain data (without multi-reference to same table)
+function lua2pb.diffSlim(src, dst)
+    if src == dst then
+        return nil
+    end
+
+    if dst == nil then
+        return "\024"
+    elseif type(dst) == "table" or table.isudtable(dst) then
+        if type(src) ~= "table" and not table.isudtable(src) then
+            return dst
+        end
+
+        local diff = {}
+        local dstkeys = {}
+        for k, v in pairs(dst) do
+            diff[k] = lua2pb.diffSlim(src[k], v)
+            dstkeys[k] = true
+        end
+        for k, v in pairs(src) do
+            if not dstkeys[k] then
+                diff[k] = "\024"
+            end
+        end
+        if next(diff) then
+            return diff
+        else
+            return nil
+        end
+    else
+        return dst
+    end
 end
 
 return lua2pb
