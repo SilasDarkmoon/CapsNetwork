@@ -492,6 +492,7 @@ function lua2pb.cloneDataWithReference(tab)
     return cloneTable(tab)
 end
 
+-- the src and dst can have multi-reference to same table
 function lua2pb.extractDiffTable(src, dst)
     -- first we clone the dst and then directly modify the cloned dst and then use the cloned dst as diff.
     local diff = lua2pb.cloneDataWithReference(dst)
