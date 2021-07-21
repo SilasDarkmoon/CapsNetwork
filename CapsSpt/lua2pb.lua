@@ -133,7 +133,7 @@ end
 -- if we have more than one reference to one same table, the following references will be converted like: { i = id, t = "r" }
 -- this will ensure that the encoder (json encoder for example) will not fall into dead recursion.
 -- this should be used on result of lua2pb.extractDataFromTable(tab)
--- TODO: how to make id stable. (won't change between different machines)
+-- TODO: could we make id stable? (won't change between different machines)
 function lua2pb.convertDataTableToPlain(tab)
     local tab2idinfo = {}
     local nextid = 1
@@ -535,14 +535,23 @@ function lua2pb.extractDiffTable(src, dst)
                         dst[i] = extractDiff(src[i], dst[i])
                     end
                 else
-                    local dstkeys = {}
+                    local allkeys = {}
                     for k, v in pairs(dst) do
-                        dst[k] = extractDiff(src[k], v)
-                        dstkeys[k] = true
+                        allkeys[k] = true
                     end
                     for k, v in pairs(src) do
-                        if not dstkeys[k] then
+                        allkeys[k] = true
+                    end
+                    local allkeysorted = {}
+                    for k, v in pairs(allkeys) do
+                        allkeysorted[#allkeysorted + 1] = k
+                    end
+                    table.sort(allkeysorted)
+                    for i, k in ipairs(allkeysorted) do
+                        if dst[k] == nil then
                             dst[k] = "\024"
+                        else
+                            dst[k] = extractDiff(src[k], dst[k])
                         end
                     end
                 end
