@@ -78,7 +78,7 @@ function lua2pb.extractDataFromTable(tab)
                 for k, v in pairs(tab) do
                     local kt = type(k)
                     local vt = type(v)
-                    if validKeyTypes[kt] and validValTypes[vt] then
+                    if validKeyTypes[kt] and (validValTypes[vt] or table.isudtable(v)) then
                         keyCount = keyCount + 1
                     end
                 end
