@@ -469,4 +469,119 @@ function lua2pb.decode(raw)
     end
 end
 
+function lua2pb.removeDuplicatedReferenceFromTable(tab)
+    local visited = {}
+    local workList = {}
+    local workIndex = 0
+    local function removeDuplicatedReference()
+        while workIndex <= #workList do
+            local tab = workList[workIndex]
+            workIndex = workIndex + 1
+
+            local keys = {}
+            for k, v in pairs(tab) do
+                keys[#keys + 1] = k
+            end
+            table.sort(keys)
+            for i, k in ipairs(keys) do
+                local v = tab[k]
+                if type(v) == "table" or table.isudtable(v) then
+                    if visited[v] then
+                        tab[k] = nil
+                    else
+                        visited[v] = true
+                        workList[#workList + 1] = v
+                    end
+                end
+            end
+        end
+    end
+
+    if type(tab) ~= "table" and not table.isudtable(tab) then
+        return tab
+    else
+        visited[tab] = true
+        workList[1] = tab
+        workIndex = 1
+        removeDuplicatedReference()
+        return tab
+    end
+end
+
+function lua2pb.extractDiffTable(src, dst)
+    -- first we clone the dst and then directly modify the cloned dst and then use the cloned dst as diff.
+    local diff = cloneData(dst)
+    local parsed = {}
+    local function extractDiff(src, dst)
+        if src == dst then
+            return nil
+        else
+            if dst == nil then
+                return "\024"
+            elseif type(dst) == "table" or table.isudtable(dst) then
+                if parsed[dst] or type(src) ~= "table" and not table.isudtable(src) then
+                    return dst
+                end
+                parsed[dst] = true
+                local havechilddiff = false
+                local isarray = dst[1] ~= nil or not next(dst) and src[1] ~= nil
+                if isarray then
+                    local srccount = #src
+                    local dstcount = #dst
+                    local maxcount = math.max(srccount, dstcount)
+                    for i = 1, maxcount do
+                        dst[i] = extractDiff(src[i], dst[i])
+                    end
+                else
+                    local dstkeys = {}
+                    for k, v in pairs(dst) do
+                        dst[k] = extractDiff(src[k], v)
+                        dstkeys[k] = true
+                    end
+                    for k, v in pairs(src) do
+                        if not dstkeys[k] then
+                            dst[k] = "\024"
+                        end
+                    end
+                end
+                return dst
+            else
+                return dst
+            end
+        end
+    end
+
+    local trimed = {}
+    local emptytabs = {}
+    local function trimEmptyTable(tab)
+        if type(tab) ~= "table" and not table.isudtable(tab) then
+            return tab
+        end
+
+        if trimed[tab] then
+            if emptytabs[tab] then
+                return nil
+            else
+                return tab
+            end
+        end
+
+        trimed[tab] = true
+        for k, v in pairs(tab) do
+            tab[k] = trimEmptyTable(v)
+        end
+        if next(tab) then
+            return tab
+        else
+            emptytabs[tab] = true
+            return nil
+        end
+    end
+
+    local fulldiff = extractDiff(src, diff)
+    local plaindiff = lua2pb.removeDuplicatedReferenceFromTable(fulldiff)
+    local trimeddiff = trimEmptyTable(plaindiff)
+    return trimeddiff
+end
+
 return lua2pb
