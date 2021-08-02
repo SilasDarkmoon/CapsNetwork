@@ -755,6 +755,106 @@ namespace Capstones.Net
                 }
             }
         }
+        private class ProtobufParsedStringAccessor : ProtobufParsedValueAccessor<string>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out string val)
+            {
+                if (pval._Type == ProtobufNativeType.TYPE_STRING)
+                {
+                    val = pval._ObjectVal as string;
+                    return true;
+                }
+                else if (pval._Type == ProtobufNativeType.TYPE_BYTES)
+                {
+                    var raw = pval._ObjectVal as byte[];
+                    if (raw == null)
+                    {
+                        val = null;
+                    }
+                    else
+                    {
+                        val = System.Text.Encoding.UTF8.GetString(raw);
+                    }
+                    return true;
+                }
+                else
+                {
+                    val = null;//pval.Get().ToString();
+                    return false;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, string val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_STRING;
+                }
+                if (pval._Type == ProtobufNativeType.TYPE_STRING)
+                {
+                    pval._ObjectVal = val;
+                    return true;
+                }
+                else if (pval._Type == ProtobufNativeType.TYPE_BYTES)
+                {
+                    pval._ObjectVal = System.Text.Encoding.UTF8.GetBytes(val);
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+        }
+        private class ProtobufParsedBytesAccessor : ProtobufParsedValueAccessor<byte[]>
+        {
+            public override bool Get(ref ProtobufParsedValue pval, out byte[] val)
+            {
+                if (pval._Type == ProtobufNativeType.TYPE_BYTES)
+                {
+                    val = pval._ObjectVal as byte[];
+                    return true;
+                }
+                else if (pval._Type == ProtobufNativeType.TYPE_STRING)
+                {
+                    var str = pval._ObjectVal as string;
+                    if (str == null)
+                    {
+                        val = null;
+                    }
+                    else
+                    {
+                        val = System.Text.Encoding.UTF8.GetBytes(str);
+                    }
+                    return true;
+                }
+                else
+                {
+                    val = null;
+                    return false;
+                }
+            }
+            public override bool Set(ref ProtobufParsedValue pval, byte[] val)
+            {
+                if (pval.IsEmpty)
+                {
+                    pval._Type = ProtobufNativeType.TYPE_BYTES;
+                }
+                if (pval._Type == ProtobufNativeType.TYPE_BYTES)
+                {
+                    pval._ObjectVal = val;
+                    return true;
+                }
+                else if (pval._Type == ProtobufNativeType.TYPE_STRING)
+                {
+                    pval._ObjectVal = System.Text.Encoding.UTF8.GetString(val);
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+        }
         private class ProtobufParsedObjectAccessor : IProtobufParsedValueAccessor
         {
             public bool Get(ref ProtobufParsedValue pval, out object val)
@@ -948,6 +1048,8 @@ namespace Capstones.Net
         private static ProtobufParsedUIntPtrAccessor _UIntPtrAccessor = new ProtobufParsedUIntPtrAccessor();
         private static ProtobufParsedSingleAccessor _SingleAccessor = new ProtobufParsedSingleAccessor();
         private static ProtobufParsedDoubleAccessor _DoubleAccessor = new ProtobufParsedDoubleAccessor();
+        private static ProtobufParsedStringAccessor _StringAccessor = new ProtobufParsedStringAccessor();
+        private static ProtobufParsedBytesAccessor _BytesAccessor = new ProtobufParsedBytesAccessor();
         private static Dictionary<Type, IProtobufParsedValueAccessor> _TypedAccessors = new Dictionary<Type, IProtobufParsedValueAccessor>()
         {
             { typeof(bool), _BooleanAccessor },
@@ -963,6 +1065,8 @@ namespace Capstones.Net
             { typeof(UIntPtr), _UIntPtrAccessor },
             { typeof(float), _SingleAccessor },
             { typeof(double), _DoubleAccessor },
+            { typeof(string), _StringAccessor },
+            { typeof(byte[]), _BytesAccessor },
         };
         private static Dictionary<ProtobufNativeType, IProtobufParsedValueAccessor> _NativeAccessors = new Dictionary<ProtobufNativeType, IProtobufParsedValueAccessor>()
         {
@@ -6290,7 +6394,7 @@ namespace Capstones.Net
             sslot.Values.Add(new ProtobufValue { Parsed = 2u });
             sslot.Values.Add(new ProtobufValue { Parsed = 3u });
             sslot = sub.GetOrCreateSlot(1);
-            sslot.Values.Add(new ProtobufValue { RawData = new ListSegment<byte>(new byte[] { 1, 2, 3 }) });
+            sslot.Values.Add(new ProtobufValue { RawData = new ListSegment<byte>(System.Text.Encoding.UTF8.GetBytes("¼×ÒÒ±û")) });
 
 
             var tmessage = new ProtobufMessage();
@@ -6311,6 +6415,8 @@ namespace Capstones.Net
 
             var rawdata = message["submessage"]["strval"].Bytes;
             UnityEngine.Debug.Log(PlatDependant.FormatDataString(rawdata));
+            var strdata = message["submessage"]["strval"].String;
+            UnityEngine.Debug.Log(strdata);
 
             float t = message["submessage"]["floatval"][1];
             UnityEngine.Debug.Log(t);
