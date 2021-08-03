@@ -154,6 +154,7 @@ namespace Capstones.Net
             { String.TypeID, ReadString },
             { Integer.TypeID, ReadInteger },
             { Number.TypeID, ReadNumber },
+            { Control.TypeID, ReadControl },
         };
         public static Dictionary<Type, Func<object, InsertableStream>> PredefinedWriters = new Dictionary<Type, Func<object, InsertableStream>>()
         {
@@ -172,6 +173,7 @@ namespace Capstones.Net
             { typeof(float), WriteRawFloat },
             { typeof(double), WriteRawDouble },
             { typeof(Number), WriteNumber },
+            { typeof(Control), WriteControl },
         };
         public static Dictionary<Type, uint> PredefinedTypeToID = new Dictionary<Type, uint>()
         {
@@ -190,6 +192,7 @@ namespace Capstones.Net
             { typeof(float), Number.TypeID },
             { typeof(double), Number.TypeID },
             { typeof(Number), Number.TypeID },
+            { typeof(Control), Control.TypeID },
         };
         public static Dictionary<uint, Type> PredefinedIDToType = new Dictionary<uint, Type>()
         {
@@ -198,6 +201,7 @@ namespace Capstones.Net
             { String.TypeID, typeof(String) },
             { Integer.TypeID, typeof(Integer) },
             { Number.TypeID, typeof(Number) },
+            { Control.TypeID, typeof(Control) },
         };
 
         [ThreadStatic] private static InsertableStream _CommonWriterBuffer;
@@ -217,6 +221,7 @@ namespace Capstones.Net
                 return buffer;
             }
         }
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
         [ThreadStatic] private static IPooledBuffer _RawBuffer;
         public static byte[] GetRawBuffer(int cnt)
         {
@@ -240,6 +245,12 @@ namespace Capstones.Net
             _RawBuffer = buffer = BufferPool.GetBufferFromPool(cnt);
             return buffer.Buffer;
         }
+#else
+        public static byte[] GetRawBuffer(int cnt)
+        {
+            return new byte[cnt];
+        }
+#endif
 
         public static object ReadError(uint type, InsertableStream buffer, int offset, int cnt)
         {
@@ -655,6 +666,86 @@ namespace Capstones.Net
             }
             return WriteRawDouble(real.Message);
         }
+        public static object ReadControl(uint type, InsertableStream buffer, int offset, int cnt)
+        {
+            if (type != Control.TypeID)
+            {
+                PlatDependant.LogError("ReadControl - not a control - type " + type);
+                return null;
+            }
+            try
+            {
+                byte[] raw = GetRawBuffer(4);
+                for (int i = 0; i < 4; ++i)
+                {
+                    raw[i] = 0;
+                }
+                buffer.Seek(offset, SeekOrigin.Begin);
+                buffer.Read(raw, 0, Math.Min(4, cnt));
+                if (!BitConverter.IsLittleEndian)
+                {
+                    for (int i = 0; i < 2; ++i)
+                    {
+                        byte temp = raw[i];
+                        raw[i] = raw[3 - i];
+                        raw[3 - i] = temp;
+                    }
+                }
+                uint code = BitConverter.ToUInt32(raw, 0);
+                int remain = cnt - 4;
+                remain = Math.Max(remain, 0);
+                raw = GetRawBuffer(remain);
+                buffer.Read(raw, 0, remain);
+                string str = null;
+                try
+                {
+                    str = System.Text.Encoding.UTF8.GetString(raw);
+                }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
+                return new Control() { Code = code, Command = str };
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+                return null;
+            }
+        }
+        public static InsertableStream WriteControl(object data)
+        {
+            var real = data as Control;
+            if (real == null)
+            {
+                PlatDependant.LogError("WriteControl - not a control - " + data);
+                return null;
+            }
+            var buffer = CommonWriterBuffer;
+            buffer.Clear();
+            var code = real.Code;
+            buffer.WriteByte((byte)(code & 0xFFU));
+            buffer.WriteByte((byte)((code & (0xFFU << 8)) >> 8));
+            buffer.WriteByte((byte)((code & (0xFFU << 16)) >> 16));
+            buffer.WriteByte((byte)((code & (0xFFU << 24)) >> 24));
+            var command = real.Command;
+            if (command == null)
+            {
+                command = "";
+            }
+            try
+            {
+                var cnt = System.Text.Encoding.UTF8.GetByteCount(command);
+                var raw = GetRawBuffer(cnt);
+                System.Text.Encoding.UTF8.GetBytes(command, 0, command.Length, raw, 0);
+                buffer.Write(raw, 0, cnt);
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+            }
+            return buffer;
+        }
 
         public class Error
         {
@@ -680,6 +771,12 @@ namespace Capstones.Net
         {
             public const uint TypeID = unchecked((uint)-5);
             public double Message;
+        }
+        public class Control
+        {
+            public const uint TypeID = unchecked((uint)-6);
+            public uint Code;
+            public string Command;
         }
 
         private static Raw _Empty = new Raw();
