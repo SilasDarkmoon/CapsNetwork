@@ -308,7 +308,7 @@ namespace Capstones.Net
                 var pending = new PendingRead()
                 {
                     Type = type,
-                    Obj = _Serializer.Formatter.Read(type, buffer, 0, size, exFlags),
+                    Obj = _Serializer.Formatter.ReadOrUnknown(type, buffer, 0, size, exFlags),
                     Seq = seq,
                     SSeq = sseq,
                 };

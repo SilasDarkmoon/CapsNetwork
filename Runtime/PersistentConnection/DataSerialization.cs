@@ -117,6 +117,10 @@ namespace Capstones.Net
             {
                 return 0;
             }
+            else if (data is PredefinedMessages.Unknown)
+            {
+                return ((PredefinedMessages.Unknown)data).TypeID;
+            }
             uint rv;
             _TypeToID.TryGetValue(data.GetType(), out rv);
             return rv;
@@ -142,6 +146,11 @@ namespace Capstones.Net
                 return reader(type, buffer, offset, cnt);
             }
             return null;
+        }
+
+        public virtual object ReadOrUnknown(uint type, InsertableStream buffer, int offset, int cnt, object exFlags)
+        {
+            return Read(type, buffer, offset, cnt, exFlags) ?? PredefinedMessages.ReadUnknown(type, buffer, offset, cnt);
         }
     }
 
@@ -174,6 +183,7 @@ namespace Capstones.Net
             { typeof(double), WriteRawDouble },
             { typeof(Number), WriteNumber },
             { typeof(Control), WriteControl },
+            { typeof(Unknown), WriteUnknown },
         };
         public static Dictionary<Type, uint> PredefinedTypeToID = new Dictionary<Type, uint>()
         {
@@ -666,6 +676,7 @@ namespace Capstones.Net
             }
             return WriteRawDouble(real.Message);
         }
+
         public static object ReadControl(uint type, InsertableStream buffer, int offset, int cnt)
         {
             if (type != Control.TypeID)
@@ -747,36 +758,125 @@ namespace Capstones.Net
             return buffer;
         }
 
+        public static object ReadUnknown(uint type, InsertableStream buffer, int offset, int cnt)
+        {
+            try
+            {
+                byte[] raw = new byte[cnt]; // because this is exposed to outter caller, so we new the raw buffer.
+                buffer.Seek(offset, SeekOrigin.Begin);
+                buffer.Read(raw, 0, cnt);
+                return new Unknown() { TypeID = type, Message = raw };
+            }
+            catch (Exception e)
+            {
+                PlatDependant.LogError(e);
+                return null;
+            }
+        }
+        public static InsertableStream WriteUnknown(object data)
+        {
+            var real = data as Unknown;
+            if (real == null)
+            {
+                PlatDependant.LogError("WriteUnknown - not a Unknown - " + data);
+                return null;
+            }
+            return WriteRawRaw(real.Message);
+        }
+
         public class Error
         {
             public const uint TypeID = unchecked((uint)-1);
             public string Message;
+
+            public Error() { }
+            public Error(string message) { Message = message; }
+
+            public override string ToString()
+            {
+                return "(Error)" + (Message ?? "null");
+            }
         }
         public class Raw
         {
             public const uint TypeID = unchecked((uint)-2);
             public byte[] Message;
+
+            public Raw() { }
+            public Raw(byte[] message) { Message = message; }
+
+            public override string ToString()
+            {
+                return "(Raw)" + (Message == null ? "null" : Message.Length.ToString());
+            }
         }
         public class String
         {
             public const uint TypeID = unchecked((uint)-3);
             public string Message;
+
+            public String() { }
+            public String(string message) { Message = message; }
+
+            public override string ToString()
+            {
+                return Message;
+            }
         }
         public class Integer
         {
             public const uint TypeID = unchecked((uint)-4);
             public long Message;
+
+            public Integer() { }
+            public Integer(long message) { Message = message; }
+
+            public override string ToString()
+            {
+                return Message.ToString();
+            }
         }
         public class Number
         {
             public const uint TypeID = unchecked((uint)-5);
             public double Message;
+
+            public Number() { }
+            public Number(double message) { Message = message; }
+
+            public override string ToString()
+            {
+                return Message.ToString();
+            }
         }
         public class Control
         {
             public const uint TypeID = unchecked((uint)-6);
             public uint Code;
             public string Command;
+
+            public Control() { }
+            public Control(uint code) { Code = code; }
+            public Control(string command) { Command = command; }
+            public Control(uint code, string command) : this(code) { Command = command; }
+
+            public override string ToString()
+            {
+                return "(Code)" + Code + ", (Command)" + (Command ?? "null");
+            }
+        }
+        public class Unknown
+        {
+            public uint TypeID;
+            public byte[] Message;
+
+            public Unknown() { }
+            public Unknown(uint type, byte[] message) { TypeID = type; Message = message; }
+
+            public override string ToString()
+            {
+                return "(Type)" + TypeID + ", (Unknown)" + (Message == null ? "null" : Message.Length.ToString());
+            }
         }
 
         private static Raw _Empty = new Raw();
