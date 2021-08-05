@@ -277,7 +277,7 @@ namespace Capstones.Net
                 string str = null;
                 try
                 {
-                    str = System.Text.Encoding.UTF8.GetString(raw);
+                    str = System.Text.Encoding.UTF8.GetString(raw, 0, cnt);
                 }
                 catch (Exception e)
                 {
@@ -366,7 +366,7 @@ namespace Capstones.Net
                 string str = null;
                 try
                 {
-                    str = System.Text.Encoding.UTF8.GetString(raw);
+                    str = System.Text.Encoding.UTF8.GetString(raw, 0, cnt);
                 }
                 catch (Exception e)
                 {
@@ -710,7 +710,7 @@ namespace Capstones.Net
                 string str = null;
                 try
                 {
-                    str = System.Text.Encoding.UTF8.GetString(raw);
+                    str = System.Text.Encoding.UTF8.GetString(raw, 0, remain);
                 }
                 catch (Exception e)
                 {
