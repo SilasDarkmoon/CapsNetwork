@@ -1,5 +1,6 @@
 local pb = require("pb")
 pb.option("enum_as_value")
+pb.option("encode_ordered")
 pb.load(require("protocols.LuaTransfer"))
 
 local validKeyTypes = {
