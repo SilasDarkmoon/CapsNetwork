@@ -72,7 +72,11 @@ namespace Capstones.LuaLib
 #if UNITY_IPHONE && !UNITY_EDITOR
             public const string LIB_PATH = "__Internal";
 #else
+#if DLLIMPORT_NAME_FULL
+            public const string LIB_PATH = "libLuaProtobuf.so";
+#else
             public const string LIB_PATH = "LuaProtobuf";
+#endif
 #endif
             static LuaProtobufNative()
             {
@@ -84,7 +88,10 @@ namespace Capstones.LuaLib
                 {
                     InitFunc = InitLuaProtobufPlugin;
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    PlatDependant.LogError(e);
+                }
             }
 
             [DllImport(LIB_PATH, CallingConvention = CallingConvention.Cdecl)]
