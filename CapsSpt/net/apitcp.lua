@@ -49,7 +49,7 @@ function api.TcpReconnect()
     print("retry tcp connect: "..reconnectCount)
     if reconnectCount >= 3 then
         clr.coroutine(function()
-            local waithandle = req.defaultOnFailed({ failed = "tcp_retry", msg = "tcp_retry" })
+            local waithandle = req.defaultOnFailed({ failed = "tcp_retry", msg = clr.transstr("tcp_retry") })
             if waithandle then
                 while not waithandle.done do
                     coroutine.yield()
