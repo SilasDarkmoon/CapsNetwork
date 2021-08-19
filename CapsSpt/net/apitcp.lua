@@ -85,6 +85,10 @@ function api.TcpConnect()
     CarbonMessageUtils.OnClose(api.tcpClient, api.TcpReconnect)
     CarbonMessageUtils.OnJson(api.tcpClient, OnTcpMessage)
     CarbonMessageUtils.SendToken(api.tcpClient, token)
+
+    if api.OnTcpConnected then
+        api.OnTcpConnected()
+    end
 end
 
 function api.RegTcpMessageHandler(handler, messagetype)

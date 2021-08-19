@@ -955,6 +955,94 @@ namespace Capstones.Net
                 }
             }
         }
+        public class CarbonMessageOnCloseHandler
+        {
+            private IReqClient _Client;
+            public CarbonMessageOnCloseHandler(IReqClient client)
+            {
+                _Client = client;
+            }
+
+            private event Action _OnConnectionClose;
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+            private event Action _OnConnectionClose_MainThread;
+#endif
+            private void TrigConnectionClose()
+            {
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+                {
+                    var func = _OnConnectionClose_MainThread;
+                    if (func != null)
+                    {
+                        UnityThreadDispatcher.RunInUnityThread(func);
+                    }
+                }
+#endif
+                {
+                    var func = _OnConnectionClose;
+                    if (func != null)
+                    {
+                        func();
+                    }
+                }
+            }
+            public event Action OnConnectionClose
+            {
+                add
+                {
+                    var handler = _Client.GetAttachment("MessageHandler") as CarbonMessageHandler;
+                    if (handler != null)
+                    {
+                        if (handler.OnClose != TrigConnectionClose)
+                        {
+                            if (handler.OnClose != null)
+                            {
+                                _OnConnectionClose += handler.OnClose;
+                            }
+                            handler.OnClose = TrigConnectionClose;
+                        }
+                    }
+
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+                    if (ThreadSafeValues.IsMainThread)
+                    {
+                        _OnConnectionClose_MainThread += value;
+                    }
+                    else
+#endif
+                    {
+                        _OnConnectionClose += value;
+                    }
+                }
+                remove
+                {
+                    var handler = _Client.GetAttachment("MessageHandler") as CarbonMessageHandler;
+                    if (handler != null)
+                    {
+                        if (handler.OnClose == value)
+                        {
+                            handler.OnClose = null;
+                        }
+                    }
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+                    _OnConnectionClose_MainThread -= value;
+#endif
+                    _OnConnectionClose -= value;
+                }
+            }
+            public void Clear()
+            {
+                var handler = _Client.GetAttachment("MessageHandler") as CarbonMessageHandler;
+                if (handler != null)
+                {
+                    handler.OnClose = null;
+                }
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+                _OnConnectionClose_MainThread = null;
+#endif
+                _OnConnectionClose = null;
+            }
+        }
 
         public static readonly ConnectionFactory.ConnectionConfig ConnectionConfig = new ConnectionFactory.ConnectionConfig()
         {
@@ -981,6 +1069,7 @@ namespace Capstones.Net
                 //    return null;
                 //}),
                 new ConnectionFactory.ClientAttachmentCreator("MessageHandler", client => new CarbonMessageHandler(client)),
+                new ConnectionFactory.ClientAttachmentCreator("OnCloseHandler", client => new CarbonMessageOnCloseHandler(client)),
             },
         };
         public static readonly ConnectionFactory.ConnectionConfig HostedPVPConnectionConfig = new ConnectionFactory.ConnectionConfig()
@@ -1143,30 +1232,57 @@ namespace Capstones.Net
 
         public static void OnClose(ReqClient client, Action onClose)
         {
-            var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
-            if (handler != null)
+            ClearOnClose(client);
+            if (onClose != null)
             {
-#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
-                if (onClose == null)
-                {
-                    handler.OnClose = null;
-                }
-                else
-                {
-                    if (ThreadSafeValues.IsMainThread)
-                    {
-                        handler.OnClose = () => UnityThreadDispatcher.RunInUnityThread(onClose);
-                    }
-                    else
-                    {
-                        handler.OnClose = onClose;
-                    }
-                }
-#else
-                handler.OnClose = onClose;
-#endif
+                AddOnClose(client, onClose);
             }
         }
+        public static void AddOnClose(ReqClient client, Action onClose)
+        {
+            var handler = client.GetAttachment("OnCloseHandler") as CarbonMessageOnCloseHandler;
+            if (handler != null)
+            {
+                handler.OnConnectionClose += onClose;
+            }
+        }
+        public static void RemoveOnClose(ReqClient client, Action onClose)
+        {
+            var handler = client.GetAttachment("OnCloseHandler") as CarbonMessageOnCloseHandler;
+            if (handler != null)
+            {
+                handler.OnConnectionClose -= onClose;
+            }
+        }
+        public static void ClearOnClose(ReqClient client)
+        {
+            var handler = client.GetAttachment("OnCloseHandler") as CarbonMessageOnCloseHandler;
+            if (handler != null)
+            {
+                handler.Clear();
+            }
+        }
+
+        public static event Action OnCarbonConnectionClose
+        {
+            add
+            {
+                var con = _CarbonPushConnection;
+                if (con != null)
+                {
+                    AddOnClose(con, value);
+                }
+            }
+            remove
+            {
+                var con = _CarbonPushConnection;
+                if (con != null)
+                {
+                    RemoveOnClose(con, value);
+                }
+            }
+        }
+
         public static void OnMessage(ReqClient client, Action<short, int, object> onMessage)
         {
             var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
