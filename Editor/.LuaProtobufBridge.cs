@@ -644,6 +644,7 @@ namespace Capstones.LuaExt
                 l.newtable(); // ud
                 SetDataRaw(l, -1, val);
             }
+            public int LuaType { get { return lua.LUA_TTABLE; } }
 
             public static readonly LuaNativeProtocol<T> LuaHubNative = new LuaNativeProtocol<T>();
         }
