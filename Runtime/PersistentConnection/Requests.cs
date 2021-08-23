@@ -1442,10 +1442,15 @@ namespace Capstones.Net
             {
                 return null;
             }
+            var seq = _Channel.Write(reqobj);
+            if (seq == 0)
+            {
+                return null;
+            }
             var req = new Request(this, reqobj);
             req.Timeout = timeout;
+            req.Seq = seq;
             _PendingReq.Enqueue(req);
-            req.Seq = _Channel.Write(reqobj);
             return req;
         }
         public override void SendRawResponse(IReqClient to, object response, uint seq_pingback)
