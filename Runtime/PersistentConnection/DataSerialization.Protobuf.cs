@@ -967,5 +967,13 @@ namespace Capstones.Net
             }
             return null;
         }
+        public override bool CanWrite(object data)
+        {
+            if (base.CanWrite(data))
+            {
+                return true;
+            }
+            return data is Google.Protobuf.IMessage;
+        }
     }
 }

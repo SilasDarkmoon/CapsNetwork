@@ -488,6 +488,11 @@ namespace Capstones.Net
         }
         public uint Write(object obj, uint seq_pingback, uint flags)
         {
+            var rw = _Serializer.Formatter;
+            if (!rw.CanWrite(obj))
+            {
+                return 0;
+            }
             // seq
             uint seq = 0, sseq = 0;
             uint thisseq;
@@ -504,7 +509,6 @@ namespace Capstones.Net
             if (!_SerializeInConnectionThread)
             {
                 // type
-                var rw = _Serializer.Formatter;
                 var type = rw.GetDataType(obj);
                 var exFlags = rw.GetExFlags(obj);
                 // write obj

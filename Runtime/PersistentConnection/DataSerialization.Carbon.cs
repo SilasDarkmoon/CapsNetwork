@@ -651,6 +651,18 @@ namespace Capstones.Net
                 return base.Write(data);
             }
         }
+        public override bool CanWrite(object data)
+        {
+            CarbonMessage carbonmess = data as CarbonMessage;
+            if (carbonmess != null)
+            {
+                return true;
+            }
+            else
+            {
+                return base.CanWrite(data);
+            }
+        }
         public override object Read(uint type, InsertableStream buffer, int offset, int cnt, object exFlags)
         {
             var carbonFlags = exFlags as CarbonExFlags;
