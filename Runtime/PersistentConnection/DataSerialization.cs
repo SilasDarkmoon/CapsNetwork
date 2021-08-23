@@ -151,6 +151,19 @@ namespace Capstones.Net
             }
             return false;
         }
+        public virtual bool IsOrdered(object data)
+        {
+            if (data == null)
+            {
+                return false;
+            }
+            Func<object, InsertableStream> writer;
+            if (_TypedWriters.TryGetValue(data.GetType(), out writer))
+            {
+                return true;
+            }
+            return false;
+        }
         public virtual object Read(uint type, InsertableStream buffer, int offset, int cnt, object exFlags)
         {
             Func<uint, InsertableStream, int, int, object> reader;

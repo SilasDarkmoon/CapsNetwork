@@ -975,5 +975,13 @@ namespace Capstones.Net
             }
             return data is Google.Protobuf.IMessage;
         }
+        public override bool IsOrdered(object data)
+        {
+            if (base.IsOrdered(data))
+            {
+                return true;
+            }
+            return data is Google.Protobuf.IMessage;
+        }
     }
 }

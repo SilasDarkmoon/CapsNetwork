@@ -495,16 +495,19 @@ namespace Capstones.Net
             }
             // seq
             uint seq = 0, sseq = 0;
-            uint thisseq;
-            if (IsServer)
+            uint thisseq = 0;
+            if (rw.IsOrdered(obj))
             {
-                seq = seq_pingback;
-                sseq = thisseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
-            }
-            else
-            {
-                seq = thisseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
-                sseq = seq_pingback;
+                if (IsServer)
+                {
+                    seq = seq_pingback;
+                    sseq = thisseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
+                }
+                else
+                {
+                    seq = thisseq = (uint)Interlocked.Increment(ref _NextSeq) - 1;
+                    sseq = seq_pingback;
+                }
             }
             if (!_SerializeInConnectionThread)
             {

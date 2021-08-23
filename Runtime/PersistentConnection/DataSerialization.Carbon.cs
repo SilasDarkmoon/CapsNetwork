@@ -663,6 +663,18 @@ namespace Capstones.Net
                 return base.CanWrite(data);
             }
         }
+        public override bool IsOrdered(object data)
+        {
+            CarbonMessage carbonmess = data as CarbonMessage;
+            if (carbonmess != null)
+            {
+                return false;
+            }
+            else
+            {
+                return base.IsOrdered(data);
+            }
+        }
         public override object Read(uint type, InsertableStream buffer, int offset, int cnt, object exFlags)
         {
             var carbonFlags = exFlags as CarbonExFlags;
