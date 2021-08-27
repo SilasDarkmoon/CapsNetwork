@@ -68,6 +68,13 @@ namespace Capstones.Net
             //    CoroutineRunner.StartCoroutine(_Req.WaitForDone());
             //}
         }
+        protected class IgnoredCertVerifier : CertificateHandler
+        {
+            protected override bool ValidateCertificate(byte[] certificateData)
+            {
+                return true;
+            }
+        }
 
         protected System.IO.Stream _FinalDestStream;
         protected ulong _DestStartOffset = 0;
@@ -205,6 +212,9 @@ namespace Capstones.Net
                 }
 
                 _InnerReq.downloadHandler = new DownloadHandler(this);
+#if DISABLE_HTTPS_CERT_VERIFY
+                _InnerReq.certificateHandler = new IgnoredCertVerifier();
+#endif
 
                 _InnerReq.disposeUploadHandlerOnDispose = true;
                 _InnerReq.disposeDownloadHandlerOnDispose = true;
