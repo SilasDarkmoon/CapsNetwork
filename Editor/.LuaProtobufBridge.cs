@@ -557,7 +557,7 @@ namespace Capstones.LuaExt
         }
         internal static ProtobufTrans _ProtobufTrans = new ProtobufTrans();
 
-        public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubValueTypePrecompiled<T>, ILuaNative where T : new()
+        public class TypeHubProtocolPrecompiled<T> : Capstones.LuaLib.LuaTypeHub.TypeHubClonedValuePrecompiled<T>, ILuaNative where T : new()
         {
             public override bool Nonexclusive { get { return true; } }
             public override IntPtr PushLua(IntPtr l, object val)
@@ -572,14 +572,6 @@ namespace Capstones.LuaExt
             public override object GetLuaObject(IntPtr l, int index)
             {
                 return GetLuaRaw(l, index);
-            }
-            public static T GetLuaChecked(IntPtr l, int index)
-            {
-                if (l.istable(index))
-                {
-                    return GetLuaRaw(l, index);
-                }
-                return default(T);
             }
 
             public override IntPtr PushLua(IntPtr l, T val)

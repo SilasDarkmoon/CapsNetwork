@@ -746,9 +746,9 @@ namespace Capstones.UnityEditorEx.Net
                                             sw.Write(" val)");
                                             sw.WriteLine();
                                             sw.WriteLine("        {");
-                                            sw.Write("            val = Capstones.LuaExt.LuaProtobufBridge.TypeHubProtocolPrecompiled<");
-                                            sw.Write(minfo.FullCSharpName);
-                                            sw.Write(">.GetLuaChecked(l, index);");
+                                            sw.Write("            val = ___tp_");
+                                            sw.Write(typepart);
+                                            sw.Write(".TypeHubSub.GetLuaChecked(l, index);");
                                             sw.WriteLine();
                                             sw.WriteLine("        }");
                                         }
