@@ -718,6 +718,33 @@ namespace Capstones.UnityEditorEx.Net
                                             sw.Write(".TypeHubSub.GetLuaChecked(l, index);");
                                             sw.WriteLine();
                                             sw.WriteLine("        }");
+
+                                            sw.Write("        public static void PushLua(this IntPtr l, ");
+                                            sw.Write(minfo.FullCSharpName);
+                                            sw.Write("? val)");
+                                            sw.WriteLine();
+                                            sw.WriteLine("        {");
+                                            sw.WriteLine("            if (val == null)");
+                                            sw.WriteLine("                l.pushnil();");
+                                            sw.WriteLine("            else");
+                                            sw.Write("                ___tp_");
+                                            sw.Write(typepart);
+                                            sw.Write(".TypeHubSub.LuaHubNative.PushLua(l, val.Value);");
+                                            sw.WriteLine();
+                                            sw.WriteLine("        }");
+                                            sw.Write("        public static void GetLua(this IntPtr l, int index, out ");
+                                            sw.Write(minfo.FullCSharpName);
+                                            sw.Write("? val)");
+                                            sw.WriteLine();
+                                            sw.WriteLine("        {");
+                                            sw.WriteLine("            if (l.isnoneornil(index))");
+                                            sw.WriteLine("                val = null;");
+                                            sw.WriteLine("            else");
+                                            sw.Write("                val = ___tp_");
+                                            sw.Write(typepart);
+                                            sw.Write(".TypeHubSub.GetLuaChecked(l, index);");
+                                            sw.WriteLine();
+                                            sw.WriteLine("        }");
                                         }
                                         else
                                         {
