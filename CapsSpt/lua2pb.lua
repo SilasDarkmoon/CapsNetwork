@@ -634,4 +634,43 @@ function lua2pb.diffSlim(src, dst)
     end
 end
 
+-- delete messageName and 0 and {}
+function lua2pb.trimDataTable(tab)
+    if type(tab) == "table" or table.isudtable(tab) then
+        local function shouldTrim(k, v)
+            if k == "messageName" then
+                return true
+            end
+            if v == 0 then
+                return true
+            end
+            if type(v) == "table" or table.isudtable(v) then
+                if not next(v) then
+                    return true
+                end
+            end
+        end
+        local visited = {}
+        local function trimTable(tab)
+            if visited[tab] then
+                return
+            end
+            visited[tab] = true
+            for k, v in pairs(tab) do
+                if shouldTrim(k, v) then
+                    tab[k] = nil
+                else
+                    if type(v) == "table" or table.isudtable(v) then
+                        trimTable(v)
+                    end
+                end
+            end
+        end
+        trimTable(tab)
+        return tab
+    else
+        return tab
+    end
+end
+
 return lua2pb
