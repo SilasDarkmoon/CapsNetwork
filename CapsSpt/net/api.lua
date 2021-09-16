@@ -321,26 +321,34 @@ function api.result(request, timedoutInLua)
                 end
             else
                 msg = request.www:ParseResponseText(request.token, request.seq)
+                local datamt = getmetatable(request.pdata)
                 local tab = json.decode(msg)
                 if type(tab) ~= 'table' then
-                    failed = true
-                    event = "none"
-                    msg = clr.transstr(msg)
+                    dump(msg, "Response #"..request.seq)
+                    if datamt and datamt.rawpost then
+                        request.val = msg
+                    else
+                        failed = true
+                        event = "none"
+                        msg = clr.transstr(msg)
+                    end
                 else
                     dump(tab, "Response #"..request.seq)
-                    local datamt = getmetatable(request.pdata)
                     if datamt and datamt.rawpost then
                         request.val = tab
-                        msg = tab and clr.transstr(tab.tips) or clr.transstr('server_refuse', failed)
+                        msg = tab.tips and clr.transstr(tab.tips) or clr.transstr('server_no_message')
                     else
                         local type = tab.type and tonumber(tab.type)
                         if type and type <= 0 then
                             if type == 0 then
                                 failed = true
+                                if tab.tips then
+                                    failed = tab.tips
+                                end
                             else
                                 failed = type
                             end
-                            msg = clr.transstr(tab.tips) or tab.tips or clr.transstr('server_refuse', failed)
+                            msg = tab.tips and clr.transstr(tab.tips) or clr.transstr('server_refuse', failed)
                             -- msg = msg .. "\n" .. tab.traceIdentifier
                         end
                         request.val = tab.d
