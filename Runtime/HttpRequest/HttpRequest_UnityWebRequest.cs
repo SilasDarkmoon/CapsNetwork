@@ -417,6 +417,7 @@ namespace Capstones.Net
                 {
                     _InnerReq.Abort();
                     _InnerReq.Dispose();
+                    _InnerReq = null; // https://forum.unity.com/threads/argumentnullexception-appear-randomly-in-unitywebrequest.541629/
                 }
                 _ReceiveStream.Dispose();
                 _Error = "cancelled";
