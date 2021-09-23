@@ -275,32 +275,35 @@ namespace Capstones.Net
             {
                 if (_RangeEnabled && _InnerReq != null && _InnerReq.isHttpError && _InnerReq.responseCode == (int)HttpStatusCode.RequestedRangeNotSatisfiable) // 416
                 {
-                    PlatDependant.LogError("Server does not support Range.");
-                    try
-                    {
-                        _RangeEnabled = false;
-                        _Status = HttpRequestStatus.NotStarted;
-                        if (_DestStream != null)
-                        {
-                            _DestStream.Seek(0, SeekOrigin.Begin);
-                            _DestStream.SetLength(0);
-                        }
-                        if (!ToExternal && _FinalDestStream != null)
-                        {
-                            _FinalDestStream.Dispose();
-                        }
-                        if (_ReceiveStream != null)
-                        {
-                            _ReceiveStream.Dispose();
-                        }
-                        _ReceiveStream = new BidirectionMemStream();
-                        StartRequest();
-                        return;
-                    }
-                    catch (Exception e) { }
-                }
+                    //PlatDependant.LogError("Server does not support Range.");
+                    //try
+                    //{
+                    //    _RangeEnabled = false;
+                    //    _Status = HttpRequestStatus.NotStarted;
+                    //    if (_DestStream != null)
+                    //    {
+                    //        _DestStream.Seek(0, SeekOrigin.Begin);
+                    //        _DestStream.SetLength(0);
+                    //    }
+                    //    if (!ToExternal && _FinalDestStream != null)
+                    //    {
+                    //        _FinalDestStream.Dispose();
+                    //    }
+                    //    if (_ReceiveStream != null)
+                    //    {
+                    //        _ReceiveStream.Dispose();
+                    //    }
+                    //    _ReceiveStream = new BidirectionMemStream();
+                    //    StartRequest();
+                    //    return;
+                    //}
+                    //catch (Exception e) { }
 
-                if (_Error == null)
+                    // Normally this is a fully downloaded file.
+                    _InnerReq.Dispose();
+                    _InnerReq = null; // https://forum.unity.com/threads/argumentnullexception-appear-randomly-in-unitywebrequest.541629/
+                }
+                else if (_Error == null)
                 {
                     if (_InnerReq == null)
                     {
@@ -430,6 +433,7 @@ namespace Capstones.Net
                             }
                         }
                         _InnerReq.Dispose();
+                        _InnerReq = null; // https://forum.unity.com/threads/argumentnullexception-appear-randomly-in-unitywebrequest.541629/
                     }
                 }
 

@@ -393,6 +393,43 @@ namespace Capstones.Net
                                             rangeRespFound = true;
                                         }
                                     }
+                                    else if (key.ToLower() == "content-range")
+                                    {
+                                        rangeRespFound = true;
+                                        //var headerval = resp.Headers[key].ToLower();
+                                        //if (string.IsNullOrEmpty(headerval))
+                                        //{
+                                        //    rangeRespFound = false;
+                                        //}
+                                        //else
+                                        //{
+                                        //    var parts = headerval.Split(new[] { ' ', '-', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                                        //    if (parts.Length < 1)
+                                        //    {
+                                        //        rangeRespFound = false;
+                                        //    }
+                                        //    else if (parts[0] != "bytes")
+                                        //    {
+                                        //        rangeRespFound = false;
+                                        //    }
+                                        //    else if (parts.Length > 1)
+                                        //    {
+                                        //        ulong respstart;
+                                        //        if (!ulong.TryParse(parts[1], out respstart))
+                                        //        {
+                                        //            rangeRespFound = false;
+                                        //        }
+                                        //        else if (respstart != _DestStartOffset)
+                                        //        {
+                                        //            rangeRespFound = false;
+                                        //        }
+                                        //    }
+                                        //}
+                                        //if (!rangeRespFound)
+                                        //{
+                                        //    break;
+                                        //}
+                                    }
                                 }
                                 if (!rangeRespFound)
                                 {
@@ -604,17 +641,20 @@ namespace Capstones.Net
                     {
                         if (we.Response is System.Net.HttpWebResponse && ((System.Net.HttpWebResponse)we.Response).StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable) // 416
                         {
-                            try
-                            {
-                                _RangeEnabled = false;
-                                if (_DestStream != null)
-                                {
-                                    _DestStream.Seek(0, SeekOrigin.Begin);
-                                    _DestStream.SetLength(0);
-                                }
-                                RequestWork(state);
-                            }
-                            catch (Exception e) { }
+                            //try
+                            //{
+                            //    _RangeEnabled = false;
+                            //    if (_DestStream != null)
+                            //    {
+                            //        _DestStream.Seek(0, SeekOrigin.Begin);
+                            //        _DestStream.SetLength(0);
+                            //    }
+                            //    RequestWork(state);
+                            //}
+                            //catch (Exception e) { }
+
+                            // Normally this is a fully downloaded file.
+                            _Error = null;
                         }
                         else if (we.Response is System.Net.HttpWebResponse)
                         {
