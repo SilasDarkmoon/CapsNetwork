@@ -343,6 +343,43 @@ namespace Capstones.Net
                                             rangeRespFound = true;
                                         }
                                     }
+                                    else if (key.ToLower() == "content-range")
+                                    {
+                                        rangeRespFound = true;
+                                        //var headerval = rawHeaders[key].ToLower();
+                                        //if (string.IsNullOrEmpty(headerval))
+                                        //{
+                                        //    rangeRespFound = false;
+                                        //}
+                                        //else
+                                        //{
+                                        //    var parts = headerval.Split(new[] { ' ', '-', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                                        //    if (parts.Length < 1)
+                                        //    {
+                                        //        rangeRespFound = false;
+                                        //    }
+                                        //    else if (parts[0] != "bytes")
+                                        //    {
+                                        //        rangeRespFound = false;
+                                        //    }
+                                        //    else if (parts.Length > 1)
+                                        //    {
+                                        //        ulong respstart;
+                                        //        if (!ulong.TryParse(parts[1], out respstart))
+                                        //        {
+                                        //            rangeRespFound = false;
+                                        //        }
+                                        //        else if (respstart != _DestStartOffset)
+                                        //        {
+                                        //            rangeRespFound = false;
+                                        //        }
+                                        //    }
+                                        //}
+                                        //if (!rangeRespFound)
+                                        //{
+                                        //    break;
+                                        //}
+                                    }
                                 }
                                 if (!rangeRespFound)
                                 {
@@ -359,6 +396,7 @@ namespace Capstones.Net
                                 // Server does not support Range? What the hell...
                                 try
                                 {
+                                    _FinalDestStream.Flush();
                                     var realLength = _Length - _DestStartOffset;
                                     var buffer = PlatDependant.CopyStreamBuffer;
                                     for (ulong pos = 0; pos < realLength; pos += (ulong)buffer.Length)
@@ -377,9 +415,11 @@ namespace Capstones.Net
                                     }
                                     _FinalDestStream.SetLength((long)realLength);
                                 }
-                                catch
+                                catch (Exception e)
                                 {
                                     _Error = "Server does not support Range.";
+                                    PlatDependant.LogError(_Error);
+                                    PlatDependant.LogError(e);
                                     try
                                     {
                                         _FinalDestStream.Seek(0, SeekOrigin.Begin);
