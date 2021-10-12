@@ -560,7 +560,7 @@ namespace Capstones.Net
             }
             else
             {
-                if (!string.IsNullOrEmpty(Error))
+                if (!string.IsNullOrEmpty(Error) && !Error.StartsWith("HttpError: "))
                 {
                     error = Error;
                     return null;

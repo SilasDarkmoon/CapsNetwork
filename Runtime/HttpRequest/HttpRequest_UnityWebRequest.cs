@@ -311,13 +311,9 @@ namespace Capstones.Net
                     }
                     else
                     {
-                        if (_InnerReq.error != null)
+                        if (_InnerReq.error != null && !_InnerReq.isHttpError)
                         {
-                            if (_InnerReq.isHttpError)
-                            {
-                                _Error = "HttpError: " + _InnerReq.responseCode + "\n" + _InnerReq.error;
-                            }
-                            else if (_InnerReq.error.StartsWith("Request timeout", StringComparison.InvariantCultureIgnoreCase))
+                            if (_InnerReq.error.StartsWith("Request timeout", StringComparison.InvariantCultureIgnoreCase))
                             {
                                 _Error = "timedout";
                             }
@@ -328,6 +324,10 @@ namespace Capstones.Net
                         }
                         else
                         {
+                            if (_InnerReq.isHttpError)
+                            {
+                                _Error = "HttpError: " + _InnerReq.responseCode + "\n" + _InnerReq.error;
+                            }
                             var rawHeaders = _InnerReq.GetResponseHeaders();
                             _RespHeaders = new HttpRequestData();
                             foreach (var kvp in rawHeaders)

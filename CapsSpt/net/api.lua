@@ -312,6 +312,29 @@ function api.result(request, timedoutInLua)
                         else
                             failed = sub
                         end
+                        
+                        -- we can still read data when it is an http error
+                        local rawmsg = request.www:ParseResponseText(request.token, request.seq)
+                        local datamt = getmetatable(request.pdata)
+                        local tab = json.decode(rawmsg)
+                        if type(tab) ~= 'table' then
+                            dump(rawmsg, "Response #"..request.seq)
+                            request.val = rawmsg
+                        else
+                            dump(tab, "Response #"..request.seq)
+                            if datamt and datamt.rawpost then
+                                request.val = tab
+                            else
+                                local type = tab.type and tonumber(tab.type)
+                                if type and type <= 0 then
+                                    msg = tab.tips and clr.transstr(tab.tips) or msg
+                                end
+                                request.val = tab
+                                if type and type > 0 then
+                                    request.val = tab.d
+                                end
+                            end
+                        end
                     end
                 -- else
                 --     msg = tostring(error)

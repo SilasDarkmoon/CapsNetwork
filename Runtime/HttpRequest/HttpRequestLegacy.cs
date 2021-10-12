@@ -332,23 +332,55 @@ namespace Capstones.Net
                             return;
                         }
                     }
-#if NETFX_CORE
-                    var tresp = req.GetResponseAsync();
-                    if (_Timeout > 0)
+                    System.Net.WebResponse resp = null;
+                    try
                     {
-                        if (!tresp.Wait(_Timeout))
+#if NETFX_CORE
+                        var tresp = req.GetResponseAsync();
+                        if (_Timeout > 0)
                         {
-                            throw new TimeoutException();
+                            if (!tresp.Wait(_Timeout))
+                            {
+                                throw new TimeoutException();
+                            }
+                        }
+                        else
+                        {
+                            tresp.Wait();
+                        }
+                        resp = tresp.Result;
+#else
+                        resp = req.GetResponse();
+#endif
+                    }
+                    catch (System.Net.WebException we)
+                    {
+#if NETFX_CORE
+                        if (we.Status.ToString() == "Timeout")
+#else
+                        if (we.Status == System.Net.WebExceptionStatus.Timeout)
+#endif
+                        {
+                            throw;
+                        }
+                        else
+                        {
+                            if (we.Response is System.Net.HttpWebResponse && ((System.Net.HttpWebResponse)we.Response).StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable) // 416
+                            {
+                                throw;
+                            }
+                            else if (we.Response is System.Net.HttpWebResponse)
+                            {
+                                resp = we.Response;
+                                var code = ((System.Net.HttpWebResponse)we.Response).StatusCode;
+                                _Error = "HttpError: " + (int)code + "\n" + we.Message;
+                            }
+                            else
+                            {
+                                throw;
+                            }
                         }
                     }
-                    else
-                    {
-                        tresp.Wait();
-                    }
-                    var resp = tresp.Result;
-#else
-                    var resp = req.GetResponse();
-#endif
                     lock (_CloseLock)
                     {
                         if (_Closed)
