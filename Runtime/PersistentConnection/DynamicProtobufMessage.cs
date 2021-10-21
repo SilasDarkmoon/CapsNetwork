@@ -5060,6 +5060,14 @@ namespace Capstones.Net
             int readcnt;
             return ReadRaw(data, out readcnt);
         }
+        public static ProtobufMessage ReadRaw(IList<byte> data)
+        {
+            return ReadRaw(new ListSegment<byte>(data));
+        }
+        public static ProtobufMessage ReadRaw(IList<byte> data, int offset, int count)
+        {
+            return ReadRaw(new ListSegment<byte>(data, offset, count));
+        }
 
         /// <summary>
         /// notice: in case of end of stream, this will not fail, but the real bytes skipped may be less than required.
