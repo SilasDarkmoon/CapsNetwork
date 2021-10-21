@@ -185,7 +185,7 @@ namespace Capstones.Net
                 {
                     if (_RangeEnabled)
                     {
-                        _FinalDestStream = PlatDependant.OpenAppend(_Dest);
+                        _FinalDestStream = PlatDependant.OpenReadWrite(_Dest);
                         _Length = _Total = _DestStartOffset = (ulong)_FinalDestStream.Length;
                     }
                     else

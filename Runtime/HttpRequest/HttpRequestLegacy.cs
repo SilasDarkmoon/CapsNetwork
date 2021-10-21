@@ -509,7 +509,7 @@ namespace Capstones.Net
                                     {
                                         if (_RangeEnabled)
                                         {
-                                            streamd = PlatDependant.OpenAppend(_Dest);
+                                            streamd = PlatDependant.OpenReadWrite(_Dest);
                                             totalcnt = (ulong)streamd.Length;
                                         }
                                         else
