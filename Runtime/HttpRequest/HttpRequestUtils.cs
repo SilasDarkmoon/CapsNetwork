@@ -33,7 +33,7 @@ namespace Capstones.Net
                 PlatDependant.WriteAllText(downloadingInfoPath, url);
             }
 
-            var req = HttpRequestBase.Create(url, null, null, downloadingPath);
+            var req = new HttpRequestLegacy(url, null, null, downloadingPath); // UnityWebRequest is supposed to be used in main thread.
             req.RangeEnabled = rangeEnabled;
             req.OnDone = () =>
             {
