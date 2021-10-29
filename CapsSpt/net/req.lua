@@ -80,6 +80,9 @@ function req.defaultOnFailed(request)
     return failedWait
 end
 
+function req.modifyHeaders(uri, data)
+end
+
 function req.post(uri, data, oncomplete, onfailed, quiet, timeOut)
     local ret
     local postdone = nil
@@ -161,7 +164,12 @@ function req.post(uri, data, oncomplete, onfailed, quiet, timeOut)
         end
     end
 
-    ret = api.post(uri, data, quiet, timeOut)
+    local realdata = {
+        data = data,
+        headers = {},
+    }
+    req.modifyHeaders(uri, realdata)
+    ret = api.post(uri, realdata, quiet, timeOut)
     ret.doneFuncs = {
         onFailed = realOnFailed,
         onComplete = realOnComplete,

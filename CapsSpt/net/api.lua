@@ -75,6 +75,11 @@ local function createRequest(uri, data, seq, timeout)
 
         local form = clr.Capstones.Net.HttpRequestData()
         local headers = clr.Capstones.Net.HttpRequestData()
+        if data.headers then
+            for k, v in pairs(data.headers) do
+                headers:Add(k, v)
+            end
+        end
         www = clr.Capstones.Net.HttpRequestBase.Create(uri, headers, form, nil)
 
         if api.token then
@@ -84,7 +89,7 @@ local function createRequest(uri, data, seq, timeout)
         www.RSeq = tostring(rseq)
 
         form.PrepareMethod = "json"
-        form:Add("", json.encode(data))
+        form:Add("", json.encode(data.data))
 
         www.Timeout = wwwTimeout * 1000
 
