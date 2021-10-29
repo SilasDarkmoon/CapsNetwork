@@ -282,6 +282,17 @@ namespace Capstones.Net
         {
             get { return _ObjNativeTypes.Contains(_Type); }
         }
+        private static HashSet<ProtobufNativeType> _UnsignedNativeTypes = new HashSet<ProtobufNativeType>()
+        {
+            ProtobufNativeType.TYPE_FIXED32,
+            ProtobufNativeType.TYPE_FIXED64,
+            ProtobufNativeType.TYPE_UINT32,
+            ProtobufNativeType.TYPE_UINT64,
+        };
+        public bool IsUnsigned
+        {
+            get { return _UnsignedNativeTypes.Contains(_Type); }
+        }
         #region Accessors
         private interface IProtobufParsedValueAccessor
         {
@@ -317,8 +328,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(bool);
-                    return false;
+                    if (pval._ObjectVal is bool)
+                    {
+                        val = (bool)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(bool);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -334,7 +353,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -349,8 +369,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(byte);
-                    return false;
+                    if (pval._ObjectVal is byte)
+                    {
+                        val = (byte)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(byte);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -366,7 +394,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -381,8 +410,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(sbyte);
-                    return false;
+                    if (pval._ObjectVal is sbyte)
+                    {
+                        val = (sbyte)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(sbyte);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -398,7 +435,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -413,8 +451,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(short);
-                    return false;
+                    if (pval._ObjectVal is short)
+                    {
+                        val = (short)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(short);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -430,7 +476,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -445,8 +492,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(ushort);
-                    return false;
+                    if (pval._ObjectVal is ushort)
+                    {
+                        val = (ushort)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(ushort);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -462,7 +517,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -477,8 +533,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(int);
-                    return false;
+                    if (pval._ObjectVal is int)
+                    {
+                        val = (int)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(int);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -494,7 +558,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -509,8 +574,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(uint);
-                    return false;
+                    if (pval._ObjectVal is uint)
+                    {
+                        val = (uint)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(uint);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -526,7 +599,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -541,8 +615,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(long);
-                    return false;
+                    if (pval._ObjectVal is long)
+                    {
+                        val = (long)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(long);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -558,7 +640,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -573,8 +656,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(ulong);
-                    return false;
+                    if (pval._ObjectVal is ulong)
+                    {
+                        val = (ulong)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(ulong);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -590,7 +681,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -605,8 +697,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(IntPtr);
-                    return false;
+                    if (pval._ObjectVal is IntPtr)
+                    {
+                        val = (IntPtr)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(IntPtr);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -629,7 +729,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -644,8 +745,16 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(UIntPtr);
-                    return false;
+                    if (pval._ObjectVal is UIntPtr)
+                    {
+                        val = (UIntPtr)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(UIntPtr);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -668,7 +777,8 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
                 else
                 {
@@ -683,10 +793,18 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(float);
-                    return false;
+                    if (pval._ObjectVal is float)
+                    {
+                        val = (float)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(float);
+                        return false;
+                    }
                 }
-                else
+                else if (pval._Type == ProtobufNativeType.TYPE_FLOAT)
                 {
                     if (BitConverter.IsLittleEndian)
                     {
@@ -698,6 +816,21 @@ namespace Capstones.Net
                     }
                     return true;
                 }
+                else if (pval._Type == ProtobufNativeType.TYPE_DOUBLE)
+                {
+                    val = (float)pval._Union._DoubleVal;
+                    return true;
+                }
+                else if (pval.IsUnsigned)
+                {
+                    val = (float)pval._Union._UInt64Val;
+                    return true;
+                }
+                else
+                {
+                    val = (float)pval._Union._Int64Val;
+                    return true;
+                }
             }
             public override bool Set(ref ProtobufParsedValue pval, float val)
             {
@@ -707,9 +840,10 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
                 }
-                else
+                else if (pval._Type == ProtobufNativeType.TYPE_FLOAT)
                 {
                     if (BitConverter.IsLittleEndian)
                     {
@@ -721,6 +855,21 @@ namespace Capstones.Net
                     }
                     return true;
                 }
+                else if (pval._Type == ProtobufNativeType.TYPE_DOUBLE)
+                {
+                    pval._Union._DoubleVal = val;
+                    return true;
+                }
+                else if (pval.IsUnsigned)
+                {
+                    pval._Union._UInt64Val = (ulong)val;
+                    return true;
+                }
+                else
+                {
+                    pval._Union._Int64Val = (long)val;
+                    return true;
+                }
             }
         }
         private class ProtobufParsedDoubleAccessor : ProtobufParsedValueAccessor<double>
@@ -729,12 +878,42 @@ namespace Capstones.Net
             {
                 if (pval.IsObject)
                 {
-                    val = default(double);
-                    return false;
+                    if (pval._ObjectVal is double)
+                    {
+                        val = (double)pval._ObjectVal;
+                        return true;
+                    }
+                    else
+                    {
+                        val = default(double);
+                        return false;
+                    }
+                }
+                else if (pval._Type == ProtobufNativeType.TYPE_DOUBLE)
+                {
+                    val = pval._Union._DoubleVal;
+                    return true;
+                }
+                else if (pval._Type == ProtobufNativeType.TYPE_FLOAT)
+                {
+                    if (BitConverter.IsLittleEndian)
+                    {
+                        val = pval._Union._SingleVal;
+                    }
+                    else
+                    {
+                        val = pval._Union._SingleValBE;
+                    }
+                    return true;
+                }
+                else if (pval.IsUnsigned)
+                {
+                    val = (double)pval._Union._UInt64Val;
+                    return true;
                 }
                 else
                 {
-                    val = pval._Union._DoubleVal;
+                    val = (double)pval._Union._Int64Val;
                     return true;
                 }
             }
@@ -746,11 +925,34 @@ namespace Capstones.Net
                 }
                 if (pval.IsObject)
                 {
-                    return false;
+                    pval._ObjectVal = val;
+                    return true;
+                }
+                else if (pval._Type == ProtobufNativeType.TYPE_DOUBLE)
+                {
+                    pval._Union._DoubleVal = val;
+                    return true;
+                }
+                else if (pval._Type == ProtobufNativeType.TYPE_FLOAT)
+                {
+                    if (BitConverter.IsLittleEndian)
+                    {
+                        pval._Union._SingleVal = (float)val;
+                    }
+                    else
+                    {
+                        pval._Union._SingleValBE = (float)val;
+                    }
+                    return true;
+                }
+                else if (pval.IsUnsigned)
+                {
+                    pval._Union._UInt64Val = (ulong)val;
+                    return true;
                 }
                 else
                 {
-                    pval._Union._DoubleVal = val;
+                    pval._Union._Int64Val = (long)val;
                     return true;
                 }
             }
@@ -948,6 +1150,11 @@ namespace Capstones.Net
                     }
                     return true;
                 }
+                else if (pval.IsObject)
+                {
+                    val = pval._ObjectVal;
+                    return true;
+                }
                 else
                 {
                     val = null;
@@ -966,6 +1173,14 @@ namespace Capstones.Net
                         return true;
                     }
                 }
+                else if (val == null)
+                {
+                    pval._Union._UInt64Val = 0;
+                    if (pval.IsObject)
+                    {
+                        pval._ObjectVal = null;
+                    }
+                }
                 return false;
             }
             public T Get<T>(ref ProtobufParsedValue pval)
@@ -976,7 +1191,14 @@ namespace Capstones.Net
                 }
                 else if (pval.IsObject)
                 {
-                    return default(T);
+                    if (pval._ObjectVal is T)
+                    {
+                        return (T)pval._ObjectVal;
+                    }
+                    else
+                    {
+                        return default(T);
+                    }
                 }
                 else
                 {
@@ -990,7 +1212,7 @@ namespace Capstones.Net
             }
             public void Set<T>(ref ProtobufParsedValue pval, T val)
             {
-                var type = val.GetType();
+                var type = typeof(T);
                 if (type.IsEnum)
                 {
                     if (pval._Type == 0 || pval._Type == ProtobufNativeType.TYPE_ENUM)
@@ -1003,16 +1225,30 @@ namespace Capstones.Net
                         pval._Union._UInt64Val = EnumUtils.ConvertFromEnumForcibly<T>(val);
 #endif
                     }
+                    else if (pval.IsObject)
+                    {
+                        pval._ObjectVal = val;
+                    }
                 }
             }
             public T GetEnum<T>(ref ProtobufParsedValue pval) where T : struct
             {
-                if (!pval.IsObject)
+                if (pval.IsObject)
+                {
+                    if (pval._ObjectVal is T)
+                    {
+                        return (T)pval._ObjectVal;
+                    }
+                    else
+                    {
+                        return default(T);
+                    }
+                }
+                else
                 {
                     var raw = pval.UInt64;
                     return EnumUtils.ConvertToEnum<T>(raw);
                 }
-                return default(T);
             }
             public void SetEnum<T>(ref ProtobufParsedValue pval, T val) where T : struct
             {
@@ -1021,6 +1257,10 @@ namespace Capstones.Net
                     pval._Type = ProtobufNativeType.TYPE_ENUM;
                     pval._ObjectVal = typeof(T);
                     pval._Union._UInt64Val = EnumUtils.ConvertFromEnum<T>(val);
+                }
+                else if (pval.IsObject)
+                {
+                    pval._ObjectVal = val;
                 }
             }
             public object Get(ref ProtobufParsedValue pval)
@@ -3380,6 +3620,21 @@ namespace Capstones.Net
             {
                 FieldSlot slot = GetSlot(fieldindex);
                 return new SlotValueAccessor(slot);
+            }
+        }
+        public SlotValueAccessor this[int? fieldindex]
+        {
+            get
+            {
+                if (fieldindex == null)
+                {
+                    return new SlotValueAccessor(null);
+                }
+                else
+                {
+                    FieldSlot slot = GetOrCreateSlot((int)fieldindex);
+                    return new SlotValueAccessor(slot);
+                }
             }
         }
 
