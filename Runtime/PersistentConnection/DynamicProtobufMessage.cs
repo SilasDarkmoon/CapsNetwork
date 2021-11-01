@@ -162,93 +162,93 @@ namespace Capstones.Net
         }
         public bool Boolean
         {
-            get { return Get<bool>(); }
-            set { Set(value); }
+            get { bool value; _BooleanAccessor.Get(ref this, out value); return value; }
+            set { _BooleanAccessor.Set(ref this, value); }
         }
         public byte Byte
         {
-            get { return Get<byte>(); }
-            set { Set(value); }
+            get { byte value; _ByteAccessor.Get(ref this, out value); return value; }
+            set { _ByteAccessor.Set(ref this, value); }
         }
         public sbyte SByte
         {
-            get { return Get<sbyte>(); }
-            set { Set(value); }
+            get { sbyte value; _SByteAccessor.Get(ref this, out value); return value; }
+            set { _SByteAccessor.Set(ref this, value); }
         }
         public short Int16
         {
-            get { return Get<short>(); }
-            set { Set(value); }
+            get { short value; _Int16Accessor.Get(ref this, out value); return value; }
+            set { _Int16Accessor.Set(ref this, value); }
         }
         public ushort UInt16
         {
-            get { return Get<ushort>(); }
-            set { Set(value); }
+            get { ushort value; _UInt16Accessor.Get(ref this, out value); return value; }
+            set { _UInt16Accessor.Set(ref this, value); }
         }
         public int Int32
         {
-            get { return Get<int>(); }
-            set { Set(value); }
+            get { int value; _Int32Accessor.Get(ref this, out value); return value; }
+            set { _Int32Accessor.Set(ref this, value); }
         }
         public uint UInt32
         {
-            get { return Get<uint>(); }
-            set { Set(value); }
+            get { uint value; _UInt32Accessor.Get(ref this, out value); return value; }
+            set { _UInt32Accessor.Set(ref this, value); }
         }
         public long Int64
         {
-            get { return Get<long>(); }
-            set { Set(value); }
+            get { long value; _Int64Accessor.Get(ref this, out value); return value; }
+            set { _Int64Accessor.Set(ref this, value); }
         }
         public ulong UInt64
         {
-            get { return Get<ulong>(); }
-            set { Set(value); }
+            get { ulong value; _UInt64Accessor.Get(ref this, out value); return value; }
+            set { _UInt64Accessor.Set(ref this, value); }
         }
         public IntPtr IntPtr
         {
-            get { return Get<IntPtr>(); }
-            set { Set(value); }
+            get { IntPtr value; _IntPtrAccessor.Get(ref this, out value); return value; }
+            set { _IntPtrAccessor.Set(ref this, value); }
         }
         public UIntPtr UIntPtr
         {
-            get { return Get<UIntPtr>(); }
-            set { Set(value); }
+            get { UIntPtr value; _UIntPtrAccessor.Get(ref this, out value); return value; }
+            set { _UIntPtrAccessor.Set(ref this, value); }
         }
         public float Single
         {
-            get { return Get<float>(); }
-            set { Set(value); }
+            get { float value; _SingleAccessor.Get(ref this, out value); return value; }
+            set { _SingleAccessor.Set(ref this, value); }
         }
         public double Double
         {
-            get { return Get<double>(); }
-            set { Set(value); }
+            get { double value; _DoubleAccessor.Get(ref this, out value); return value; }
+            set { _DoubleAccessor.Set(ref this, value); }
         }
         public object Object
         {
-            get { return Get<object>(); }
-            set { Set(value); }
+            get { return _ObjAccessor.Get(ref this); }
+            set { _ObjAccessor.Set(ref this, value); }
         }
         public string String
         {
-            get { return Get<string>(); }
-            set { Set(value); }
+            get { string value; _StringAccessor.Get(ref this, out value); return value; }
+            set { _StringAccessor.Set(ref this, value); }
         }
         public byte[] Bytes
         {
-            get { return Get<byte[]>(); }
-            set { Set(value); }
+            get { byte[] value; _BytesAccessor.Get(ref this, out value); return value; }
+            set { _BytesAccessor.Set(ref this, value); }
         }
         public ProtobufUnknowValue Unknown
         {
-            get { return Get<ProtobufUnknowValue>(); }
-            set { Set(value); }
+            get { return Object as ProtobufUnknowValue; }
+            set { Object = value; }
         }
         public ProtobufMessage Message
         {
-            get { return Get<ProtobufMessage>(); }
-            set { Set(value); }
+            get { return Object as ProtobufMessage; }
+            set { Object = value; }
         }
 
         public T GetEnum<T>() where T : struct
@@ -2282,7 +2282,7 @@ namespace Capstones.Net
             return ntype;
         }
 
-        public struct SlotValueAccessor : IList<ProtobufParsedValue>
+        public struct SlotValueAccessor : IList<ProtobufParsedValue>, IEquatable<SlotValueAccessor>
         {
             internal FieldSlot _Slot;
             //private ProtobufParsedValue _RValue;
@@ -2290,6 +2290,24 @@ namespace Capstones.Net
             {
                 _Slot = slot;
                 //_RValue = default(ProtobufParsedValue);
+            }
+
+            public bool Equals(SlotValueAccessor other)
+            {
+                return _Slot == other._Slot;
+            }
+            public override bool Equals(object obj)
+            {
+                if (obj is SlotValueAccessor)
+                {
+                    return Equals((SlotValueAccessor)obj);
+                }
+                return false;
+            }
+            public override int GetHashCode()
+            {
+                if (_Slot == null) return 0;
+                return _Slot.GetHashCode();
             }
 
             public bool IsValid { get { return _Slot != null; } }
