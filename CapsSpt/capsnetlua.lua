@@ -2,13 +2,15 @@ local capsnetlua = class("capsnetlua")
 
 capsnetlua.MAX_MESSAGE_LENGTH = 1024 * 1024
 
+local pbformatter = class("pbformatter")
+
 function capsnetlua.Init()
     capsnetlua.instance = capsnetlua.new()
 end
 
 function capsnetlua:ctor()
     self.readContext = { size = 0 }
-    self.pbformatter = clr.Capstones.Net.ProtobufComposer()
+    self.pbformatter = pbformatter.new()
 end
 
 function capsnetlua:Dispose()
