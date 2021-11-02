@@ -6,6 +6,7 @@ reqDefaultErrorListeners = { }
 reqEventListeners = { }
 reqResultPrepareListeners = { }
 reqResultPrepareEventListeners = { }
+reqRequestDataPrepareListeners = { }
 
 local reqEventListenersStacks = cache.setValueWithHistoryAndCategory()
 function reqEventListenersStacks.onGetValue(cate)
@@ -39,6 +40,25 @@ end
 req.getResultPrepareEventListener = reqResultPrepareEventListenersStacks.getValue
 req.regResultPrepareEventListener = reqResultPrepareEventListenersStacks.pushValue
 req.popResultPrepareEventListener = reqResultPrepareEventListenersStacks.popValue
+
+local reqRequestDataPrepareListenersStacks = cache.setValueWithHistoryAndCategory()
+function reqRequestDataPrepareListenersStacks.onGetValue(cate)
+    return reqRequestDataPrepareListeners[cate]
+end
+function reqRequestDataPrepareListenersStacks.onSetValue(cate, val)
+    reqRequestDataPrepareListeners[cate] = val
+end
+req.getRequestDataPrepareListener = reqRequestDataPrepareListenersStacks.getValue
+req.regRequestDataPrepareListener = reqRequestDataPrepareListenersStacks.pushValue
+req.popRequestDataPrepareListener = reqRequestDataPrepareListenersStacks.popValue
+
+local function reqPrepareRequestData(url, data)
+    for k, v in spairs(reqRequestDataPrepareListeners) do
+        if type(v) == "function" then
+            v(url, data)
+        end
+    end
+end
 
 local function reqPrepareResult(request)
     local ret = nil
@@ -78,9 +98,6 @@ function req.defaultOnFailed(request)
         failedWait.done = true
     end
     return failedWait
-end
-
-function req.modifyHeaders(uri, data)
 end
 
 function req.post(uri, data, oncomplete, onfailed, quiet, timeOut)
@@ -168,7 +185,7 @@ function req.post(uri, data, oncomplete, onfailed, quiet, timeOut)
         data = data,
         headers = {},
     }
-    req.modifyHeaders(uri, realdata)
+    reqPrepareRequestData(uri, realdata)
     ret = api.post(uri, realdata, quiet, timeOut)
     ret.doneFuncs = {
         onFailed = realOnFailed,

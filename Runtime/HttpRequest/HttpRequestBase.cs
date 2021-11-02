@@ -30,6 +30,27 @@ namespace Capstones.Net
 
         public byte[] Encoded = null;
 
+        public object Get(string key)
+        {
+            object result;
+            _Data.TryGetValue(key, out result);
+            return result;
+        }
+
+        public object GetIgnoreCase(string key)
+        {
+            object result = null;
+            foreach (var kvp in _Data)
+            {
+                if (kvp.Key.Equals(key, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    result = kvp.Value;
+                    break;
+                }
+            }
+            return result;
+        }
+
         public void Add(string key, object val)
         {
             if (key != null)
@@ -322,8 +343,7 @@ namespace Capstones.Net
                 {
                     foreach (var kvp in _RespHeaders.Data)
                     {
-                        var lkey = kvp.Key.ToLower();
-                        if (lkey == "t")
+                        if (kvp.Key.Equals("t", StringComparison.InvariantCultureIgnoreCase))
                         {
                             token = kvp.Value.ToString();
                             break;
@@ -336,8 +356,7 @@ namespace Capstones.Net
                     {
                         foreach (var kvp in _Headers.Data)
                         {
-                            var lkey = kvp.Key.ToLower();
-                            if (lkey == "t")
+                            if (kvp.Key.Equals("t", StringComparison.InvariantCultureIgnoreCase))
                             {
                                 token = kvp.Value.ToString();
                                 break;
@@ -381,8 +400,7 @@ namespace Capstones.Net
                 {
                     foreach (var kvp in _RespHeaders.Data)
                     {
-                        var lkey = kvp.Key.ToLower();
-                        if (lkey == "seq")
+                        if (kvp.Key.Equals("seq", StringComparison.InvariantCultureIgnoreCase))
                         {
                             ulong.TryParse(kvp.Value.ToString(), out seq);
                             break;
@@ -395,8 +413,7 @@ namespace Capstones.Net
                     {
                         foreach (var kvp in _Headers.Data)
                         {
-                            var lkey = kvp.Key.ToLower();
-                            if (lkey == "seq")
+                            if (kvp.Key.Equals("seq", StringComparison.InvariantCultureIgnoreCase))
                             {
                                 ulong.TryParse(kvp.Value.ToString(), out seq);
                                 break;
@@ -440,8 +457,7 @@ namespace Capstones.Net
                 {
                     foreach (var kvp in _RespHeaders.Data)
                     {
-                        var lkey = kvp.Key.ToLower();
-                        if (lkey == "rseq")
+                        if (kvp.Key.Equals("rseq", StringComparison.InvariantCultureIgnoreCase))
                         {
                             ulong.TryParse(kvp.Value.ToString(), out seq);
                             break;
@@ -454,8 +470,7 @@ namespace Capstones.Net
                     {
                         foreach (var kvp in _Headers.Data)
                         {
-                            var lkey = kvp.Key.ToLower();
-                            if (lkey == "rseq")
+                            if (kvp.Key.Equals("rseq", StringComparison.InvariantCultureIgnoreCase))
                             {
                                 ulong.TryParse(kvp.Value.ToString(), out seq);
                                 break;
@@ -494,12 +509,11 @@ namespace Capstones.Net
             {
                 foreach (var kvp in _RespHeaders.Data)
                 {
-                    var lkey = kvp.Key.ToLower();
-                    if (lkey == "seq")
+                    if (kvp.Key.Equals("seq", StringComparison.InvariantCultureIgnoreCase))
                     {
                         ulong.TryParse(kvp.Value.ToString(), out seq);
                     }
-                    else if (lkey == "t")
+                    else if (kvp.Key.Equals("t", StringComparison.InvariantCultureIgnoreCase))
                     {
                         token = kvp.Value.ToString();
                     }
@@ -511,8 +525,7 @@ namespace Capstones.Net
                 {
                     foreach (var kvp in _Headers.Data)
                     {
-                        var lkey = kvp.Key.ToLower();
-                        if (lkey == "t")
+                        if (kvp.Key.Equals("t", StringComparison.InvariantCultureIgnoreCase))
                         {
                             token = kvp.Value.ToString();
                             break;
@@ -523,8 +536,7 @@ namespace Capstones.Net
                 {
                     foreach (var kvp in _Headers.Data)
                     {
-                        var lkey = kvp.Key.ToLower();
-                        if (lkey == "seq")
+                        if (kvp.Key.Equals("seq", StringComparison.InvariantCultureIgnoreCase))
                         {
                             ulong.TryParse(kvp.Value.ToString(), out seq);
                             break;
@@ -574,12 +586,11 @@ namespace Capstones.Net
                     {
                         foreach (var kvp in _RespHeaders.Data)
                         {
-                            var lkey = kvp.Key.ToLower();
-                            if (lkey == "content-encoding")
+                            if (kvp.Key.Equals("content-encoding", StringComparison.InvariantCultureIgnoreCase))
                             {
                                 enc = kvp.Value.ToString().ToLower();
                             }
-                            else if (lkey == "encrypted")
+                            else if (kvp.Key.Equals("encrypted", StringComparison.InvariantCultureIgnoreCase))
                             {
                                 var val = kvp.Value.ToString();
                                 if (val != null) val = val.ToLower();
