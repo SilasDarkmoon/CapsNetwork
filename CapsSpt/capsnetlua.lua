@@ -1,8 +1,176 @@
 local capsnetlua = class("capsnetlua")
 
 capsnetlua.MAX_MESSAGE_LENGTH = 1024 * 1024
+capsnetlua.PB_COMPOSER_USE_VARIANT_HEADER = true
+
+local typeClrBytes
+local function isClrBytes(val)
+    if not typeClrBytes then
+        typeClrBytes = clr.array(clr.System.Byte)
+    end
+    return rawequal(clr.type(val), typeClrBytes)
+end
 
 local pbformatter = class("pbformatter")
+
+local preType2ID = clr.table(clr.Capstones.Net.PredefinedMessages.PredefinedTypeToID)
+local preWriters = clr.table(clr.Capstones.Net.PredefinedMessages.PredefinedWriters)
+local preReaders = clr.table(clr.Capstones.Net.PredefinedMessages.PredefinedReaders)
+
+function pbformatter:PrepareBlock(data, type, flags, seq, sseq, exFlags)
+    if data then
+        local size = data.Count
+        data.InsertMode = true
+        data:Seek(0, clr.System.IO.SeekOrigin.Begin)
+        local wrotecnt = 0
+        local encoder = clr.Capstones.Net.ProtobufEncoder
+        local pblltype = clr.Capstones.Net.ProtobufLowLevelType
+        if capsnetlua.PB_COMPOSER_USE_VARIANT_HEADER then
+            wrotecnt = wrotecnt + encoder.WriteTag(1, pblltype.Varint, data, wrotecnt)
+            wrotecnt = wrotecnt + encoder.WriteVariant(encoder.EncodeZigZag32(clr.Capstones.Net.LuaNetProxyUtils.ConvertToInt(type)), data, wrotecnt)
+            wrotecnt = wrotecnt + encoder.WriteTag(2, pblltype.Varint, data, wrotecnt)
+            wrotecnt = wrotecnt + encoder.WriteVariant(flags, data, wrotecnt)
+            wrotecnt = wrotecnt + encoder.WriteTag(3, pblltype.Varint, data, wrotecnt);
+            wrotecnt = wrotecnt + encoder.WriteVariant(seq, data, wrotecnt);
+            wrotecnt = wrotecnt + encoder.WriteTag(4, pblltype.Varint, data, wrotecnt);
+            wrotecnt = wrotecnt + encoder.WriteVariant(sseq, data, wrotecnt);
+        else
+            wrotecnt = wrotecnt + encoder.WriteTag(1, pblltype.Fixed32, data, wrotecnt)
+            wrotecnt = wrotecnt + encoder.WriteFixed32(type, data, wrotecnt)
+            wrotecnt = wrotecnt + encoder.WriteTag(2, pblltype.Fixed32, data, wrotecnt)
+            wrotecnt = wrotecnt + encoder.WriteFixed32(flags, data, wrotecnt)
+            wrotecnt = wrotecnt + encoder.WriteTag(3, pblltype.Fixed32, data, wrotecnt);
+            wrotecnt = wrotecnt + encoder.WriteFixed32(seq, data, wrotecnt);
+            wrotecnt = wrotecnt + encoder.WriteTag(4, pblltype.Fixed32, data, wrotecnt);
+            wrotecnt = wrotecnt + encoder.WriteFixed32(sseq, data, wrotecnt);
+        end
+        wrotecnt = wrotecnt + encoder.WriteTag(5, pblltype.LengthDelimited, data, wrotecnt);
+        wrotecnt = wrotecnt + encoder.WriteVariant(size, data, wrotecnt);
+    end
+end
+
+function pbformatter.GetMessageName2IDMap()
+    if not pbformatter.pbmap_name2id then
+        pbformatter.pbmap_name2id = {}
+        pbformatter.pbmap_id2name = {}
+
+        local pb = require("pb")
+        if type(___CONFIG__NETLUA_PB_MAP_INIT) == "function" then
+            ___CONFIG__NETLUA_PB_MAP_INIT()
+        end
+        for name, basename, type in pb.types() do
+            local fullname = name
+            if string.sub(name, 1, 1) == "." then
+                fullname = string.sub(name, 2, -1)
+            end
+        
+            local hash = clr.Capstones.UnityEngineEx.ExtendedStringHash.GetHashCodeExShort(clr.Capstones.UnityEngineEx.ExtendedStringHash.GetHashCodeEx(fullname))
+
+            pbformatter.pbmap_name2id[fullname] = hash
+            pbformatter.pbmap_id2name[hash] = fullname
+        end
+    end
+
+    return pbformatter.pbmap_name2id, pbformatter.pbmap_id2name
+end
+
+function pbformatter:GetDataType(data)
+    if not data then
+        return 0
+    end
+
+    local clrtype = clr.type(data)
+
+    if clrtype == clr.Capstones.Net.PredefinedMessages.Unknown then
+        return data.TypeID
+    end
+
+    local preid = preType2ID[clrtype]
+    if preid and preid ~= 0 then
+        return preid
+    end
+
+    if data.messageName then
+        local map_n2i = pbformatter.GetMessageName2IDMap()
+        local pbid = map_n2i[data.messageName]
+        if pbid then
+            return pbid
+        end
+    end
+
+    return 0
+end
+
+function pbformatter:CanWrite(data)
+    if data then
+        local clrtype = clr.type(data)
+        if clrtype == clr.Capstones.Net.PredefinedMessages.Unknown then
+            return true
+        end
+
+        local preid = preType2ID[clrtype]
+        if preid and preid ~= 0 then
+            return true
+        end
+    end
+
+    if data.messageName then
+        local map_n2i = pbformatter.GetMessageName2IDMap()
+        local pbid = map_n2i[data.messageName]
+        if pbid then
+            return true
+        end
+    end
+
+    return false
+end
+
+function pbformatter:IsOrdered(data)
+    return self:CanWrite(data)
+end
+
+function pbformatter:Write(data)
+    if data then
+        local clrtype = clr.type(data)
+        local writer = preWriters[clrtype]
+        if writer then
+            return writer(data)
+        end
+    end
+
+    if data.messageName then
+        if not pbformatter.write_UnderlayStream then
+            pbformatter.write_UnderlayStream = clr.Capstones.UnityEngineEx.ArrayBufferStream()
+        end
+        local stream = pbformatter.write_UnderlayStream
+        stream:Clear()
+        local raw = pb.encode(data.messageName, data)
+        stream:Write(raw, 0, #raw)
+        return stream
+    end
+
+    return nil
+end
+
+function pbformatter:Read(type, buffer, offset, cnt, exFlags)
+    local prereader = preReaders[type]
+    if prereader then
+        return prereader(type, buffer, offset, cnt)
+    end
+
+    local mapn2i, mapi2n = pbformatter.GetMessageName2IDMap()
+    local messageName = mapi2n[type]
+    if messageName then
+        local raw = clr.array(cnt, clr.System.Byte)
+        buffer:Seek(offset, clr.System.IO.SeekOrigin.Begin)
+        buffer:Read(raw, 0, cnt)
+        local message = pb.decode(messageName, raw)
+        message.messageName = messageName
+        return message
+    end
+end
+
+---------------------------------------------------------------------------
 
 function capsnetlua.Init()
     capsnetlua.instance = capsnetlua.new()
@@ -56,7 +224,7 @@ function capsnetlua:OnLuaReceiveBlock(splitter, buffer, size, exFlags)
                     if ttype == clr.Google.Protobuf.WireFormat.WireType.Varint then
                         clr.Capstones.Net.ProtobufEncoder.ReadVariant(buffer)
                         local value = clr.lastulong()
-                        pbtype = clr.Capstones.Net.ProtobufEncoder.DecodeZigZag64(value)
+                        pbtype = clr.Capstones.Net.LuaNetProxyUtils.ConvertToUInt(clr.Capstones.Net.ProtobufEncoder.DecodeZigZag64(value))
                     elseif ttype == clr.Google.Protobuf.WireFormat.WireType.Fixed32 then
                         pbtype = clr.Capstones.Net.ProtobufEncoder.ReadFixed32(buffer)
                     end
@@ -105,7 +273,7 @@ function capsnetlua:OnLuaReceiveBlock(splitter, buffer, size, exFlags)
         end
         xpcall(TryParseBlock, printe)
         if not decodeSuccess then
-            self:FireReceiveBlock(splitter, null, 0, pbtype, pbflags, seq_client, sseq, exFlags)
+            self:FireReceiveBlock(splitter, nil, 0, pbtype, pbflags, seq_client, sseq, exFlags)
         end
     else
         self:FireReceiveBlock(splitter, buffer, size, exFlags.type, exFlags.flags, 0, 0, exFlags)
@@ -239,14 +407,6 @@ function capsnetlua:PrepareBlock(data, type, flags, seq, sseq, exFlags)
         -- Write Type.(4 bytes)
         clr.Capstones.Net.LuaNetProxyUtils.WriteIntBigEndian(data, carbonType)
     end
-end
-
-local typeClrBytes
-local function isClrBytes(val)
-    if not typeClrBytes then
-        typeClrBytes = clr.array(clr.System.Byte)
-    end
-    return rawequal(clr.type(val), typeClrBytes)
 end
 
 function capsnetlua:GetExFlags(data)
