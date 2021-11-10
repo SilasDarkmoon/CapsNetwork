@@ -193,7 +193,7 @@ function api.post(uri, data, quiet, timeOut)
     if datamt and datamt.rawpost then
         mess_data = mess_data..dumprawq(clr.datastr(data.data), "Raw")
     else
-        mess_data = mess_data..dumpq(clr.wrap(json.encode(data)), "Json")
+        mess_data = mess_data..dumpq(clr.wrap(json.encode(data and data.data or data)), "Json")
     end
     print(mess_data)
     local request = createRequest(uri, data, nil, timeOut)
