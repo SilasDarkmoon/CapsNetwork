@@ -168,6 +168,20 @@ namespace Capstones.Net
                     {
                         _RangeEnabled = false;
                     }
+                    if (!_RangeEnabled)
+                    {
+                        if (_DestStream != null)
+                        {
+                            try
+                            {
+                                _DestStream.SetLength(0);
+                            }
+                            catch (Exception e)
+                            {
+                                PlatDependant.LogError(e);
+                            }
+                        }
+                    }
                 }
                 if (_Data != null && data != null)
                 {

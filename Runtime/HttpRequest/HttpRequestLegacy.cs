@@ -533,6 +533,17 @@ namespace Capstones.Net
                                                 _DestStream.Seek(0, SeekOrigin.End);
                                                 totalcnt = (ulong)_DestStream.Length;
                                             }
+                                            else
+                                            {
+                                                try
+                                                {
+                                                    _DestStream.SetLength(0);
+                                                }
+                                                catch (Exception e)
+                                                {
+                                                    PlatDependant.LogError(e);
+                                                }
+                                            }
                                             streamd = _DestStream;
                                         }
                                         else
