@@ -569,4 +569,25 @@ ___LuaNet__Read = function(...)
     return capsnetlua.instance:Read(...)
 end
 
+----------------------------------------------------------------
+
+capsnetlua.ConnectionConfig = clr.Capstones.Net.ConnectionFactory.ConnectionConfig(clr.Capstones.Net.CarbonMessageUtils.ConnectionConfig)
+capsnetlua.ConnectionConfig.SConfig = clr.Capstones.Net.SerializationConfig()
+capsnetlua.ConnectionConfig.SConfig.SplitterFactory = clr.Capstones.Net.LuaSplitter.Factory
+capsnetlua.ConnectionConfig.SConfig.Composer = clr.Capstones.Net.LuaComposer()
+capsnetlua.ConnectionConfig.SConfig.FormatterFactory = clr.Capstones.Net.LuaFormatter.Factory
+
+function capsnetlua.Connect(url)
+    capsnetlua.CarbonPushConnection = clr.Capstones.Net.ConnectionFactory.GetClient(url, capsnetlua.ConnectionConfig)
+    return capsnetlua.CarbonPushConnection
+end
+function capsnetlua.ConnectToHostAndPort(host, port)
+    local url = clr.Capstones.Net.CarbonMessageUtils.CombineUrl(host, port)
+    return capsnetlua.Connect(url)
+end
+function capsnetlua.ConnectWithDifferentPort(url, port)
+    local uri = clr.System.Uri(url)
+    return capsnetlua.ConnectToHostAndPort(uri.DnsSafeHost, port)
+end
+
 return capsnetlua
