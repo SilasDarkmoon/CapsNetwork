@@ -251,6 +251,7 @@ namespace Capstones.LuaLib
                         {
                             if (l.IsArray(index))
                             {
+                                slot.IsRepeated = true;
                                 var cnt = l.getn(index);
                                 l.pushvalue(index);
                                 for (int i = 1; i <= cnt; ++i)

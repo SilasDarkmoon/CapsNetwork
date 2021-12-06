@@ -2465,6 +2465,20 @@ namespace Capstones.Net
                         return Count > 1;
                     }
                 }
+                set
+                {
+                    if (value)
+                    {
+                        _Slot.Desc.Label = ProtobufFieldLabel.LABEL_REPEATED;
+                    }
+                    else
+                    {
+                        if (_Slot.Desc.Label == ProtobufFieldLabel.LABEL_REPEATED)
+                        {
+                            _Slot.Desc.Label = 0;
+                        }
+                    }
+                }
             }
             public ProtobufParsedValue FirstValue
             {
