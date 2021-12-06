@@ -286,6 +286,23 @@ function api.bool(val)
     return val and val ~= '' and val ~= 0
 end
 
+function api.defaultParseResult(tab)
+    local failed, msg = false, nil
+    local type = tab.type and tonumber(tab.type)
+    if type and type <= 0 then
+        if type == 0 then
+            failed = true
+            if tab.tips then
+                failed = tab.tips
+            end
+        else
+            failed = type
+        end
+        msg = tab.tips and clr.transstr(tab.tips)
+    end
+    return tab.d, tab.e, type, failed, msg
+end
+
 function api.result(request, timedoutInLua)
     if request.www.IsDone or timedoutInLua then
         if not request.done or timedoutInLua then
@@ -330,14 +347,19 @@ function api.result(request, timedoutInLua)
                             if datamt and datamt.rawpost then
                                 request.val = tab
                             else
-                                local type = tab.type and tonumber(tab.type)
-                                if type and type <= 0 then
-                                    msg = tab.tips and clr.transstr(tab.tips) or msg
+                                local parsefunc = api.overrideParseResult
+                                if type(api.overrideParseResult) ~= "function" then
+                                    parsefunc = api.defaultParseResult
+                                end
+                                local pd, pe, pt, pf, pm = parsefunc(tab)
+                                if pf then
+                                    msg = pm or msg
                                 end
                                 request.val = tab
-                                if type and type > 0 then
-                                    request.val = tab.d
+                                if pd then
+                                    request.val = pd
                                 end
+                                request.event = pe
                             end
                         end
                     end
@@ -366,21 +388,17 @@ function api.result(request, timedoutInLua)
                         request.val = tab
                         msg = tab.tips and clr.transstr(tab.tips) or clr.transstr('server_no_message')
                     else
-                        local type = tab.type and tonumber(tab.type)
-                        if type and type <= 0 then
-                            if type == 0 then
-                                failed = true
-                                if tab.tips then
-                                    failed = tab.tips
-                                end
-                            else
-                                failed = type
-                            end
-                            msg = tab.tips and clr.transstr(tab.tips) or clr.transstr('server_refuse', failed)
-                            -- msg = msg .. "\n" .. tab.traceIdentifier
+                        local parsefunc = api.overrideParseResult
+                        if type(api.overrideParseResult) ~= "function" then
+                            parsefunc = api.defaultParseResult
                         end
-                        request.val = tab.d
-                        request.event = tab.e
+                        local pd, pe, pt, pf, pm = parsefunc(tab)
+                        failed = pf
+                        if failed then
+                            msg = pm or clr.transstr('server_refuse', failed)
+                        end
+                        request.val = pd
+                        request.event = pe
                     end
                 end
             end
