@@ -29,6 +29,10 @@ local nextRealSeq = 1
 local repostReq -- function
 local restartReq -- function
 
+function api.peekNextRequestSeq()
+    return nextRequestSeq
+end
+
 local function createRequest(uri, data, seq, timeout)
     local datamt = getmetatable(data)
     local www
