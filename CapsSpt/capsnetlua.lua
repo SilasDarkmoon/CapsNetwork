@@ -144,7 +144,9 @@ function pbformatter:Write(data)
         end
         local stream = pbformatter.write_UnderlayStream
         stream:Clear()
-        local raw = pb.encode(data.messageName, data)
+        local pb = require("pb")
+        local encoded = pb.encode(data.messageName, data)
+        local raw = clr.wrap(encoded)
         stream:Write(raw, 0, #raw)
         return stream
     end
@@ -164,7 +166,8 @@ function pbformatter:Read(type, buffer, offset, cnt, exFlags)
         local raw = clr.array(cnt, clr.System.Byte)
         buffer:Seek(offset, clr.System.IO.SeekOrigin.Begin)
         buffer:Read(raw, 0, cnt)
-        local message = pb.decode(messageName, raw)
+        local pb = require("pb")
+        local message = pb.decode(messageName, clr.unwrap(raw))
         message.messageName = messageName
         return message
     end
@@ -462,7 +465,7 @@ function capsnetlua:GetExFlags(data)
             flags = 0,
             cate = 2,
             type = 10001,
-            endpoint = self.wrappedEndPoint or 0,
+            endpoint = capsnetlua.wrappedEndPoint or 0,
         }
     elseif clr.is(data, clr.Google.Protobuf.IMessage) then
         return {
