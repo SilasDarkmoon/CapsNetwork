@@ -103,6 +103,11 @@ namespace Capstones.UnityEditorEx.Net
             {
                 PlatDependant.CopyFile(bridgesrc, hubdir + "LuaProtobufBridge.cs");
             }
+            var luawrapperfile = System.IO.Path.GetDirectoryName(curfile) + "/.LuaNetworkProxy.cs";
+            if (PlatDependant.IsFileExist(luawrapperfile))
+            {
+                PlatDependant.CopyFile(luawrapperfile, hubdir + "LuaNetworkProxy.cs");
+            }
 
             Dictionary<string, CapsNetworkEditor.ProtocolInfo> allmessagesinallfiles = new Dictionary<string, CapsNetworkEditor.ProtocolInfo>();
             Func<string, string> GetCSharpMessageName = mname =>
