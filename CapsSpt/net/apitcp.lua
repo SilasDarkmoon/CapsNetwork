@@ -1,5 +1,10 @@
 local CarbonMessageUtils = clr.Capstones.Net.CarbonMessageUtils
-
+local capsnetlua = require("capsnetlua")
+local concreator = capsnetlua
+--___DEBUG__USE_LEGACY_TCPAPI = true
+if ___DEBUG__USE_LEGACY_TCPAPI then
+    concreator = CarbonMessageUtils
+end
 --api.tcpHost = nil
 --api.tcpPort = nil
 --api.tcpClient = nil
@@ -72,7 +77,7 @@ function api.TcpConnect()
 
     api.CloseTcpConnect()
     if ___CONFIG__TCP_URL then
-        api.tcpClient = CarbonMessageUtils.Connect(___CONFIG__TCP_URL)
+        api.tcpClient = concreator.Connect(___CONFIG__TCP_URL)
     else
         if not api.tcpHost then
             api.tcpHost = ___CONFIG__BASE_URL
@@ -80,7 +85,7 @@ function api.TcpConnect()
         if not api.tcpPort then
             api.tcpPort = 8976
         end
-        api.tcpClient = CarbonMessageUtils.ConnectWithDifferentPort(api.tcpHost, api.tcpPort)
+        api.tcpClient = concreator.ConnectWithDifferentPort(api.tcpHost, api.tcpPort)
     end
     CarbonMessageUtils.OnClose(api.tcpClient, api.TcpReconnect)
     CarbonMessageUtils.OnJson(api.tcpClient, OnTcpMessage)

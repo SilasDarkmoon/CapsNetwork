@@ -172,6 +172,31 @@ end
 
 ---------------------------------------------------------------------------
 
+local function ConvertMessage(data)
+    if clr.type(data) == clr.Capstones.Net.CarbonMessage then
+        return {
+            __iscarbon = true,
+            flags = data.Flags,
+            cate = data.Cate,
+            type = data.Type,
+            message = data.ObjMessage,
+        }
+    end
+    return data
+end
+
+local function ConvertMessageBack(data)
+    if type(data) == "table" and data.__iscarbon then
+        local mess = clr.Capstones.Net.CarbonMessage()
+        mess.Flags = data.flags
+        mess.Cate = data.cate
+        mess.Type = data.type
+        mess.ObjMessage = data.message
+        return mess
+    end
+    return data
+end
+
 function capsnetlua.Init()
     capsnetlua.instance = capsnetlua.new()
 end
@@ -186,7 +211,7 @@ end
 
 function capsnetlua:FireReceiveBlock(splitter, buffer, size, type, flags, seq, sseq, exFlags)
     self:ResetReadBlockContext()
-    splitter:FireReceiveBlockPublic(buffer, size, type, flags, seq, sseq, exFlags)
+    splitter:FireReceiveBlockBase(buffer, size, type, flags, seq, sseq, exFlags)
 end
 
 function capsnetlua:OnLuaReceiveBlock(splitter, buffer, size, exFlags)
@@ -410,6 +435,7 @@ function capsnetlua:PrepareBlock(data, type, flags, seq, sseq, exFlags)
 end
 
 function capsnetlua:GetExFlags(data)
+    data = ConvertMessage(data)
     if type(data) == "table" and data.__iscarbon then
         return {
             flags = data.flags,
@@ -468,6 +494,7 @@ function capsnetlua:GetDataType(data)
 end
 
 function capsnetlua:CanWrite(data)
+    data = ConvertMessage(data)
     if type(data) == "table" and data.__iscarbon then
         return true
     else
@@ -476,6 +503,7 @@ function capsnetlua:CanWrite(data)
 end
 
 function capsnetlua:IsOrdered(data)
+    data = ConvertMessage(data)
     if type(data) == "table" and data.__iscarbon then
         return false
     else
@@ -484,6 +512,7 @@ function capsnetlua:IsOrdered(data)
 end
 
 function capsnetlua:Write(data)
+    data = ConvertMessage(data)
     if type(data) == "table" and data.__iscarbon then
         if data.message then
             return self.pbformatter:Write(data.message)
@@ -511,7 +540,7 @@ function capsnetlua:Read(type, buffer, offset, cnt, exFlags)
             local raw = clr.array(cnt, clr.System.Byte)
             buffer:Seek(offset, clr.System.IO.SeekOrigin.Begin)
             buffer:Read(raw, 0, cnt)
-            local str = clr.System.Text.Encoding.UTF8.GetString(raw, 0, cnt)
+            local str = clr.unwrap(raw)
             carbon.message = str
         elseif exFlags.cate == 4 then
             -- PB
@@ -527,7 +556,7 @@ function capsnetlua:Read(type, buffer, offset, cnt, exFlags)
             buffer:Read(raw, 0, cnt)
             carbon.message = raw
         end
-        return carbon
+        return ConvertMessageBack(carbon)
     end
 end
 
@@ -570,12 +599,14 @@ ___LuaNet__Read = function(...)
 end
 
 ----------------------------------------------------------------
+package.loaded["capsnetlua"] = capsnetlua
 
 capsnetlua.ConnectionConfig = clr.Capstones.Net.ConnectionFactory.ConnectionConfig(clr.Capstones.Net.CarbonMessageUtils.ConnectionConfig)
-capsnetlua.ConnectionConfig.SConfig = clr.Capstones.Net.SerializationConfig()
-capsnetlua.ConnectionConfig.SConfig.SplitterFactory = clr.Capstones.Net.LuaSplitter.Factory
-capsnetlua.ConnectionConfig.SConfig.Composer = clr.Capstones.Net.LuaComposer()
-capsnetlua.ConnectionConfig.SConfig.FormatterFactory = clr.Capstones.Net.LuaFormatter.Factory
+local sconfig = clr.Capstones.Net.SerializationConfig()
+sconfig.SplitterFactory = clr.Capstones.Net.LuaSplitter.Factory
+sconfig.Composer = clr.Capstones.Net.LuaComposer()
+sconfig.FormatterFactory = clr.Capstones.Net.LuaFormatter.Factory
+capsnetlua.ConnectionConfig.SConfig = sconfig
 
 function capsnetlua.Connect(url)
     capsnetlua.CarbonPushConnection = clr.Capstones.Net.ConnectionFactory.GetClient(url, capsnetlua.ConnectionConfig)
