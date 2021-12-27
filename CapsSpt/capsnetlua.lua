@@ -1,6 +1,6 @@
 local capsnetlua = class("capsnetlua")
 
-capsnetlua.MAX_MESSAGE_LENGTH = 1024 * 1024
+capsnetlua.MAX_MESSAGE_LENGTH = 1 * 1024 * 1024
 capsnetlua.PB_COMPOSER_USE_VARIANT_HEADER = true
 
 local typeClrBytes
