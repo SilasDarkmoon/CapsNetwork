@@ -146,8 +146,8 @@ function pbformatter:Write(data)
         stream:Clear()
         local pb = require("pb")
         local encoded = pb.encode(data.messageName, data)
-        local raw = clr.wrap(encoded)
-        stream:Write(raw, 0, #raw)
+        local raw = clr.array(encoded)
+        stream:Write(raw, 0, #encoded)
         return stream
     end
 
@@ -337,6 +337,7 @@ function capsnetlua:ReadBlock(splitter)
     local size, flags, cate, type, endpoint = self:ReadHeaders(splitter)
     local realsize = size - 16
     local exFlags = {
+        __luastackonly = true,
         flags = flags,
         cate = cate,
         type = type,
@@ -370,6 +371,7 @@ function capsnetlua:TryReadBlock(splitter)
             local size, flags, cate, type, endpoint = self:ReadHeaders(splitter)
             local realsize = size - 16
             local exFlags = {
+                __luastackonly = true,
                 flags = flags,
                 cate = cate,
                 type = type,
