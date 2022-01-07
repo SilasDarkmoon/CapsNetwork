@@ -312,21 +312,25 @@ function lua2pb.convertCompactDataToProtobuf(tab)
     end
 end
 
-function lua2pb.encode(tab)
+function lua2pb.preencode(tab)
     if type(tab) == "table" or table.isudtable(tab) then
         local data = lua2pb.extractDataFromTable(tab)
         local plain = lua2pb.convertDataTableToPlain(data)
         local compact = lua2pb.convertPlainDataToCompact(plain)
         local ptab = lua2pb.convertCompactDataToProtobuf(compact)
 
-        local raw = pb.encode("protocols.CompactLuaValueProto", ptab)
-        return raw
+        return proto.new("protocols.CompactLuaValueProto", ptab)
     else
         local ptab = lua2pb.convertCompactDataToProtobuf(tab)
 
-        local raw = pb.encode("protocols.CompactLuaValueProto", ptab)
-        return raw
+        return proto.new("protocols.CompactLuaValueProto", ptab)
     end
+end
+
+function lua2pb.encode(tab)
+    local ptab = lua2pb.preencode(tab)
+    local raw = pb.encode("protocols.CompactLuaValueProto", ptab)
+    return raw
 end
 
 function lua2pb.convertProtobufToCompactData(tab)
@@ -461,6 +465,11 @@ end
 
 function lua2pb.decode(raw)
     local ptab = pb.decode("protocols.CompactLuaValueProto", raw)
+
+    return lua2pb.postdecode(ptab)
+end
+
+function lua2pb.postdecode(ptab)
     local compact, istable = lua2pb.convertProtobufToCompactData(ptab)
     if not istable then
         return compact
