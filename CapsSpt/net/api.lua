@@ -39,7 +39,7 @@ local function createRequest(uri, data, seq, timeout)
     local request
     local wwwTimeout = api.timeout
     if type(timeout) == "number" and timeout > 0 then -- TODO: could we set timeout to -1 (never timeout)?
-        wwwTimeout = timeOut
+        wwwTimeout = timeout
     end
 
     if datamt and datamt.rawpost then
@@ -54,8 +54,13 @@ local function createRequest(uri, data, seq, timeout)
             end
         end
 
-        form.PrepareMethod = "default"
-        form.Encoded = data.data
+        if data.data then
+            form.PrepareMethod = "default"
+            form.Encoded = data.data
+        else
+            form.PrepareMethod = "nodata"
+            form.Encoded = nil
+        end
 
         www.Timeout = wwwTimeout * 1000
 
@@ -191,12 +196,15 @@ end
 
 function api.post(uri, data, quiet, timeOut)
     uri = api.normalizeUrl(uri)
-    local mess_data = "Request #"..nextRequestSeq..": "..uri.."\n"
-    mess_data = mess_data..dumpq(data, "Data").."\n"
+    local mess_data = "Request"
     local datamt = getmetatable(data)
     if datamt and datamt.rawpost then
+        mess_data = mess_data..": "..uri.."\n"
+        mess_data = mess_data..dumpq(data, "Data").."\n"
         mess_data = mess_data..dumprawq(clr.datastr(data.data), "Raw")
     else
+        mess_data = mess_data.." #"..nextRequestSeq..": "..uri.."\n"
+        mess_data = mess_data..dumpq(data, "Data").."\n"
         mess_data = mess_data..dumpq(clr.wrap(json.encode(data and data.data or data)), "Json")
     end
     print(mess_data)
@@ -344,7 +352,11 @@ function api.result(request, timedoutInLua)
                         local datamt = getmetatable(request.pdata)
                         local tab = json.decode(rawmsg)
                         if type(tab) ~= 'table' then
-                            dump(rawmsg, "Response #"..request.seq)
+                            if request.seq then
+                                dump(rawmsg, "Response #"..tostring(request.req))
+                            else
+                                dump(rawmsg, "Response")
+                            end
                             request.val = rawmsg
                         else
                             dump(tab, "Response #"..request.seq)
@@ -378,7 +390,11 @@ function api.result(request, timedoutInLua)
                 local datamt = getmetatable(request.pdata)
                 local tab = json.decode(msg)
                 if type(tab) ~= 'table' then
-                    dump(msg, "Response #"..request.seq)
+                    if request.seq then
+                        dump(msg, "Response #"..request.seq)
+                    else
+                        dump(msg, "Response")
+                    end
                     if datamt and datamt.rawpost then
                         request.val = msg
                     else
@@ -408,7 +424,11 @@ function api.result(request, timedoutInLua)
             end
             request.msg = msg
             if failed then
-                dump(msg, "Response #"..request.seq.." Failed")
+                if request.seq then
+                    dump(msg, "Response #"..request.seq.." Failed")
+                else
+                    dump(msg, "Response Failed")
+                end
                 if event then
                     request.event = event
                 end
