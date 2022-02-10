@@ -204,7 +204,7 @@ function api.post(uri, data, quiet, timeOut)
         mess_data = mess_data..dumprawq(clr.datastr(data.data), "Raw")
     else
         mess_data = mess_data.." #"..nextRequestSeq..": "..uri.."\n"
-        mess_data = mess_data..dumpq(data, "Data").."\n"
+        mess_data = mess_data..dumprawq(data, "Data").."\n"
         mess_data = mess_data..dumpq(clr.wrap(json.encode(data and data.data or data)), "Json")
     end
     print(mess_data)
