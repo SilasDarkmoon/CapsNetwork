@@ -106,7 +106,7 @@ namespace Capstones.LuaLib
     using Capstones.Net;
     public static partial class LuaHubEx
     {
-        private class DynamicProtobufMessageHub : LuaTypeHub.TypeHubValueType, ILuaTrans<ProtobufMessage>, ILuaPush<ProtobufMessage>
+        private class DynamicProtobufMessageHub : LuaTypeHub.TypeHubValueType, ILuaTrans<ProtobufMessage>, ILuaPush<ProtobufMessage>, ILuaNative, ILuaConvert
         {
             public override bool Nonexclusive { get { return true; } }
             private static Dictionary<ProtobufNativeType, Action<IntPtr, ProtobufParsedValue>> _TypedSlotValuePushFuncs = new Dictionary<ProtobufNativeType, Action<IntPtr, ProtobufParsedValue>>()
@@ -327,6 +327,18 @@ namespace Capstones.LuaLib
             {
                 t = typeof(ProtobufMessage);
                 PutIntoCache();
+
+                _ConvertFromFuncs = new[]
+                {
+                    new KeyValuePair<Type, LuaConvertFunc>(typeof(LuaTable), LuaConvertFuncFromLuaTable),
+                    new KeyValuePair<Type, LuaConvertFunc>(typeof(LuaOnStackTable), LuaConvertFuncFromLuaTable),
+                    new KeyValuePair<Type, LuaConvertFunc>(typeof(LuaRawTable), LuaConvertFuncFromLuaTable),
+                    new KeyValuePair<Type, LuaConvertFunc>(typeof(LuaOnStackRawTable), LuaConvertFuncFromLuaTable),
+                };
+                _ConvertFuncs[typeof(LuaTable)] = LuaConvertFuncToLuaTable;
+                _ConvertFuncs[typeof(LuaOnStackTable)] = LuaConvertFuncToLuaOnStackTable;
+                _ConvertFuncs[typeof(LuaRawTable)] = LuaConvertFuncToLuaRawTable;
+                _ConvertFuncs[typeof(LuaOnStackRawTable)] = LuaConvertFuncToLuaOnStackRawTable;
             }
             protected override bool UpdateDataAfterCall
             {
@@ -358,6 +370,98 @@ namespace Capstones.LuaLib
             ProtobufMessage ILuaTrans<ProtobufMessage>.GetLua(IntPtr l, int index)
             {
                 return GetLuaRaw(l, index);
+            }
+
+            public void Wrap(IntPtr l, int index)
+            {
+                l.pushvalue(index);
+                // set trans
+                l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+                l.pushlightuserdata(_DynamicProtobufMessageHub.r); // #trans trans
+                l.settable(-3);
+            }
+            public void Unwrap(IntPtr l, int index)
+            {
+                l.pushvalue(index);
+                // set trans
+                l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+                l.pushnil(); // #trans nil
+                l.settable(-3);
+            }
+            public int LuaType { get { return LuaCoreLib.LUA_TTABLE; } }
+
+            private static int LuaConvertFuncToLuaOnStackTable(IntPtr l, int index)
+            {
+                //// this is already the lua-table
+                //l.pushvalue(index);
+                ////l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+                ////l.pushnil(); // #trans nil
+                ////l.settable(-3);
+
+                var pos = l.NormalizeIndex(index);
+                var inst = new LuaOnStackTable(l, pos);
+                l.PushLuaObject(inst);
+                return 1;
+            }
+            private static int LuaConvertFuncToLuaTable(IntPtr l, int index)
+            {
+                //// this is already the lua-table
+                //l.pushvalue(index);
+                ////l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+                ////l.pushnil(); // #trans nil
+                ////l.settable(-3);
+
+                var inst = new LuaTable(l, index);
+                l.PushLuaObject(inst);
+                return 1;
+            }
+            private static int LuaConvertFuncToLuaOnStackRawTable(IntPtr l, int index)
+            {
+                //// this is already the lua-table
+                //l.pushvalue(index);
+                ////l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+                ////l.pushnil(); // #trans nil
+                ////l.settable(-3);
+
+                var pos = l.NormalizeIndex(index);
+                var inst = new LuaOnStackRawTable(l, pos);
+                l.PushLuaObject(inst);
+                return 1;
+            }
+            private static int LuaConvertFuncToLuaRawTable(IntPtr l, int index)
+            {
+                //// this is already the lua-table
+                //l.pushvalue(index);
+                ////l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+                ////l.pushnil(); // #trans nil
+                ////l.settable(-3);
+
+                var inst = new LuaRawTable(l, index);
+                l.PushLuaObject(inst);
+                return 1;
+            }
+            private static int LuaConvertFuncFromLuaTable(IntPtr l, int index)
+            {
+                int typecode;
+                bool isobj;
+                l.GetType(index, out typecode, out isobj);
+                if (!isobj)
+                {
+                    l.pushvalue(index);
+                    // set trans
+                    l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+                    l.pushlightuserdata(_DynamicProtobufMessageHub.r); // #trans trans
+                    l.settable(-3);
+                }
+                else
+                {
+                    l.PushLua(l.GetLua(index));
+                    // set trans
+                    l.pushlightuserdata(LuaConst.LRKEY_TYPE_TRANS); // #trans
+                    l.pushlightuserdata(_DynamicProtobufMessageHub.r); // #trans trans
+                    l.settable(-3);
+                }
+                return 1;
             }
         }
 
