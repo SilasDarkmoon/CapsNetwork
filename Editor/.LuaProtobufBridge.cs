@@ -622,7 +622,9 @@ namespace Capstones.LuaExt
                     l.pop(1);
                     return obj;
                 }
-                return null;
+
+                LuaTable tab = new LuaTable(l, index);
+                return tab; // fallback to LuaTable
             }
             public object GetLua(IntPtr l, int index)
             {
@@ -637,7 +639,7 @@ namespace Capstones.LuaExt
                 {
                     return type;
                 }
-                return null;
+                return typeof(LuaTable); // fallback to LuaTable
             }
             public Type GetType(IntPtr l, int index)
             {
