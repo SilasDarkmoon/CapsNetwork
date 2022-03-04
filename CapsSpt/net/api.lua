@@ -359,7 +359,11 @@ function api.result(request, timedoutInLua)
                             end
                             request.val = rawmsg
                         else
-                            dump(tab, "Response #"..request.seq)
+                            if request.seq then
+                                dump(tab, "Response #"..tostring(request.seq))
+                            else
+                                dump(tab, "Response")
+                            end
                             if datamt and datamt.rawpost then
                                 request.val = tab
                             else
