@@ -1095,7 +1095,15 @@ namespace Capstones.Net
             },
             ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
             {
-                new ConnectionFactory.ClientAttachmentCreator("CarbonHeartbeat", client => new Heartbeat(client, HeartbeatMessage, true)
+                new ConnectionFactory.ClientAttachmentCreator("CarbonHeartbeat", client => new Heartbeat(client, new MessageWithSpecifiedSerializer()
+                {
+                    Message = HeartbeatMessage,
+                    Serializer = new Serializer()
+                    {
+                        Composer = new CarbonComposer(),
+                        Formatter = new CarbonFormatter(),
+                    },
+                }, true)
                 {
                     Timeout = -1,
                     Interval = 3000,
