@@ -739,6 +739,7 @@ namespace Capstones.Net
             public int LastTick { get { return _LastTick; } }
             public int Interval = 1000;
             public int Timeout = -1;
+            protected bool _ForceBackground = false;
             protected bool _Dead = false;
             public bool Dead { get { return _Dead; } }
 
@@ -770,11 +771,27 @@ namespace Capstones.Net
             {
                 _HeartbeatCreator = heartbeatCreator;
             }
+            public Heartbeat(IReqClient client, bool forcebackground)
+            {
+                _Client = client;
+                _ForceBackground = forcebackground;
+                Start();
+            }
+            public Heartbeat(IReqClient client, object heartbeatObj, bool forcebackground)
+                : this(client, forcebackground)
+            {
+                _HeartbeatObj = heartbeatObj;
+            }
+            public Heartbeat(IReqClient client, Func<object> heartbeatCreator, bool forcebackground)
+                : this(client, forcebackground)
+            {
+                _HeartbeatCreator = heartbeatCreator;
+            }
 
             public void Start()
             {
 #if UNITY_ENGINE || UNITY_5_3_OR_NEWER
-                if (ThreadSafeValues.IsMainThread)
+                if (!_ForceBackground && ThreadSafeValues.IsMainThread)
                 {
                     CoroutineRunner.StartCoroutine(SendHeartbeatWork());
                 }
@@ -1078,7 +1095,7 @@ namespace Capstones.Net
             },
             ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
             {
-                new ConnectionFactory.ClientAttachmentCreator("CarbonHeartbeat", client => new Heartbeat(client, HeartbeatMessage)
+                new ConnectionFactory.ClientAttachmentCreator("CarbonHeartbeat", client => new Heartbeat(client, HeartbeatMessage, true)
                 {
                     Timeout = -1,
                     Interval = 3000,
