@@ -199,9 +199,11 @@ function api.post(uri, data, quiet, timeOut)
     local mess_data = "Request"
     local datamt = getmetatable(data)
     if datamt and datamt.rawpost then
-        mess_data = mess_data..": "..uri.."\n"
-        mess_data = mess_data..dumpq(data, "Data").."\n"
-        mess_data = mess_data..dumprawq(clr.datastr(data.data), "Raw")
+        if not datamt.omituploadlog then
+            mess_data = mess_data..": "..uri.."\n"
+            mess_data = mess_data..dumpq(data, "Data").."\n"
+            mess_data = mess_data..dumprawq(clr.datastr(data.data), "Raw")
+        end
     else
         mess_data = mess_data.." #"..nextRequestSeq..": "..uri.."\n"
         mess_data = mess_data..dumprawq(data, "Data").."\n"
@@ -220,9 +222,11 @@ function api.post(uri, data, quiet, timeOut)
     return request
 end
 
-function api.rawpost(data, headers)
+function api.rawpost(data, headers, metatable)
     local result = { data = data, headers = headers }
-    return setmetatable(result, { rawpost = true })
+    metatable = metatable or {}
+    metatable.rawpost = true
+    return setmetatable(result, metatable)
 end
 
 api.timeout = 20
