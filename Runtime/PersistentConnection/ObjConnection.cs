@@ -84,6 +84,11 @@ namespace Capstones.Net
         public DataFormatter Formatter;
         public readonly List<DataPostProcess> PostProcessors = new List<DataPostProcess>();
     }
+    public class MessageWithSpecifiedSerializer
+    {
+        public Serializer Serializer;
+        public object Message;
+    }
 
     public interface IChannel : IPersistentConnectionLifetime, IServerConnectionLifetime
     {
@@ -488,7 +493,14 @@ namespace Capstones.Net
         }
         public uint Write(object obj, uint seq_pingback, uint flags)
         {
-            var rw = _Serializer.Formatter;
+            var serializer = _Serializer;
+            var sobj = obj as MessageWithSpecifiedSerializer;
+            if (sobj != null)
+            {
+                serializer = sobj.Serializer;
+                obj = sobj.Message;
+            }
+            var rw = serializer.Formatter;
             if (!rw.CanWrite(obj))
             {
                 return 0;
@@ -519,14 +531,14 @@ namespace Capstones.Net
                 if (stream != null)
                 {
                     // post process (encrypt etc.)
-                    var processors = _Serializer.PostProcessors;
+                    var processors = serializer.PostProcessors;
                     for (int i = 0; i < processors.Count; ++i)
                     {
                         var processor = processors[i];
                         flags = processor.Process(stream, 0, flags, type, seq, sseq, IsServer, exFlags);
                     }
                     // compose block
-                    _Serializer.Composer.PrepareBlock(stream, type, flags, seq, sseq, exFlags);
+                    serializer.Composer.PrepareBlock(stream, type, flags, seq, sseq, exFlags);
                     // send
                     _Stream.Write(stream, 0, stream.Count);
 #if DEBUG_PVP

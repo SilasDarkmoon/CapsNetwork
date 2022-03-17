@@ -288,7 +288,7 @@ namespace Capstones.LuaLib
                 using (var lr = l.CreateStackRecover())
                 {
                     ProtobufMessage message = new ProtobufMessage();
-                    l.pushvalue(-1);
+                    l.pushvalue(index);
                     l.pushnil();
                     while (l.next(-2))
                     {

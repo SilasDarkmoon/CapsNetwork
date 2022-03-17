@@ -15,6 +15,12 @@ namespace Capstones.Net
 {
     public class HttpRequest : HttpRequestBase
     {
+        static HttpRequest()
+        {
+#if DISABLE_HTTPS_CERT_VERIFY
+            IgnoreCertVerify = true;
+#endif
+        }
         public HttpRequest(string url, HttpRequestData headers, HttpRequestData data, string dest)
             : base(url, headers, data, dest)
         {
@@ -51,7 +57,16 @@ namespace Capstones.Net
             [UnityPreserve]
             protected override void ReceiveContentLengthHeader(ulong contentLength)
             {
-                _Req._Total += contentLength;
+                ulong originTotal;
+                if (_Req._DestExistingLength == null)
+                {
+                    _Req._DestExistingLength = originTotal = _Req._Total;
+                }
+                else
+                {
+                    originTotal = (ulong)_Req._DestExistingLength;
+                }
+                _Req._Total += originTotal + contentLength;
             }
             [UnityPreserve]
             protected override bool ReceiveData(byte[] data, int dataLength)
@@ -76,7 +91,9 @@ namespace Capstones.Net
             }
         }
 
+        public static bool IgnoreCertVerify = false;
         protected System.IO.Stream _FinalDestStream;
+        protected ulong? _DestExistingLength = 0;
         protected ulong _DestStartOffset = 0;
         //protected bool _ToMem = false;
         //public bool ToMem { get { return _ToMem; } }
@@ -227,9 +244,10 @@ namespace Capstones.Net
                 }
 
                 _InnerReq.downloadHandler = new DownloadHandler(this);
-#if DISABLE_HTTPS_CERT_VERIFY
-                _InnerReq.certificateHandler = new IgnoredCertVerifier();
-#endif
+                if (IgnoreCertVerify)
+                {
+                    _InnerReq.certificateHandler = new IgnoredCertVerifier();
+                }
 
                 _InnerReq.disposeUploadHandlerOnDispose = true;
                 _InnerReq.disposeDownloadHandlerOnDispose = true;
