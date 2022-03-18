@@ -89,8 +89,8 @@ local function createRequest(uri, data, seq, timeout)
         if api.token then
             www.Token = tostring(api.token)
         end
-        www.Seq = tostring(seq)
-        www.RSeq = tostring(rseq)
+        www.Seq = seq
+        www.RSeq = rseq
 
         form.PrepareMethod = "json"
         form:Add("", json.encode(data.data))
