@@ -67,6 +67,7 @@ local function createRequest(uri, data, seq, timeout)
         www:StartRequest()
         request = {}
         setmetatable(request, {__isobject = true})
+        request.timeout = timeout
         request.www = www
         request.uri = uri
         request.pdata = data
@@ -105,6 +106,7 @@ local function createRequest(uri, data, seq, timeout)
         www:StartRequest()
         request = {}
         setmetatable(request, {__isobject = true})
+        request.timeout = timeout
         request.www = www
         request.uri = uri
         request.pdata = data
@@ -165,7 +167,7 @@ end
 
 function restartReq(request) -- local
     request.www:StopRequest()
-    local request2 = createRequest(request.uri, request.pdata, request.seq, request.timeOut)
+    local request2 = createRequest(request.uri, request.pdata, request.seq, request.timeout)
     request2.quiet = request.quiet
     request2.blockdlg = request.blockdlg
     request2.doneFuncs = request.doneFuncs
@@ -194,12 +196,14 @@ function repostReq(request) -- local
     return request2
 end
 
-function api.post(uri, data, quiet, timeOut)
+function api.post(uri, data, quiet, timeout)
     uri = api.normalizeUrl(uri)
     local mess_data = "Request"
     local datamt = getmetatable(data)
     if datamt and datamt.rawpost then
-        if not datamt.omituploadlog then
+        if datamt.omituploadlog then
+            mess_data = mess_data..": "..uri
+        else
             mess_data = mess_data..": "..uri.."\n"
             mess_data = mess_data..dumpq(data, "Data").."\n"
             mess_data = mess_data..dumprawq(clr.datastr(data.data), "Raw")
@@ -210,7 +214,7 @@ function api.post(uri, data, quiet, timeOut)
         mess_data = mess_data..dumpq(clr.wrap(json.encode(data and data.data or data)), "Json")
     end
     print(mess_data)
-    local request = createRequest(uri, data, nil, timeOut)
+    local request = createRequest(uri, data, nil, timeout)
     request.quiet = quiet
 
     if not quiet then
@@ -246,8 +250,8 @@ function api.wait(request, onComplete, onFailed)
     return done
 end
 
-function api.postwait(uri, data, onComplete, onFailed, quiet, timeOut)
-    return api.wait(api.post(uri, data, quiet, timeOut), onComplete, onFailed)
+function api.postwait(uri, data, onComplete, onFailed, quiet, timeout)
+    return api.wait(api.post(uri, data, quiet, timeout), onComplete, onFailed)
 end
 
 function api.waitany(...)
