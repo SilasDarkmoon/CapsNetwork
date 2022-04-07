@@ -57,6 +57,9 @@ local function createRequest(uri, data, seq, timeout)
         if data.data then
             form.PrepareMethod = "default"
             form.Encoded = data.data
+        elseif data.file then
+            form.PrepareMethod = "file"
+            form:Add("?uploadfile", data.file)
         else
             form.PrepareMethod = "nodata"
             form.Encoded = nil

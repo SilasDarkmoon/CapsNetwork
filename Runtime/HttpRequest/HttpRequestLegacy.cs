@@ -305,7 +305,21 @@ namespace Capstones.Net
 
                             try
                             {
-                                stream.Write(data, 0, data.Length);
+                                if (data.RawData != null)
+                                {
+                                    stream.Write(data.RawData, 0, data.RawData.Length);
+                                }
+                                else if (data.DataStream != null)
+                                {
+                                    data.DataStream.CopyTo(stream);
+                                }
+                                else if (data.FilePath != null)
+                                {
+                                    using (var src = PlatDependant.OpenRead(data.FilePath))
+                                    {
+                                        src.CopyTo(stream);
+                                    }
+                                }
                                 stream.Flush();
                             }
                             finally

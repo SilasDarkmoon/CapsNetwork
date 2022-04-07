@@ -684,14 +684,95 @@ namespace Capstones.Net
             }
         }
 
-        public byte[] PrepareRequestData()
+        public class EncodedUploadData
+        {
+            public string FilePath;
+            public byte[] RawData;
+            public Stream DataStream;
+
+            public EncodedUploadData() { }
+            public EncodedUploadData(string uploadfile)
+            {
+                FilePath = uploadfile;
+            }
+            public EncodedUploadData(byte[] rawdata)
+            {
+                RawData = rawdata;
+            }
+            public EncodedUploadData(Stream uploadstream)
+            {
+                DataStream = uploadstream;
+            }
+
+            public static implicit operator byte[](EncodedUploadData thiz)
+            {
+                if (thiz == null)
+                {
+                    return null;
+                }
+                return thiz.RawData;
+            }
+            public static implicit operator string(EncodedUploadData thiz)
+            {
+                if (thiz == null)
+                {
+                    return null;
+                }
+                return thiz.FilePath;
+            }
+            public static implicit operator Stream(EncodedUploadData thiz)
+            {
+                if (thiz == null)
+                {
+                    return null;
+                }
+                return thiz.DataStream;
+            }
+
+            public long Length
+            {
+                get
+                {
+                    try
+                    {
+                        if (RawData != null)
+                        {
+                            return RawData.Length;
+                        }
+                        if (FilePath != null)
+                        {
+#if NETFX_CORE
+                        using (var sr = PlatDependant.OpenRead(FilePath))
+                        {
+                            return sr.Length;
+                        }
+#else
+                            return new FileInfo(FilePath).Length;
+#endif
+
+                        }
+                        if (DataStream != null)
+                        {
+                            return DataStream.Length;
+                        }
+                        return 0;
+                    }
+                    catch (Exception e)
+                    {
+                        PlatDependant.LogError(e);
+                        return 0;
+                    }
+                }
+            }
+        }
+        public EncodedUploadData PrepareRequestData()
         {
             string token;
             ulong seq;
             ParseTokenAndSeq(out token, out seq);
             return PrepareRequestData(token, seq);
         }
-        public byte[] PrepareRequestData(string token, ulong seq)
+        public EncodedUploadData PrepareRequestData(string token, ulong seq)
         {
             if (_Data == null)
             {
@@ -712,6 +793,11 @@ namespace Capstones.Net
             var data = _Data.Encoded;
             if (data == null)
             {
+                var uploadfile = _Data.Get("?uploadfile") as string;
+                if (uploadfile != null)
+                {
+                    return new EncodedUploadData(uploadfile);
+                }
                 return null;
             }
             var encryptMethod = _Data.EncryptMethod;
@@ -774,7 +860,7 @@ namespace Capstones.Net
             {
                 data = _Data.Encoded;
             }
-            return data;
+            return new EncodedUploadData(data);
         }
 
         public static class PrepareFuncHelper

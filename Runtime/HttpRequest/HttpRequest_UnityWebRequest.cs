@@ -208,7 +208,23 @@ namespace Capstones.Net
                         _InnerReq.SetRequestHeader("Content-Type", _Data.ContentType);
                     }
                     //_InnerReq.SetRequestHeader("Content-Length", data.Length.ToString());
-                    _InnerReq.uploadHandler = new UploadHandlerRaw(data);
+                    if (data.RawData != null)
+                    {
+                        _InnerReq.uploadHandler = new UploadHandlerRaw(data);
+                    }
+                    else if (data.FilePath != null)
+                    {
+                        _InnerReq.uploadHandler = new UploadHandlerFile(data.FilePath);
+                    }
+                    else if (data.DataStream != null)
+                    {
+                        var tmpfile = ThreadSafeValues.UpdatePath + "/upload.file";
+                        using (var tmpstream = PlatDependant.OpenWrite(tmpfile))
+                        {
+                            data.DataStream.CopyTo(tmpstream);
+                        }
+                        _InnerReq.uploadHandler = new UploadHandlerFile(tmpfile);
+                    }
                 }
 
                 _DestStartOffset = 0;
