@@ -23,6 +23,9 @@ local cachedTypedMessage = {}
 local reconnectCount = 0
 
 local function OnTcpMessage(message, messagetype)
+    if api.forbidTcpMessage then
+        return
+    end
     reconnectCount = 0
     local jsonMess, err = json.decode(message)
     if jsonMess then
