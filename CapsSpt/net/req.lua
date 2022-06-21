@@ -154,7 +154,11 @@ function req.post(uri, data, oncomplete, onfailed, quiet, timeout)
             postdone = "failed"
         else
             if quiet then
-                postdone = "failed"
+                if quiet == "retry" then
+                    ret = ret:repost()
+                else
+                    postdone = "failed"
+                end
             else
                 local failedWait = nil
                 if type(reqDefaultErrorListeners[request.failed]) == "function" then
@@ -233,133 +237,5 @@ function req.post(uri, data, oncomplete, onfailed, quiet, timeout)
 
     return ret
 end
-
-
--- ------------
--- -- default eventListener:
--- ------------
-
--- function reqEventListeners.restart(data)
---     local waitHandle = { }
---     if data then
---         local msg  = type(data) == "string" and data or lang.trans("loginExpire")
---         require("ui.common.manager.DialogManager").ShowAlertPop(lang.trans("tips"), msg, function()
---             waitHandle.done = true
---             unity.restart()
---         end, nil, nil, 10000)
---     end
---     return waitHandle
--- end
-
--- function reqEventListeners.authExpire(data)
---     local waitHandle = { }
---     if data then
---         local msg  = type(data) == "string" and data or lang.trans("loginExpire")
---         require("ui.common.manager.DialogManager").ShowAlertPop(lang.trans("tips"), msg, function()
---             waitHandle.done = true
---             luaevt.trig("player_authExpire")
---         end, nil, nil, 10000)
---     end
---     return waitHandle
--- end
-
--- ------------
--- -- categoried error listeners:
--- ------------
--- reqDefaultErrorListeners[1002] = function(request)
---     if request and type(request.val) == "userdata" then
---         unity.changeServerTo(CS.toluastring(request.val))
---     end
--- end
--- ------------
--- -- requests:
--- ------------
--- local function SetCheckVersionVer(data)
---     local gameVer = _G["___resver"]
---     local isEditor = CS.UnityEngine.Application.isEditor
---     if CS.SplitResManager ~= nil and CS.SplitResManager.IsSplitResApp == true then
---         if isEditor then data.plat = "Android" end
---         local ver = {}
---         if type(gameVer) == "table" then
---             for k,v in pairs(gameVer) do
---                 if k ~= "res" and k ~= "resex" and k ~= "editor" then ver[k] = v end
---             end
---             local cdnv = tonumber(gameVer["cdn"])
---             for i = 1 , 9 ,1 do ver["cdn" .. i] = cdnv end
---         end
---         gameVer = ver
---         if isEditor then dump(gameVer, "测试模式运行 [Android]：   ") end
---     end
---     data.ver = gameVer
---     return data
--- end
-
--- function req.checkVersion(oncomplete, onfailed)
---     local flags = {}
---     local udFlags = CS.table(CS.Capstones.UnityFramework.ResManager.GetDistributeFlags())
---     for i, v in ipairs(udFlags) do
---         table.insert(flags, CS.toluastring(v))
---     end
---     local lang, country = luaevt.trig("GetLang")
-
---     local data = {
---         capid = CS.capid(),
---         plat = CS.platform,
---         flags = flags,
---         udid = luaevt.trig("GetUDID") or luaevt.trig("SDK_AdvertisingId") or CS.capid(),
---         mac = luaevt.trig("GetMacAddr"),
---         imei = luaevt.trig("GetImei"),
---         bichannel = luaevt.trig("SDK_GetChannel"),
---         app = luaevt.trig("SDK_GetAppId"),
---         appver = luaevt.trig("SDK_GetAppVerCode"),
---         pf = CS.platform,
---         lang = lang,
---         country = country,
---     }
---     SetCheckVersionVer(data)
---     if luaevt.trig("Platform_Branch") == nil then
---         data.fdataChannel = CS.Msdk.WGPlatform.Instance:WGGetChannelId()
---         data.regChannelId = CS.Msdk.WGPlatform.Instance:WGGetRegisterChannelId()
---     else
---         data.fdataChannel = luaevt.trig("SDK_GetChannel")
---         data.regChannelId = luaevt.trig("SDK_GetChannel")
---     end
---     return req.post(tostring(___CONFIG__ACCOUNT_URL) .. "device/version", data, oncomplete, onfailed)
--- end
-
--- function req.checkCheat(oncomplete, onfailed)
---     local flags = {}
---     local udFlags = CS.table(CS.Capstones.UnityFramework.ResManager.GetDistributeFlags())
---     for i, v in ipairs(udFlags) do
---         table.insert(flags, CS.toluastring(v))
---     end
---     local data = {
---         capid = CS.capid(),
---         plat = CS.platform,
---         flags = flags,
---         udid = luaevt.trig("GetUDID") or CS.capid(),
---         mac = luaevt.trig("GetMacAddr"),
---         imei = luaevt.trig("GetImei"),
---         bichannel = luaevt.trig("SDK_GetChannel"),
---     }
---     SetCheckVersionVer(data)
---     return req.post(tostring(___CONFIG__ACCOUNT_URL) .. "device/cheat", data, oncomplete, onfailed, true)
--- end
-
--- function req.forceColdUpdateInfo()
---     local data = {
---         did = CS.Msdk.WGPlatform.Instance:WGGetChannelId(),
---         plat = CS.platform,
---     }
-
---     return req.post(tostring(___CONFIG__ACCOUNT_URL) .. "device/forceColdUpdateInfo", data, nil, nil, true)
--- end
-
--- exports.url = url
--- exports.reqDefaultListeners = reqDefaultListeners
--- exports.reqDefaultErrorListeners = reqDefaultErrorListeners
--- exports.reqEventListeners = reqEventListeners
--- exports.reqResultPrepareListeners = reqResultPrepareListeners
--- exports.reqResultPrepareEventListeners = reqResultPrepareEventListeners
 
 return req
