@@ -287,16 +287,28 @@ namespace Capstones.LuaLib
                 }
                 using (var lr = l.CreateStackRecover())
                 {
+                    l.pushvalue(index); // otab
+                    l.pushlightuserdata(LuaConst.LRKEY_TARGET); // otab #tar
+                    l.rawget(-2); // otab obj
+                    if (l.IsUserData(-1))
+                    {
+                        return l.GetLuaRawObject(-1) as ProtobufMessage;
+                    }
+                    l.pop(1); // otab
+
                     ProtobufMessage message = new ProtobufMessage();
-                    l.pushvalue(index);
+                    //l.pushvalue(index);
                     l.pushnil();
                     while (l.next(-2))
                     {
-                        string key = l.GetString(-2);
-                        if (!string.IsNullOrEmpty(key))
+                        if (l.IsString(-2))
                         {
-                            var slot = message[key];
-                            GetMessageValue(l, -1, slot);
+                            string key = l.GetString(-2);
+                            if (!string.IsNullOrEmpty(key))
+                            {
+                                var slot = message[key];
+                                GetMessageValue(l, -1, slot);
+                            }
                         }
                         l.pop(1);
                     }
@@ -305,8 +317,15 @@ namespace Capstones.LuaLib
             }
             public static void PushLuaRaw(IntPtr l, ProtobufMessage val)
             {
-                l.newtable();
-                SetDataRaw(l, -1, val);
+                if (object.ReferenceEquals(val, null))
+                {
+                    _DynamicProtobufMessageHub.PushLuaCommon(l, null);
+                }
+                else
+                {
+                    l.newtable();
+                    SetDataRaw(l, -1, val);
+                }
             }
 
             public class DynamicProtobufMessageHubNative : LuaHub.LuaPushNativeBase<ProtobufMessage>
