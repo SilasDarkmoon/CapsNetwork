@@ -66,7 +66,7 @@ namespace Capstones.Net
                 {
                     originTotal = (ulong)_Req._DestExistingLength;
                 }
-                _Req._Total += originTotal + contentLength;
+                _Req._Total = originTotal + contentLength;
             }
             [UnityPreserve]
             protected override bool ReceiveData(byte[] data, int dataLength)
