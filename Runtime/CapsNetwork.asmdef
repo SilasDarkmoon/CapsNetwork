@@ -1,10 +1,12 @@
 {
     "name": "CapsNetwork",
+    "rootNamespace": "",
     "references": [
         "ResManagerEntry",
         "ResManager",
         "Unity.Collections.Concurrent",
-        "JsonObject"
+        "JsonObject",
+        "Unity.Networking.BackgroundDownload"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -13,5 +15,6 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": []
+    "versionDefines": [],
+    "noEngineReferences": false
 }
