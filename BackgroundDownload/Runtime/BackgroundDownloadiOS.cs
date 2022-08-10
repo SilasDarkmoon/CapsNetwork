@@ -18,7 +18,7 @@ namespace Unity.Networking
         internal BackgroundDownloadiOS(BackgroundDownloadConfig config)
             : base(config)
         {
-            var destDir = Path.GetDirectoryName(Path.Combine(Application.persistentDataPath, config.filePath));
+            var destDir = Path.GetDirectoryName(Path.Combine(_persistentDataPath, config.filePath));
             if (!Directory.Exists(destDir))
                 Directory.CreateDirectory(destDir);
             IntPtr request = UnityBackgroundDownloadCreateRequest(config.url.AbsoluteUri);

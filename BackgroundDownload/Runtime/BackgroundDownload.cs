@@ -123,6 +123,14 @@ namespace Unity.Networking
         : CustomYieldInstruction
         , IDisposable
     {
+        protected static string _persistentDataPath;
+
+        [RuntimeInitializeOnLoadMethod]
+        private static void Init()
+        {
+            _persistentDataPath = Application.persistentDataPath;
+        }
+
         protected static Dictionary<string, BackgroundDownload> _downloads;
 
         /// <summary>

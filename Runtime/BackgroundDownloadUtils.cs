@@ -27,6 +27,10 @@ namespace Capstones.Net
                 {
                     return download;
                 }
+                else if (config.filePath == path)
+                {
+                    download.Dispose();
+                }
             }
 
             return BackgroundDownload.Start(uri, path);
@@ -41,47 +45,55 @@ namespace Capstones.Net
         }
 
         private static char[] _PathSeparators = new char[] { '\\', '/' };
-        public static System.Collections.IEnumerator DownloadBackgroundWork(TaskProgress prog, string url, string path, Action<string> onDone = null, Action<long> onReportProgress = null, Func<string, bool> checkFunc = null)
+        public static TaskProgress DownloadBackground(string url, string path, Action<string> onDone = null, Action<long> onReportProgress = null, Func<string, bool> checkFunc = null)
         {
-            prog.Total = 100;
-            prog.Length = 5;
-
-            bool cancelled = false;
-            bool done = false;
-
-            try
+            return PlatDependant.RunBackgroundLongTime(prog =>
             {
-                while (true)
-                {
-                    var interPath = path + ".download";
-                    var driverindex = interPath.IndexOf(":");
-                    if (driverindex >= 0)
-                    {
-                        interPath = interPath.Substring(driverindex + 1);
-                    }
-                    interPath = interPath.TrimStart(_PathSeparators).ToLower();
-                    var req = CreateBackgroundDownloadRequest(url, interPath);
-                    prog.Task = req;
-                    prog.OnCancel += () =>
-                    {
-                        req.Dispose();
-                        cancelled = true;
-                    };
+                prog.Total = 1000000L;
+                prog.Length = 50000L;
 
-                    var downloaded = req.progress;
-                    var downloadtick = Environment.TickCount;
-                    while (req.status == BackgroundDownloadStatus.Downloading)
+                bool cancelled = false;
+                bool done = false;
+
+                try
+                {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                    UnityEngine.AndroidJNI.AttachCurrentThread();
+#endif
+                    while (true)
                     {
-                        yield return null;
-                        var newtick = Environment.TickCount;
-                        if (newtick - downloadtick > 1000)
+                        var interPath = path + ".download";
+                        if (interPath.StartsWith(ThreadSafeValues.AppPersistentDataPath, StringComparison.InvariantCultureIgnoreCase))
                         {
+                            interPath = interPath.Substring(ThreadSafeValues.AppPersistentDataPath.Length);
+                        }
+                        else
+                        {
+                            var driverindex = interPath.IndexOf(":");
+                            if (driverindex >= 0)
+                            {
+                                interPath = interPath.Substring(driverindex + 1);
+                            }
+                        }
+                        interPath = interPath.TrimStart(_PathSeparators).ToLower();
+                        interPath = interPath.Replace('\\', '/');
+                        var req = CreateBackgroundDownloadRequest(url, interPath);
+                        prog.Task = req;
+                        prog.OnCancel += () =>
+                        {
+                            req.Dispose();
+                            cancelled = true;
+                        };
+
+                        var downloaded = req.progress;
+                        while (req.status == BackgroundDownloadStatus.Downloading)
+                        {
+                            PlatDependant.Sleep(200);
                             var newdownloaded = req.progress;
                             if (newdownloaded > downloaded)
                             {
                                 downloaded = newdownloaded;
-                                downloadtick = newtick;
-                                prog.Length = 5L + (long)(((float)newdownloaded) * 90f);
+                                prog.Length = 50000L + (long)(((float)newdownloaded) * 900000f);
                                 if (onReportProgress != null)
                                 {
                                     onReportProgress(prog.Length);
@@ -96,77 +108,72 @@ namespace Capstones.Net
                             //    }
                             //}
                         }
-                    }
-                    req.Dispose();
+                        req.Dispose();
 
-                    if (cancelled)
-                    {
-                        prog.Error = "canceled";
-                        break;
-                    }
-                    if (req.status == BackgroundDownloadStatus.Failed)
-                    {
-                        yield return new WaitForSecondsRealtime(0.5f);
-                    }
-                    else //if (req.status == BackgroundDownloadStatus.Done)
-                    {
-                        var realinterPath = req.config.filePath;
-                        if (checkFunc == null || checkFunc(realinterPath))
+                        if (cancelled)
                         {
-                            if (realinterPath.Equals(interPath, StringComparison.InvariantCultureIgnoreCase))
+                            prog.Error = "canceled";
+                            break;
+                        }
+                        if (req.status == BackgroundDownloadStatus.Failed)
+                        {
+                            PlatDependant.Sleep(500);
+                        }
+                        else //if (req.status == BackgroundDownloadStatus.Done)
+                        {
+                            var realinterPath = req.config.filePath;
+                            var fullreal = System.IO.Path.Combine(ThreadSafeValues.AppPersistentDataPath, realinterPath);
+                            var fullinter = System.IO.Path.Combine(ThreadSafeValues.AppPersistentDataPath, interPath);
+                            if (checkFunc == null || checkFunc(fullreal))
                             {
-                                PlatDependant.MoveFile(interPath, path);
+                                if (realinterPath.Equals(interPath, StringComparison.InvariantCultureIgnoreCase))
+                                {
+                                    PlatDependant.MoveFile(fullinter, path);
+                                }
+                                else
+                                {
+                                    PlatDependant.CopyFile(fullreal, path);
+                                    PlatDependant.DeleteFile(fullinter);
+                                }
+                                break;
                             }
                             else
                             {
-                                PlatDependant.CopyFile(realinterPath, path);
-                                PlatDependant.DeleteFile(interPath);
+                                PlatDependant.DeleteFile(fullreal);
+                                PlatDependant.DeleteFile(fullinter);
                             }
-                            break;
-                        }
-                        else
-                        {
-                            PlatDependant.DeleteFile(realinterPath);
-                            PlatDependant.DeleteFile(interPath);
                         }
                     }
-                }
 
-                done = true;
-                if (prog.Error == null)
-                {
-                    prog.Length = 95;
-                    if (onDone != null)
-                    {
-                        onDone(null);
-                    }
-                }
-                else
-                {
-                    if (onDone != null)
-                    {
-                        onDone(prog.Error);
-                    }
-                }
-            }
-            finally
-            {
-                if (!done)
-                {
+                    done = true;
                     if (prog.Error == null)
                     {
-                        prog.Error = "coroutine not done correctly";
+                        prog.Length = 950000L;
+                        if (onDone != null)
+                        {
+                            onDone(null);
+                        }
+                    }
+                    else
+                    {
+                        if (onDone != null)
+                        {
+                            onDone(prog.Error);
+                        }
                     }
                 }
-                prog.Done = true;
-            }
-        }
-
-        public static TaskProgress DownloadBackground(string url, string path, Action<string> onDone = null, Action<long> onReportProgress = null, Func<string, bool> checkFunc = null)
-        {
-            var prog = new TaskProgress();
-            CoroutineRunner.StartCoroutine(DownloadBackgroundWork(prog, url, path, onDone, onReportProgress, checkFunc));
-            return prog;
+                finally
+                {
+                    if (!done)
+                    {
+                        if (prog.Error == null)
+                        {
+                            prog.Error = "Background downloading is not done correctly.";
+                        }
+                    }
+                    prog.Done = true;
+                }
+            });
         }
 
         public static TaskProgress Download(string url, string path, Action<string> onDone = null, Action<long> onReportProgress = null, Func<string, bool> checkFunc = null)

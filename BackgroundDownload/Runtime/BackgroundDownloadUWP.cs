@@ -29,7 +29,7 @@ namespace Unity.Networking
         {
 #if ENABLE_WINMD_SUPPORT
             CreateBackgroundDownloadGroup();
-            string filePath = Path.Combine(Application.persistentDataPath, config.filePath);
+            string filePath = Path.Combine(_persistentDataPath, config.filePath);
             string directory = Path.GetDirectoryName(filePath).Replace('/', '\\');
             if (!Directory.Exists(directory))
                 Directory.CreateDirectory(directory);
@@ -197,7 +197,7 @@ namespace Unity.Networking
 
         static string GetDownloadPath(string absPath)
         {
-            string basePath = Application.persistentDataPath.Replace('/', '\\');
+            string basePath = _persistentDataPath.Replace('/', '\\');
             if (!absPath.StartsWith(basePath)) // not something started by Unity
                 return null;
             int idx = basePath.Length;

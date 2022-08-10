@@ -58,8 +58,8 @@ namespace Capstones.Net
         {
             return PlatDependant.RunBackgroundLongTime(prog =>
             {
-                prog.Total = 100;
-                prog.Length = 5;
+                prog.Total = 1000000L;
+                prog.Length = 50000L;
 
                 bool cancelled = false;
 
@@ -91,7 +91,7 @@ namespace Capstones.Net
                             downloadtick = newtick;
                             if (req.Total > 0)
                             {
-                                prog.Length = 5L + (long)(((float)(newdownloaded)) / ((float)req.Total) * 90f);
+                                prog.Length = 50000L + (long)(((float)(newdownloaded)) / ((float)req.Total) * 900000f);
                                 if (onReportProgress != null)
                                 {
                                     onReportProgress(prog.Length);
@@ -126,7 +126,7 @@ namespace Capstones.Net
 
                 if (prog.Error == null)
                 {
-                    prog.Length = 95;
+                    prog.Length = 950000L;
                     if (onDone != null)
                     {
                         onDone(null);
