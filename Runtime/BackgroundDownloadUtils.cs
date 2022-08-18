@@ -172,6 +172,9 @@ namespace Capstones.Net
                         }
                     }
                     prog.Done = true;
+#if UNITY_ANDROID && !UNITY_EDITOR
+                    UnityEngine.AndroidJNI.DetachCurrentThread();
+#endif
                 }
             });
         }
