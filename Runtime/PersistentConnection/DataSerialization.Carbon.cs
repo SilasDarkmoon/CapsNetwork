@@ -727,15 +727,373 @@ namespace Capstones.Net
         }
     }
 
+    public interface ISafeReqClientAttachment
+    {
+        void Attach(IReqConnection safeclient);
+    }
+    public interface ICustomReceiveReqConnection
+    {
+        void EnqueueInput(IReqClient from, uint type, object reqobj, uint seq, bool noresp);
+    }
+
+    public static class SafeReqClientExtensions
+    {
+        public static IReqConnection GetSafeClient(this IReqConnection client)
+        {
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+            if (client == null)
+            {
+                return null;
+            }
+            if (client is ReqClient && !((ReqClient)client).IsBackground)
+            {
+                return client;
+            }
+            else
+            {
+                var safeclient = client.GetAttachment<IReqConnection>("SafeReqClient");
+                if (safeclient != null)
+                {
+                    return safeclient;
+                }
+                safeclient = new SafeReqClient(client);
+                client.SetAttachment("SafeReqClient", safeclient);
+                var attachments = client.GetAttachments();
+                foreach (var kvp in attachments)
+                {
+                    var attachment = kvp.Value;
+                    if (attachment is ISafeReqClientAttachment)
+                    {
+                        ISafeReqClientAttachment attach = (ISafeReqClientAttachment)attachment;
+                        attach.Attach(safeclient);
+                        safeclient.SetAttachment(kvp.Key, attach);
+                    }
+                }
+                return safeclient;
+            }
+#else
+            return client;
+#endif
+        }
+        public static IReqConnection GetUnsafeClient(this IReqConnection client)
+        {
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+            var safeclient = client as SafeReqClient;
+            if (safeclient == null)
+            {
+                return client;
+            }
+            else
+            {
+                return safeclient.Parent;
+            }
+#else
+            return client;
+#endif
+        }
+
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+        private class SafeReqClient : IReqConnection, ICustomReceiveReqConnection
+        {
+            private IReqConnection _Parent;
+            public IReqConnection Parent { get { return _Parent; } }
+            public SafeReqClient(IReqConnection parent)
+            {
+                _Parent = parent;
+                parent.RegHandler(HandleRequest);
+                parent.OnClose += () =>
+                {
+                    _SendNotify.Set();
+                };
+                PlatDependant.RunBackgroundLongTime(prog =>
+                {
+                    while (parent.IsAlive)
+                    {
+                        _SendNotify.WaitOne(1000);
+                        MessageInfo mi;
+                        while (_OutQueue.TryDequeue(out mi))
+                        {
+                            if (mi.IsRawResp)
+                            {
+                                parent.SendRawResponse(mi.Peer, mi.Raw, mi.Seq);
+                            }
+                            else
+                            {
+                                var innerreq = parent.Send(mi.Raw, mi.SendTimeout);
+                                var mainreq = mi.MonitoringRequest;
+                                if (mainreq != null)
+                                {
+                                    if (innerreq == null)
+                                    {
+                                        mainreq.Dispose();
+                                    }
+                                    else
+                                    {
+                                        mainreq.Parent = innerreq;
+                                        if (mainreq.Disposed)
+                                        {
+                                            innerreq.Dispose();
+                                        }
+                                        else
+                                        {
+                                            Request.Combine(mainreq, innerreq);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            public int Timeout { get { return _Parent.Timeout; } set { _Parent.Timeout = value; } }
+
+            public SerializationConfig SerializationConfig { get { return _Parent.SerializationConfig; } }
+
+            public Serializer Serializer { get { return _Parent.Serializer; } set { _Parent.Serializer = value; } }
+
+            public bool IsStarted { get { return _Parent.IsStarted; } }
+
+            public bool IsAlive { get { return _Parent.IsAlive; } }
+
+            public bool IsConnected { get { return _Parent.IsConnected; } }
+
+            Dictionary<Delegate, Delegate> SafeDelegates = new Dictionary<Delegate, Delegate>();
+            private TDel GetSafeDelegate<TDel>(TDel raw, Func<TDel, TDel> creator) where TDel : Delegate
+            {
+                var cache = SafeDelegates;
+                if (cache != null)
+                {
+                    Delegate outDel;
+                    if (cache.TryGetValue(raw, out outDel))
+                    {
+                        return (TDel)outDel;
+                    }
+                    outDel = creator(raw);
+                    cache[raw] = outDel;
+                    return (TDel)outDel;
+                }
+                else
+                {
+                    return creator(raw);
+                }
+            }
+
+            public event Action<IReqClient> OnPrepareConnection
+            {
+                add
+                {
+                    _Parent.OnPrepareConnection += GetSafeDelegate(value, v => v.UnityThreadWaitAction());
+                }
+
+                remove
+                {
+                    _Parent.OnPrepareConnection -= GetSafeDelegate(value, v => v.UnityThreadWaitAction());
+                }
+            }
+
+            public event Action OnUpdate
+            {
+                add
+                {
+                    _Parent.OnUpdate += GetSafeDelegate(value, v => v.UnityThreadAction());
+                }
+
+                remove
+                {
+                    _Parent.OnUpdate -= GetSafeDelegate(value, v => v.UnityThreadAction());
+                }
+            }
+
+            public event Action OnClose
+            {
+                add
+                {
+                    _Parent.OnClose += GetSafeDelegate(value, v => v.UnityThreadAction());
+                }
+
+                remove
+                {
+                    _Parent.OnClose -= GetSafeDelegate(value, v => v.UnityThreadAction());
+                }
+            }
+
+            public event Action<IServerConnectionLifetime> OnConnected
+            {
+                add
+                {
+                    _Parent.OnConnected += GetSafeDelegate(value, v => v.UnityThreadAction());
+                }
+
+                remove
+                {
+                    _Parent.OnConnected -= GetSafeDelegate(value, v => v.UnityThreadAction());
+                }
+            }
+
+            public void Start()
+            {
+                _Parent.Start();
+            }
+
+            public void Dispose()
+            {
+                _Parent.Dispose();
+            }
+
+            [EventOrder(int.MaxValue)]
+            public object HandleRequest(IReqClient from, uint type, object reqobj, uint seq)
+            {
+                _InQueue.Enqueue(new MessageInfo()
+                {
+                    Peer = from,
+                    Type = type,
+                    Raw = reqobj,
+                    Seq = seq,
+                });
+                UnityThreadDispatcher.RunInUnityThread(() =>
+                {
+                    MessageInfo mi;
+                    while (_InQueue.TryDequeue(out mi))
+                    {
+                        var resp = _InnerHandler.HandleRequest(mi.Peer, mi.Type, mi.Raw, mi.Seq);
+                        if (!mi.NoResp)
+                        {
+                            this.SendResponse(mi.Peer, resp, mi.Seq);
+                        }
+                    }
+                });
+                return PredefinedMessages.NoResponse;
+            }
+
+            private class Request : Capstones.Net.Request
+            {
+                public volatile bool Disposed = false;
+                public volatile Capstones.Net.Request Parent = null;
+
+                public override void Dispose()
+                {
+                    Disposed = true;
+                    var parent = Parent;
+                    Parent = null;
+                    if (parent != null)
+                    {
+                        parent.Dispose();
+                    }
+                }
+            }
+            private struct MessageInfo
+            {
+                public IReqClient Peer;
+                public uint Type;
+                public object Raw;
+                public uint Seq;
+                public bool NoResp;
+
+                public bool IsRawResp;
+                public int SendTimeout;
+                public Request MonitoringRequest;
+            }
+            private BaseReqHandler _InnerHandler = new BaseReqHandler();
+            private ConcurrentQueueGrowOnly<MessageInfo> _InQueue = new ConcurrentQueueGrowOnly<MessageInfo>();
+            private ConcurrentQueueGrowOnly<MessageInfo> _OutQueue = new ConcurrentQueueGrowOnly<MessageInfo>();
+            private AutoResetEvent _SendNotify = new AutoResetEvent(false);
+
+            public void EnqueueInput(IReqClient from, uint type, object reqobj, uint seq, bool noresp)
+            {
+                _InQueue.Enqueue(new MessageInfo()
+                {
+                    Peer = from,
+                    Type = type,
+                    Raw = reqobj,
+                    Seq = seq,
+                    NoResp = noresp,
+                });
+            }
+
+            public void RegHandler(Request.Handler handler)
+            {
+                _InnerHandler.RegHandler(handler);
+            }
+
+            public void RegHandler(uint type, Request.Handler handler)
+            {
+                _InnerHandler.RegHandler(type, handler);
+            }
+
+            public void RegHandler<T>(Request.Handler<T> handler)
+            {
+                _InnerHandler.RegHandler(handler);
+            }
+
+            public void RegHandler(Request.Handler handler, int order)
+            {
+                _InnerHandler.RegHandler(handler, order);
+            }
+
+            public void RegHandler(uint type, Request.Handler handler, int order)
+            {
+                _InnerHandler.RegHandler(type, handler, order);
+            }
+
+            public void RegHandler<T>(Request.Handler<T> handler, int order)
+            {
+                _InnerHandler.RegHandler(handler, order);
+            }
+
+            public void RemoveHandler(Request.Handler handler)
+            {
+                _InnerHandler.RemoveHandler(handler);
+            }
+
+            public void RemoveHandler(uint type, Request.Handler handler)
+            {
+                _InnerHandler.RemoveHandler(type, handler);
+            }
+
+            public void RemoveHandler<T>(Request.Handler<T> handler)
+            {
+                _InnerHandler.RemoveHandler(handler);
+            }
+
+
+            public Capstones.Net.Request Send(object reqobj, int timeout)
+            {
+                Request req = new Request();
+                _OutQueue.Enqueue(new MessageInfo()
+                {
+                    Raw = reqobj,
+                    SendTimeout= timeout,
+                    MonitoringRequest = req,
+                });
+                _SendNotify.Set();
+                return req;
+            }
+
+            public void SendRawResponse(IReqClient to, object response, uint seq_pingback)
+            {
+                _OutQueue.Enqueue(new MessageInfo()
+                {
+                    Peer = to,
+                    Raw = response,
+                    Seq = seq_pingback,
+                    IsRawResp = true,
+                });
+                _SendNotify.Set();
+            }
+        }
+#endif
+    }
+
     public static class CarbonMessageUtils
     {
-        public class Heartbeat : IDisposable
+        public class Heartbeat : ISafeReqClientAttachment, IDisposable
         {
-            protected IReqClient _Client;
+            protected IReqConnection _Client;
             public object _HeartbeatObj;
             public Func<object> _HeartbeatCreator;
 
-            protected int _LastTick;
+            protected volatile int _LastTick;
             public int LastTick { get { return _LastTick; } }
             public int Interval = 1000;
             public int Timeout = -1;
@@ -758,8 +1116,6 @@ namespace Capstones.Net
 
             public Heartbeat(IReqClient client)
             {
-                _Client = client;
-                Start();
             }
             public Heartbeat(IReqClient client, object heartbeatObj)
                 : this(client)
@@ -773,9 +1129,7 @@ namespace Capstones.Net
             }
             public Heartbeat(IReqClient client, bool forcebackground)
             {
-                _Client = client;
                 _ForceBackground = forcebackground;
-                Start();
             }
             public Heartbeat(IReqClient client, object heartbeatObj, bool forcebackground)
                 : this(client, forcebackground)
@@ -788,8 +1142,26 @@ namespace Capstones.Net
                 _HeartbeatCreator = heartbeatCreator;
             }
 
+            public void Attach(IReqConnection safeclient)
+            {
+                _Client = safeclient;
+                Start();
+            }
+
+            [EventOrder(int.MinValue)]
+            public object OnReceive(IReqClient from, uint type, object reqobj, uint seq)
+            {
+                _LastTick = Environment.TickCount;
+                return null;
+            }
+
             public void Start()
             {
+                if (Timeout > 0)
+                {
+                    _Client.GetUnsafeClient().RegHandler(OnReceive);
+                }
+
 #if UNITY_ENGINE || UNITY_5_3_OR_NEWER
                 if (!_ForceBackground && ThreadSafeValues.IsMainThread)
                 {
@@ -832,7 +1204,7 @@ namespace Capstones.Net
                                     interval = 1000;
                                 }
                                 Thread.Sleep(interval);
-                                if (Timeout > 0 && Environment.TickCount > _LastTick + Timeout)
+                                if (Timeout > 0 && Environment.TickCount - _LastTick > Timeout)
                                 {
                                     break;
                                 }
@@ -935,7 +1307,7 @@ namespace Capstones.Net
         }
         public static readonly CarbonMessage HeartbeatMessage = new CarbonMessage();
 
-        public class CarbonMessageHandler : IDisposable
+        public class CarbonMessageHandler : ISafeReqClientAttachment, IDisposable
         {
             public Action OnClose;
             public Action<short, int, object> OnMessage;
@@ -943,7 +1315,10 @@ namespace Capstones.Net
 
             public CarbonMessageHandler(IReqClient client)
             {
-                var handler = client as ReqHandler;
+            }
+            public void Attach(IReqConnection safeclient)
+            {
+                var handler = safeclient;
                 if (handler != null)
                 {
                     Action onClose = null;
@@ -996,12 +1371,15 @@ namespace Capstones.Net
                 }
             }
         }
-        public class CarbonMessageOnCloseHandler
+        public class CarbonMessageOnCloseHandler : ISafeReqClientAttachment
         {
-            private IReqClient _Client;
+            private IReqConnection _Client;
             public CarbonMessageOnCloseHandler(IReqClient client)
             {
-                _Client = client;
+            }
+            public void Attach(IReqConnection safeclient)
+            {
+                _Client = safeclient;
             }
 
             private event Action _OnConnectionClose;
@@ -1085,6 +1463,37 @@ namespace Capstones.Net
             }
         }
 
+        public class ControlCodeInfoHandler : ISafeReqClientAttachment
+        {
+            protected ICustomReceiveReqConnection _CClient;
+            protected IReqConnection _UnsafeClient;
+            public const uint ControlCodeInfo = 101;
+
+            public void Attach(IReqConnection safeclient)
+            {
+                _UnsafeClient = safeclient.GetUnsafeClient();
+                _CClient = safeclient as ICustomReceiveReqConnection;
+                _UnsafeClient.RegHandler(HandleRequest_Ctrl_Info);
+            }
+
+            public object HandleRequest_Ctrl_Info(IReqClient from, uint type, object reqobj, uint seq)
+            {
+                if (reqobj is PredefinedMessages.Control)
+                {
+                    var ctrl = (PredefinedMessages.Control)reqobj;
+                    if (ctrl.Code == ControlCodeInfo)
+                    {
+                        if (_CClient != null)
+                        {
+                            _CClient.EnqueueInput(from, type, reqobj, seq, true);
+                        }
+                        return PredefinedMessages.Empty;
+                    }
+                }
+                return null;
+            }
+        }
+
         public static readonly ConnectionFactory.ConnectionConfig ConnectionConfig = new ConnectionFactory.ConnectionConfig()
         {
             SConfig = new SerializationConfig()
@@ -1092,6 +1501,10 @@ namespace Capstones.Net
                 SplitterFactory = CarbonSplitter.Factory,
                 Composer = new CarbonComposer(),
                 FormatterFactory = CarbonFormatter.Factory,
+            },
+            ExConfig = new Dictionary<string, object>()
+            {
+                { "background", true },
             },
             ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
             {
@@ -1119,6 +1532,7 @@ namespace Capstones.Net
                 //}),
                 new ConnectionFactory.ClientAttachmentCreator("MessageHandler", client => new CarbonMessageHandler(client)),
                 new ConnectionFactory.ClientAttachmentCreator("OnCloseHandler", client => new CarbonMessageOnCloseHandler(client)),
+                new ConnectionFactory.ClientAttachmentCreator("ControlCodeInfoHandler", client => new ControlCodeInfoHandler()),
             },
         };
         public static readonly ConnectionFactory.ConnectionConfig HostedPVPConnectionConfig = new ConnectionFactory.ConnectionConfig()
@@ -1138,7 +1552,7 @@ namespace Capstones.Net
                 }),
                 new ConnectionFactory.ClientAttachmentCreator("TokenSender", client =>
                 {
-                    SendToken((ReqClient)client, null);
+                    SendToken((IReqConnection)client, null);
                     return null;
                 }),
             },
@@ -1219,25 +1633,39 @@ namespace Capstones.Net
             url = "tcp://" + url;
             return url;
         }
-        private static ReqClient _CarbonPushConnection;
-        public static ReqClient CarbonPushConnection { get { return _CarbonPushConnection; } }
-        public static ReqClient Connect(string url)
+        private static IReqConnection _CarbonPushConnection;
+        public static IReqConnection CarbonPushConnection { get { return _CarbonPushConnection; } }
+
+        public static void CloseConnection()
         {
-            return _CarbonPushConnection = ConnectionFactory.GetClient<ReqClient>(url, ConnectionConfig);
+            if (_CarbonPushConnection != null)
+            {
+                var con = _CarbonPushConnection;
+                ClearOnClose(con);
+                _CarbonPushConnection = null;
+                con.Dispose();
+            }
         }
-        public static ReqClient Connect(string host, int port)
+        public static IReqConnection Connect(string url)
+        {
+            EditorBridge.AfterPlayModeChange -= CloseConnection;
+            EditorBridge.AfterPlayModeChange += CloseConnection;
+
+            return _CarbonPushConnection = ConnectionFactory.GetClient<IReqConnection>(url, ConnectionConfig).GetSafeClient();
+        }
+        public static IReqConnection Connect(string host, int port)
         {
             string url = CombineUrl(host, port);
             return Connect(url);
         }
-        public static ReqClient ConnectWithDifferentPort(string url, int port)
+        public static IReqConnection ConnectWithDifferentPort(string url, int port)
         {
             var uri = new Uri(url);
             return Connect(uri.DnsSafeHost, port);
         }
 
         private static string _CurToken;
-        public static void SendToken(ReqClient client, string token)
+        public static void SendToken(IReqConnection client, string token)
         {
             if (token == null)
             {
@@ -1279,7 +1707,7 @@ namespace Capstones.Net
             }
         }
 
-        public static void OnClose(ReqClient client, Action onClose)
+        public static void OnClose(IReqConnection client, Action onClose)
         {
             ClearOnClose(client);
             if (onClose != null)
@@ -1287,7 +1715,7 @@ namespace Capstones.Net
                 AddOnClose(client, onClose);
             }
         }
-        public static void AddOnClose(ReqClient client, Action onClose)
+        public static void AddOnClose(IReqConnection client, Action onClose)
         {
             var handler = client.GetAttachment("OnCloseHandler") as CarbonMessageOnCloseHandler;
             if (handler != null)
@@ -1295,7 +1723,7 @@ namespace Capstones.Net
                 handler.OnConnectionClose += onClose;
             }
         }
-        public static void RemoveOnClose(ReqClient client, Action onClose)
+        public static void RemoveOnClose(IReqConnection client, Action onClose)
         {
             var handler = client.GetAttachment("OnCloseHandler") as CarbonMessageOnCloseHandler;
             if (handler != null)
@@ -1303,7 +1731,7 @@ namespace Capstones.Net
                 handler.OnConnectionClose -= onClose;
             }
         }
-        public static void ClearOnClose(ReqClient client)
+        public static void ClearOnClose(IReqConnection client)
         {
             var handler = client.GetAttachment("OnCloseHandler") as CarbonMessageOnCloseHandler;
             if (handler != null)
@@ -1332,7 +1760,7 @@ namespace Capstones.Net
             }
         }
 
-        public static void OnMessage(ReqClient client, Action<short, int, object> onMessage)
+        public static void OnMessage(IReqConnection client, Action<short, int, object> onMessage)
         {
             var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
             if (handler != null)
@@ -1340,7 +1768,7 @@ namespace Capstones.Net
                 handler.OnMessage = onMessage;
             }
         }
-        public static void OnJson(ReqClient client, Action<string, int> onJson)
+        public static void OnJson(IReqConnection client, Action<string, int> onJson)
         {
             var handler = client.GetAttachment("MessageHandler") as CarbonMessageHandler;
             if (handler != null)
@@ -1360,7 +1788,7 @@ namespace Capstones.Net
     {
         public static string Url;
         public static string Token;
-        public static ReqClient Client;
+        public static IReqConnection Client;
 
         public class CarbonMessageTestConnectToServer : UnityEditor.EditorWindow
         {

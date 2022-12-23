@@ -99,6 +99,19 @@ namespace Capstones.Net
 
         public delegate object Handler(IReqClient from, uint type, object reqobj, uint seq);
         public delegate object Handler<T>(IReqClient from, uint type, T reqobj, uint seq);
+
+        public static Request Combine(Request main, Request inner)
+        {
+            Action OnInnerDone = null;
+            OnInnerDone = () =>
+            {
+                inner.OnDone -= OnInnerDone;
+                main.Error = inner.Error;
+                main.ResponseObj= inner.ResponseObj;
+            };
+            inner.OnDone += OnInnerDone;
+            return main;
+        }
     }
 
     public class PeekedRequest : Request
@@ -448,11 +461,14 @@ namespace Capstones.Net
         void RegHandler(Request.Handler handler);
         void RegHandler(uint type, Request.Handler handler);
         void RegHandler<T>(Request.Handler<T> handler);
+        void RegHandler(Request.Handler handler, int order);
+        void RegHandler(uint type, Request.Handler handler, int order);
+        void RegHandler<T>(Request.Handler<T> handler, int order);
         void RemoveHandler(Request.Handler handler);
         void RemoveHandler(uint type, Request.Handler handler);
         void RemoveHandler<T>(Request.Handler<T> handler);
         object HandleRequest(IReqClient from, uint type, object reqobj, uint seq);
-        void SendResponse(IReqClient to, object response, uint seq_pingback);
+        void SendRawResponse(IReqClient to, object response, uint seq_pingback);
 
         //event Request.Handler HandleCommonRequest;
         event Action<IReqClient> OnPrepareConnection;
@@ -470,6 +486,32 @@ namespace Capstones.Net
             if (req != null)
             {
                 req.Dispose();
+            }
+        }
+        public static void SendResponse(this IReqServer thiz, IReqClient to, object response, uint seq_pingback)
+        {
+            var resp = response as Request;
+            if (resp != null)
+            {
+                if (resp is PeekedRequest)
+                {
+                    // the SendResponse it is handled by ReceivedRequest itself.
+                }
+                else
+                {
+                    resp.OnDone += () =>
+                    {
+                        thiz.SendRawResponse(to, resp.ResponseObj, seq_pingback);
+                    };
+                }
+            }
+            else if (response != null)
+            {
+                thiz.SendRawResponse(to, response, seq_pingback);
+            }
+            else
+            {
+                thiz.SendRawResponse(to, PredefinedMessages.Empty, seq_pingback); // we send an empty response.
             }
         }
 
@@ -989,7 +1031,7 @@ namespace Capstones.Net
 #endregion
     }
 
-    public abstract class ReqHandler : IReqServer
+    public class BaseReqHandler
     {
         protected class HandleRequestEvent : OrderedEvent<Request.Handler>
         {
@@ -1275,32 +1317,10 @@ namespace Capstones.Net
             respobj = merged.CallHandlers(from, messagetype, reqobj, seq);
             return respobj;
         }
-        public void SendResponse(IReqClient from, object response, uint seq_pingback)
-        {
-            var resp = response as Request;
-            if (resp != null)
-            {
-                if (resp is PeekedRequest)
-                {
-                    // the SendResponse it is handled by ReceivedRequest itself.
-                }
-                else
-                {
-                    resp.OnDone += () =>
-                    {
-                        SendRawResponse(from, resp.ResponseObj, seq_pingback);
-                    };
-                }
-            }
-            else if (response != null)
-            {
-                SendRawResponse(from, response, seq_pingback);
-            }
-            else
-            {
-                SendRawResponse(from, PredefinedMessages.Empty, seq_pingback); // we send an empty response.
-            }
-        }
+    }
+
+    public abstract class ReqHandler : BaseReqHandler, IReqServer
+    {
         public abstract void SendRawResponse(IReqClient to, object response, uint seq_pingback);
         public abstract void Start();
         public abstract bool IsStarted { get; }
@@ -1359,15 +1379,25 @@ namespace Capstones.Net
 #endregion
     }
 
-    public class ReqClient : ReqHandler, IReqClient, IPositiveConnection, IDisposable
+    public interface IReqConnection : IReqClient, IReqServer
+    {
+    }
+    public class ReqClient : ReqHandler, IReqConnection, IPositiveConnection, IDisposable
     {
         protected ObjClient _Channel;
         public ObjClient Channel { get { return _Channel; } }
         public override SerializationConfig SerializationConfig { get { return _Channel.SerializationConfig; } }
         public override Serializer Serializer { get { return _Channel.Serializer; } set { _Channel.Serializer = value; } }
+        protected bool _IsBackground = false;
+        public bool IsBackground { get { return _IsBackground; } }
 
         public ReqClient(ObjClient channel, IDictionary<string, object> exconfig)
         {
+            if (exconfig.Get<bool>("background"))
+            {
+                _IsBackground = true;
+            }
+
             _Channel = channel;
             _Channel.OnReceiveObj += OnChannelReceive;
             _Channel.OnConnected += FireOnConnected;
@@ -1623,7 +1653,7 @@ namespace Capstones.Net
                 var resp = HandleRequest(this, type, obj, reqseq);
                 if (pingback == 0)
                 {
-                    SendResponse(this, resp, reqseq);
+                    this.SendResponse(this, resp, reqseq);
                 }
             }
 
@@ -1662,7 +1692,7 @@ namespace Capstones.Net
                 if (!_Channel.DeserializeInConnectionThread)
                 {
 #if UNITY_ENGINE || UNITY_5_3_OR_NEWER
-                    if (ThreadSafeValues.IsMainThread)
+                    if (ThreadSafeValues.IsMainThread && !_IsBackground)
                     {
                         CoroutineRunner.StartCoroutine(RequestCheckWork());
                     }
@@ -1863,7 +1893,7 @@ namespace Capstones.Net
         public override bool IsAlive { get { return !_Disposed && (!_Started || _Server.IsAlive); } }
         public override bool IsConnected { get { return _Started; } }
 
-        public ReqClient GetConnection()
+        public IReqConnection GetConnection()
         {
             var channel = _Server.GetConnection();
             var child = new ReqClient(channel, _ExtraConfig);
@@ -1881,7 +1911,7 @@ namespace Capstones.Net
 
         public override void SendRawResponse(IReqClient to, object response, uint seq_pingback)
         {
-            var client = to as ReqClient;
+            var client = to as IReqConnection;
             if (client != null && client.IsAlive)
             {
                 client.SendRawResponse(to, response, seq_pingback);
@@ -1978,8 +2008,8 @@ namespace Capstones.Net
     {
         public interface IPersistentConnectionCreator
         {
-            IPersistentConnection CreateClient(Uri uri);
-            IPersistentConnectionServer CreateServer(Uri uri);
+            IPersistentConnection CreateClient(Uri uri, IDictionary<string, object> exconfig);
+            IPersistentConnectionServer CreateServer(Uri uri, IDictionary<string, object> exconfig);
         }
         private static Dictionary<string, IPersistentConnectionCreator> _Creators;
         private static Dictionary<string, IPersistentConnectionCreator> Creators
@@ -1995,30 +2025,36 @@ namespace Capstones.Net
         }
         public class RegisteredCreator : IPersistentConnectionCreator
         {
-            public Func<Uri, IPersistentConnection> ClientFactory;
-            public Func<Uri, IPersistentConnectionServer> ServerFactory;
+            public Func<Uri, IDictionary<string, object>, IPersistentConnection> ClientFactory;
+            public Func<Uri, IDictionary<string, object>, IPersistentConnectionServer> ServerFactory;
 
-            public RegisteredCreator(string scheme, Func<Uri, IPersistentConnection> clientFactory, Func<Uri, IPersistentConnectionServer> serverFactory)
+            public RegisteredCreator(string scheme, Func<Uri, IDictionary<string, object>, IPersistentConnection> clientFactory, Func<Uri, IDictionary<string, object>, IPersistentConnectionServer> serverFactory)
             {
                 ClientFactory = clientFactory;
                 ServerFactory = serverFactory;
                 Creators[scheme] = this;
             }
-
-            public IPersistentConnection CreateClient(Uri uri)
+            public RegisteredCreator(string scheme, Func<Uri, IPersistentConnection> clientFactory, Func<Uri, IPersistentConnectionServer> serverFactory)
             {
-                return ClientFactory(uri);
+                ClientFactory = (uri, exconfig) => clientFactory(uri);
+                ServerFactory = (uri, exconfig) => serverFactory(uri);
+                Creators[scheme] = this;
             }
-            public IPersistentConnectionServer CreateServer(Uri uri)
+
+            public IPersistentConnection CreateClient(Uri uri, IDictionary<string, object> exconfig)
             {
-                return ServerFactory(uri);
+                return ClientFactory(uri, exconfig);
+            }
+            public IPersistentConnectionServer CreateServer(Uri uri, IDictionary<string, object> exconfig)
+            {
+                return ServerFactory(uri, exconfig);
             }
         }
 
         public interface IHighLevelCreator
         {
-            IReqClient CreateClient(Uri uri);
-            IReqServer CreateServer(Uri uri);
+            IReqClient CreateClient(Uri uri, IDictionary<string, object> exconfig);
+            IReqServer CreateServer(Uri uri, IDictionary<string, object> exconfig);
         }
         private static Dictionary<string, IHighLevelCreator> _HighLevelCreators;
         private static Dictionary<string, IHighLevelCreator> HighLevelCreators
@@ -2034,23 +2070,29 @@ namespace Capstones.Net
         }
         public class HighLevelCreator : IHighLevelCreator
         {
-            public Func<Uri, IReqClient> ClientFactory;
-            public Func<Uri, IReqServer> ServerFactory;
+            public Func<Uri, IDictionary<string, object>, IReqClient> ClientFactory;
+            public Func<Uri, IDictionary<string, object>, IReqServer> ServerFactory;
 
-            public HighLevelCreator(string scheme, Func<Uri, IReqClient> clientFactory, Func<Uri, IReqServer> serverFactory)
+            public HighLevelCreator(string scheme, Func<Uri, IDictionary<string, object>, IReqClient> clientFactory, Func<Uri, IDictionary<string, object>, IReqServer> serverFactory)
             {
                 ClientFactory = clientFactory;
                 ServerFactory = serverFactory;
                 HighLevelCreators[scheme] = this;
             }
-
-            public IReqClient CreateClient(Uri uri)
+            public HighLevelCreator(string scheme, Func<Uri, IReqClient> clientFactory, Func<Uri, IReqServer> serverFactory)
             {
-                return ClientFactory(uri);
+                ClientFactory = (uri, exconfig) => clientFactory(uri);
+                ServerFactory = (uri, exconfig) => serverFactory(uri);
+                HighLevelCreators[scheme] = this;
             }
-            public IReqServer CreateServer(Uri uri)
+
+            public IReqClient CreateClient(Uri uri, IDictionary<string, object> exconfig)
             {
-                return ServerFactory(uri);
+                return ClientFactory(uri, exconfig);
+            }
+            public IReqServer CreateServer(Uri uri, IDictionary<string, object> exconfig)
+            {
+                return ServerFactory(uri, exconfig);
             }
         }
 
@@ -2154,6 +2196,7 @@ namespace Capstones.Net
         public struct ConnectionConfig : IEnumerable
         {
             public SerializationConfig SConfig;
+            public IDictionary<string, object> ExConfig;
             public IList<IClientAttachmentCreator> ClientAttachmentCreators;
             public IList<IServerAttachmentCreator> ServerAttachmentCreators;
 
@@ -2173,6 +2216,7 @@ namespace Capstones.Net
             public ConnectionConfig(ConnectionConfig other)
             {
                 SConfig = other.SConfig;
+                ExConfig = other.ExConfig;
                 ClientAttachmentCreators = other.ClientAttachmentCreators == null ? null : new List<IClientAttachmentCreator>(other.ClientAttachmentCreators);
                 ServerAttachmentCreators = other.ServerAttachmentCreators == null ? null : new List<IServerAttachmentCreator>(other.ServerAttachmentCreators);
             }
@@ -2206,22 +2250,22 @@ namespace Capstones.Net
             var sconfig = econfig.SConfig ?? DefaultSerializationConfig;
             var acclient = econfig.ClientAttachmentCreators;
             //var acserver = econfig.ServerAttachmentCreators;
-            var exconfig = UriUtilities.ParseExtraConfigFromQuery(uri);
+            IDictionary<string, object> exconfig = UriUtilities.ParseExtraConfigFromQuery(uri);
+            exconfig = exconfig.Merge(econfig.ExConfig);
 
             IReqClient client = null;
 
             IHighLevelCreator hcreator;
             if (HighLevelCreators.TryGetValue(scheme, out hcreator))
             {
-                //var exconfig = ParseExtraConfigFromQuery(uri); // high-level creators should parse exconfig themselves.
-                client = hcreator.CreateClient(uri);
+                client = hcreator.CreateClient(uri, exconfig);
             }
             if (client == null)
             {
                 IPersistentConnectionCreator creator;
                 if (Creators.TryGetValue(scheme, out creator))
                 {
-                    var connection = creator.CreateClient(uri);
+                    var connection = creator.CreateClient(uri, exconfig);
                     var channel = new ObjClient(connection, sconfig, exconfig);
                     client = new ReqClient(channel, exconfig);
                 }
@@ -2287,15 +2331,14 @@ namespace Capstones.Net
             IHighLevelCreator hcreator;
             if (HighLevelCreators.TryGetValue(scheme, out hcreator))
             {
-                //var exconfig = ParseExtraConfigFromQuery(uri); // high-level creators should parse exconfig themselves.
-                server = hcreator.CreateServer(uri);
+                server = hcreator.CreateServer(uri, exconfig);
             }
             if (server == null)
             {
                 IPersistentConnectionCreator creator;
                 if (Creators.TryGetValue(scheme, out creator))
                 {
-                    var connection = creator.CreateServer(uri);
+                    var connection = creator.CreateServer(uri, exconfig);
                     var channel = new ObjServer(connection, sconfig, exconfig);
                     server = new ReqServer(channel, exconfig);
                 }

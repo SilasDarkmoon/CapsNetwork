@@ -106,6 +106,23 @@ namespace Capstones.Net
             }
             return null;
         }
+        public static Dictionary<string, object> GetAttachments(object owner)
+        {
+            if (owner == null)
+            {
+                return null;
+            }
+            ConcurrentDictionary<string, object> attachments;
+            if (_AttachmentList.TryGetValue(owner, out attachments))
+            {
+                Dictionary<string, object> rv = new Dictionary<string, object>(attachments);
+                return rv;
+            }
+            else
+            {
+                return null;
+            }
+        }
 #else
         private static Dictionary<object, Dictionary<string, object>> _AttachmentList = new Dictionary<object, Dictionary<string, object>>();
         public static void SetAttachment(object owner, string name, object attach)
@@ -206,6 +223,27 @@ namespace Capstones.Net
             }
             return null;
         }
+        public static Dictionary<string, object> GetAttachments(object owner)
+        {
+            if (owner == null)
+            {
+                return null;
+            }
+            Dictionary<string, object> attachments;
+            lock (_AttachmentList)
+            {
+                _AttachmentList.TryGetValue(owner, out attachments);
+            }
+            if (attachments != null)
+            {
+                lock (attachments)
+                {
+                    Dictionary<string, object> rv = new Dictionary<string, object>(attachments);
+                    return rv;
+                }
+            }
+            return null;
+        }
 #endif
         public static void SetAttachment(this IChannel owner, string name, object attach)
         {
@@ -229,6 +267,10 @@ namespace Capstones.Net
         public static T GetAttachment<T>(this IChannel owner)
         {
             return (T)GetAttachment((object)owner, typeof(T).Name);
+        }
+        public static Dictionary<string, object> GetAttachments(this IChannel owner)
+        {
+            return GetAttachments((object)owner);
         }
         public static void TryDispose(object obj)
         {
