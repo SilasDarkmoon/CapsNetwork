@@ -538,9 +538,11 @@ namespace Capstones.UnityEngineEx
         }
         protected override void Move(int dstOffset, int srcOffset, int cnt)
         {
-            byte[] buffer = new byte[cnt];
-            System.Runtime.InteropServices.Marshal.Copy((IntPtr)((long)_RealBuffer.Address + srcOffset), buffer, 0, cnt);
-            System.Runtime.InteropServices.Marshal.Copy(buffer, 0, (IntPtr)((long)_RealBuffer.Address + dstOffset), cnt);
+            UnsafeMemMove.MemMove((IntPtr)((long)_RealBuffer.Address + srcOffset), (IntPtr)((long)_RealBuffer.Address + dstOffset), cnt);
+
+            //byte[] buffer = new byte[cnt];
+            //System.Runtime.InteropServices.Marshal.Copy((IntPtr)((long)_RealBuffer.Address + srcOffset), buffer, 0, cnt);
+            //System.Runtime.InteropServices.Marshal.Copy(buffer, 0, (IntPtr)((long)_RealBuffer.Address + dstOffset), cnt);
 
             //Capstones.Net.KCPLib.kcp_memmove((IntPtr)((long)_RealBuffer.Address + dstOffset), (IntPtr)((long)_RealBuffer.Address + srcOffset), cnt);
         }
