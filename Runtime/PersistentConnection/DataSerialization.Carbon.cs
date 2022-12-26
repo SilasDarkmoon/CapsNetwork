@@ -370,6 +370,10 @@ namespace Capstones.Net
                 }
                 catch (Exception e)
                 {
+                    if (_InputStream == null)
+                    { // means disposed. (connection lost.)
+                        return;
+                    }
                     PlatDependant.LogError(e);
                     ResetReadBlockContext();
                 }
