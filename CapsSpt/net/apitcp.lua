@@ -72,6 +72,21 @@ function api.TcpReconnect()
     end
 end
 
+local connectDelayedChecking = nil
+local function ConnectDelayedCheck()
+    if connectDelayedChecking then
+        return
+    end
+    connectDelayedChecking = true
+    unity.async(function()
+        unity.await.rtime(5)
+        connectDelayedChecking = nil
+        if not api.tcpClient or api.tcpClient == clr.null or not api.tcpClient.IsAlive then
+            api.TcpReconnect()
+        end
+    end)
+end
+
 function api.TcpConnect()
     local token = api.token
     if not token or token == "" then
@@ -97,6 +112,7 @@ function api.TcpConnect()
     if api.OnTcpConnected then
         api.OnTcpConnected()
     end
+    ConnectDelayedCheck()
 end
 
 function api.RegTcpMessageHandler(handler, messagetype)
