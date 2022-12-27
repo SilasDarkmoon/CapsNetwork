@@ -1522,7 +1522,7 @@ namespace Capstones.Net
                     },
                 }, true)
                 {
-                    Timeout = -1,
+                    Timeout = 15000,
                     Interval = 3000,
                 }),
                 //new ConnectionFactory.ClientAttachmentCreator("QoSHandler", client =>
@@ -1551,7 +1551,7 @@ namespace Capstones.Net
             {
                 new ConnectionFactory.ClientAttachmentCreator("CarbonHeartbeat", client => new Heartbeat(client, HeartbeatMessage)
                 {
-                    Timeout = -1,
+                    Timeout = 15000,
                     Interval = 3000,
                 }),
                 new ConnectionFactory.ClientAttachmentCreator("TokenSender", client =>
