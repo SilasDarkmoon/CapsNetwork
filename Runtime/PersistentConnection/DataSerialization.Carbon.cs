@@ -1314,15 +1314,53 @@ namespace Capstones.Net
 
         public class CarbonMessageHandler : ISafeReqClientAttachment, IDisposable
         {
-            public Action OnClose;
+            protected Action _OnClose;
+            public Action OnClose
+            {
+                get { return _OnClose; }
+                set
+                {
+                    Interlocked.Exchange(ref _OnClose, value);
+                    if (value != null)
+                    {
+                        if (_Disposed)
+                        {
+                            Interlocked.Exchange(ref _OnClose, null);
+                            value();
+                        }
+                    }
+                    //DoDelayedCheck();
+                }
+            }
             public Action<short, int, object> OnMessage;
             public Action<string, int> OnJsonMessage;
+            protected IReqConnection _Parent;
+
+            protected volatile int IsDoingDelayedCheck;
+            protected void DoDelayedCheck()
+            {
+                if (IsDoingDelayedCheck != 0)
+                {
+                    return;
+                }
+                IsDoingDelayedCheck = 1;
+                PlatDependant.RunBackground(prog =>
+                {
+                    Thread.Sleep(5000);
+                    IsDoingDelayedCheck = 0;
+                    if (!_Disposed && _Parent != null && !_Parent.IsAlive)
+                    {
+                        Dispose();
+                    }
+                });
+            }
 
             public CarbonMessageHandler(IReqClient client)
             {
             }
             public void Attach(IReqConnection safeclient)
             {
+                _Parent = safeclient;
                 var handler = safeclient;
                 if (handler != null)
                 {
@@ -1335,6 +1373,14 @@ namespace Capstones.Net
                     };
                     handler.OnClose += onClose;
                     handler.RegHandler(MessageHandler);
+                    if (!handler.IsAlive)
+                    {
+                        onClose();
+                    }
+                }
+                else
+                {
+                    Dispose();
                 }
             }
 
@@ -1366,11 +1412,11 @@ namespace Capstones.Net
                 if (!_Disposed)
                 {
                     _Disposed = true;
-                    if (OnClose != null)
+                    var onClose = Interlocked.Exchange(ref _OnClose, null);
+                    if (onClose != null)
                     {
-                        OnClose();
+                        onClose();
                     }
-                    OnClose = null;
                     OnMessage = null;
                     OnJsonMessage = null;
                 }
@@ -1726,6 +1772,10 @@ namespace Capstones.Net
             if (handler != null)
             {
                 handler.OnConnectionClose += onClose;
+            }
+            else
+            {
+                onClose();
             }
         }
         public static void RemoveOnClose(IReqConnection client, Action onClose)

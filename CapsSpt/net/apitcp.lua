@@ -105,14 +105,15 @@ function api.TcpConnect()
         end
         api.tcpClient = concreator.ConnectWithDifferentPort(api.tcpHost, api.tcpPort)
     end
-    CarbonMessageUtils.OnClose(api.tcpClient, api.TcpReconnect)
     CarbonMessageUtils.OnJson(api.tcpClient, OnTcpMessage)
     CarbonMessageUtils.SendToken(api.tcpClient, token)
-
+    
     if api.OnTcpConnected then
         api.OnTcpConnected()
     end
-    ConnectDelayedCheck()
+
+    CarbonMessageUtils.OnClose(api.tcpClient, api.TcpReconnect)
+    --ConnectDelayedCheck()
 end
 
 function api.RegTcpMessageHandler(handler, messagetype)
