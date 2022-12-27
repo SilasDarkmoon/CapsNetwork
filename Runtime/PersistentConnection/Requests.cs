@@ -108,8 +108,13 @@ namespace Capstones.Net
                 inner.OnDone -= OnInnerDone;
                 main.Error = inner.Error;
                 main.ResponseObj= inner.ResponseObj;
+                main.Done = true;
             };
             inner.OnDone += OnInnerDone;
+            if (inner.Done)
+            {
+                OnInnerDone();
+            }
             return main;
         }
     }
@@ -1436,6 +1441,7 @@ namespace Capstones.Net
                 {
                     Parent._DisposingReq.Enqueue(Seq);
                 }
+                Done = true;
             }
 
             public void SetResponse(object resp)

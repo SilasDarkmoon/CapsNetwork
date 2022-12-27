@@ -984,6 +984,7 @@ namespace Capstones.Net
                     {
                         parent.Dispose();
                     }
+                    Done = true;
                 }
             }
             private struct MessageInfo
