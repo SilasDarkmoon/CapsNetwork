@@ -955,6 +955,12 @@ namespace Capstones.Net
                     Raw = reqobj,
                     Seq = seq,
                 });
+                HandleInputInUnityThread();
+                return PredefinedMessages.NoResponse;
+            }
+
+            protected void HandleInputInUnityThread()
+            {
                 UnityThreadDispatcher.RunInUnityThread(() =>
                 {
                     MessageInfo mi;
@@ -967,7 +973,6 @@ namespace Capstones.Net
                         }
                     }
                 });
-                return PredefinedMessages.NoResponse;
             }
 
             private class Request : Capstones.Net.Request
@@ -1014,6 +1019,7 @@ namespace Capstones.Net
                     Seq = seq,
                     NoResp = noresp,
                 });
+                HandleInputInUnityThread();
             }
 
             public void RegHandler(Request.Handler handler)
