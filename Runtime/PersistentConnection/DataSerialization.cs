@@ -22,7 +22,7 @@ namespace Capstones.Net
                 return inst;
             }
         }
-        protected virtual void Attach(Stream input)
+        public virtual void Attach(Stream input)
         {
             _InputStream = input;
             _BufferedStream = input as IBuffered;
