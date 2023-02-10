@@ -11,6 +11,8 @@ using BackgroundDownloadimpl = Unity.Networking.BackgroundDownloadAndroid;
 using BackgroundDownloadimpl = Unity.Networking.BackgroundDownloadiOS;
 #elif UNITY_WSA_10_0
 using BackgroundDownloadimpl = Unity.Networking.BackgroundDownloadUWP;
+#else
+using BackgroundDownloadimpl = Unity.Networking.BackgroundDownloadDummy;
 #endif
 
 namespace Unity.Networking
