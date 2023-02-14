@@ -1,6 +1,7 @@
-﻿#if UNITY_IOS && !UNITY_EDITOR
+﻿#define LOG_TCPCLIENT_SEND_DATA
+//#if UNITY_IOS && !UNITY_EDITOR
 #define SOCKET_SEND_EXPLICIT_ORDER
-#endif
+//#endif
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -288,6 +289,21 @@ namespace Capstones.Net
             Send(data, data.Length);
         }
 
+#if LOG_TCPCLIENT_SEND_DATA
+        private string _LogFilePath;
+        public string LogFilePath
+        {
+            get
+            {
+                if (_LogFilePath == null)
+                {
+                    _LogFilePath = System.IO.Path.Combine(ThreadSafeValues.LogPath, $"rec/tcpdata{DateTime.Now:ddHHmmss}.bin");
+                }
+                return _LogFilePath;
+            }
+        }
+#endif
+
 #if SOCKET_SEND_EXPLICIT_ORDER
         protected AutoResetEvent _AsyncSendWaitHandle = new AutoResetEvent(true);
 #else
@@ -304,6 +320,13 @@ namespace Capstones.Net
             data.AddRef();
             if (_Socket != null)
             {
+#if LOG_TCPCLIENT_SEND_DATA
+                using (var file_stream = PlatDependant.OpenAppend(LogFilePath))
+                {
+                    file_stream.Write(data.Buffer, 0, cnt);
+                }
+#endif
+
 #if SOCKET_SEND_USE_BLOCKING_INSTEAD_OF_ASYNC
                 try
                 {
