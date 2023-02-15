@@ -1,7 +1,7 @@
 ﻿#define LOG_TCPCLIENT_SEND_DATA
-//#if UNITY_IOS && !UNITY_EDITOR
+#if UNITY_IOS && !UNITY_EDITOR
 #define SOCKET_SEND_EXPLICIT_ORDER
-//#endif
+#endif
 using System;
 using System.Collections;
 using System.Collections.Generic;
