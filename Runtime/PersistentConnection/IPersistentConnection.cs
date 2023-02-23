@@ -41,6 +41,9 @@ namespace Capstones.Net
     public interface IServerConnection : IPersistentConnection, IServerConnectionLifetime
     {
     }
+    public interface IAutoPackedConnection
+    {
+    }
 
     public interface ICustomSendConnection : IPersistentConnection
     {

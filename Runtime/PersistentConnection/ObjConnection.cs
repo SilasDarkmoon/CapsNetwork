@@ -198,9 +198,12 @@ namespace Capstones.Net
         {
             get { return _Connection == null ? null : _Connection.RemoteEndPoint; }
         }
+        protected bool _IsAutoPacked;
+        public bool IsAutoPacked { get { return _IsAutoPacked; } }
 
         public ObjClient(IPersistentConnection connection, SerializationConfig sconfig, IDictionary<string, object> exconfig)
         {
+            _IsAutoPacked = connection is IAutoPackedConnection;
             _DeserializeInConnectionThread = ConfigManager.Get<bool>(exconfig, "DeserializeInConnectionThread");
             _SerializeInConnectionThread = ConfigManager.Get<bool>(exconfig, "SerializeInConnectionThread");
             var idletimeout = ConfigManager.Get<int>(exconfig, "IdleTimeout");
@@ -216,6 +219,7 @@ namespace Capstones.Net
             _ServerConnection = connection as IServerConnection;
             _PositiveConnection = connection as IPositiveConnection;
             _Stream = new ConnectionStream(_Connection, true) { DonotNotifyReceive = !_DeserializeInConnectionThread };
+            _Stream.IsAutoPacked = _IsAutoPacked;
             _Serializer = new Serializer()
             {
                 Splitter = sconfig.SplitterFactory.Create(_Stream),

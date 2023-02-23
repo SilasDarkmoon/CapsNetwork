@@ -33,11 +33,13 @@ namespace Capstones.Net
 
         public event StreamReceiveHandler OnReceive = (data, offset, cnt) => { };
         public bool DonotNotifyReceive = false;
+        public bool IsAutoPacked = false;
 
         public override void Write(byte[] buffer, int offset, int count)
         {
             if (_Con != null)
             {
+                ValueList<PooledBufferSpan> buffers = new ValueList<PooledBufferSpan>();
                 int cntwrote = 0;
                 while (cntwrote < count)
                 {
@@ -49,18 +51,17 @@ namespace Capstones.Net
                         scnt = sbuffer.Length;
                     }
                     Buffer.BlockCopy(buffer, offset + cntwrote, sbuffer, 0, scnt);
-
-                    _Con.Send(pbuffer, scnt);
-                    pbuffer.Release();
-
+                    buffers.Add(new PooledBufferSpan() { WholeBuffer = pbuffer, Length = scnt });
                     cntwrote += scnt;
                 }
+                _Con.Send(buffers);
             }
         }
         public void Write(IList<byte> buffer, int offset, int count)
         {
             if (_Con != null)
             {
+                ValueList<PooledBufferSpan> buffers = new ValueList<PooledBufferSpan>();
                 int cntwrote = 0;
                 while (cntwrote < count)
                 {
@@ -75,12 +76,10 @@ namespace Capstones.Net
                     {
                         sbuffer[i] = buffer[offset + cntwrote + i];
                     }
-
-                    _Con.Send(pbuffer, scnt);
-                    pbuffer.Release();
-
+                    buffers.Add(new PooledBufferSpan() { WholeBuffer = pbuffer, Length = scnt });
                     cntwrote += scnt;
                 }
+                _Con.Send(buffers);
             }
         }
         public void Write(InsertableStream buffer, int offset, int count)
@@ -141,7 +140,10 @@ namespace Capstones.Net
             }
             UnityEngineEx.PlatDependant.LogInfo(sb);
 #endif
-            base.Write(buffer, offset, count);
+            if (!IsAutoPacked)
+            {
+                base.Write(buffer, offset, count);
+            }
             if (!DonotNotifyReceive)
             {
                 OnReceive(buffer, offset, count);

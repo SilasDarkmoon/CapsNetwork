@@ -32,7 +32,7 @@ namespace Capstones.Net
                 inotify.OnReceive += OnReceiveData;
             }
         }
-        protected void OnReceiveData(byte[] data, int offset, int cnt)
+        public virtual void OnReceiveData(byte[] data, int offset, int cnt)
         {
             while (TryReadBlock()) ;
         }
