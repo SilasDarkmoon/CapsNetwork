@@ -1592,43 +1592,20 @@ namespace Capstones.Net
                 new ConnectionFactory.ClientAttachmentCreator("ControlCodeInfoHandler", client => new ControlCodeInfoHandler()),
             },
         };
-        public static readonly ConnectionFactory.ConnectionConfig HostedPVPConnectionConfig = new ConnectionFactory.ConnectionConfig()
+        public static readonly ConnectionFactory.ConnectionConfig PVPConnectionConfig = new ConnectionFactory.ConnectionConfig()
         {
             SConfig = new SerializationConfig()
             {
-                SplitterFactory = CarbonSplitter.Factory,
-                Composer = new CarbonComposer(),
-                FormatterFactory = CarbonFormatter.Factory,
+                SplitterFactory = ProtobufAutoPackedSplitter.Factory,
+                Composer = new ProtobufAutoPackedComposer(),
+                Formatter = new ProtobufFormatter(),
             },
-            ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
+            ExConfig = new Dictionary<string, object>()
             {
-                new ConnectionFactory.ClientAttachmentCreator("CarbonHeartbeat", client => new Heartbeat(client, HeartbeatMessage)
-                {
-                    Timeout = -1,
-                    Interval = 3000,
-                }),
-                new ConnectionFactory.ClientAttachmentCreator("TokenSender", client =>
-                {
-                    SendToken((IReqConnection)client, null);
-                    return null;
-                }),
+                { "background", true },
             },
         };
         public static bool UseCarbonInPVP;
-        public static ConnectionFactory.ConnectionConfig PVPConnectionConfig
-        {
-            get
-            {
-                if (UseCarbonInPVP)
-                {
-                    return HostedPVPConnectionConfig;
-                }
-                else
-                {
-                    return default(ConnectionFactory.ConnectionConfig);
-                }
-            }
-        }
         public static bool UseCarbonPushConnectionInPVP;
 
         //[EventOrder(80)]

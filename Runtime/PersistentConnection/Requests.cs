@@ -1695,7 +1695,7 @@ namespace Capstones.Net
             _Started = true;
             if (!PositiveMode)
             {
-                if (!_Channel.DeserializeInConnectionThread)
+                if (!_Channel.DeserializeInConnectionThread && !_Channel.IsAutoPacked)
                 {
 #if UNITY_ENGINE || UNITY_5_3_OR_NEWER
                     if (ThreadSafeValues.IsMainThread && !_IsBackground)

@@ -218,7 +218,7 @@ namespace Capstones.Net
             _Connection.OnClose = con => Dispose();
             _ServerConnection = connection as IServerConnection;
             _PositiveConnection = connection as IPositiveConnection;
-            _Stream = new ConnectionStream(_Connection, true) { DonotNotifyReceive = !_DeserializeInConnectionThread };
+            _Stream = new ConnectionStream(_Connection, true) { DonotNotifyReceive = !_DeserializeInConnectionThread && !_IsAutoPacked };
             _Stream.IsAutoPacked = _IsAutoPacked;
             _Serializer = new Serializer()
             {

@@ -744,4 +744,11 @@ namespace Capstones.Net
             Dispose(true);
         }
     }
+
+    public static partial class ConnectionFactory
+    {
+        private static RegisteredCreator _Reg_WebSocket = new RegisteredCreator("ws"
+            , uri => new WSClient(uri.ToString())
+            , null);
+    }
 }

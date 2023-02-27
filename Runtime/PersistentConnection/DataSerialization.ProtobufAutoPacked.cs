@@ -17,6 +17,19 @@ namespace Capstones.Net
 {
     public class ProtobufAutoPackedSplitter : DataSplitter<ProtobufAutoPackedSplitter>
     {
+        public static readonly TemplateProtobufMessage MessageProto = new TemplateProtobufMessage()
+        {
+            { 1, "type", ProtobufNativeType.TYPE_FIXED32 },
+            { 2, "flags", ProtobufNativeType.TYPE_FIXED32 },
+            { 3, "seq", ProtobufNativeType.TYPE_FIXED32 },
+            { 4, "sseq", ProtobufNativeType.TYPE_FIXED32 },
+            { 5, "raw", ProtobufNativeType.TYPE_BYTES },
+        };
+        static ProtobufAutoPackedSplitter()
+        {
+            MessageProto.FinishBuild();
+        }
+
         public ListSegment<byte> CurrentMessage;
 
         public ProtobufAutoPackedSplitter() { }
@@ -25,12 +38,29 @@ namespace Capstones.Net
             Attach(input);
         }
 
+#if UNITY_ENGINE || UNITY_5_3_OR_NEWER
+        private InsertableStream _ReadBuffer = new NativeBufferStream();
+#else
+        private InsertableStream _ReadBuffer = new ArrayBufferStream();
+#endif
         public override void ReadBlock()
         {
+            var message = ProtobufEncoder.ReadRaw(CurrentMessage);
+            message = message.ApplyTemplate(MessageProto);
+            CurrentMessage = new ListSegment<byte>();
+
+            _ReadBuffer.Clear();
+            var raw = message["raw"].Bytes;
+            _ReadBuffer.Write(raw, 0, raw.Length);
+            FireReceiveBlock(_ReadBuffer, _ReadBuffer.Count, message["type"], message["flags"], message["seq"], message["sseq"], null);
         }
 
         public override bool TryReadBlock()
         {
+            if (CurrentMessage.List == null)
+            {
+                return false;
+            }
             try
             {
                 ReadBlock();
@@ -54,8 +84,18 @@ namespace Capstones.Net
     {
         public override void PrepareBlock(InsertableStream data, uint type, uint flags, uint seq, uint sseq, object exFlags)
         {
+            byte[] raw = new byte[data.Count];
+            data.CopyTo(raw, 0);
             ProtobufMessage message = new ProtobufMessage();
-            message[1].Set(new ProtobufUnknowValue() { Raw = new ListSegment<byte>() });
+            message.ApplyTemplate(ProtobufAutoPackedSplitter.MessageProto);
+            message["type"].Set(type);
+            message["flags"].Set(flags);
+            message["seq"].Set(seq);
+            message["sseq"].Set(sseq);
+            message["raw"].Set(raw);
+
+            data.Clear();
+            ProtobufEncoder.WriteRaw(message, data, 0);
         }
     }
 }
