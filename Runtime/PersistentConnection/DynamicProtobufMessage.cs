@@ -1771,6 +1771,11 @@ namespace Capstones.Net
         public ProtobufHighLevelType Type;
         public ProtobufFieldLabel Label;
     }
+    public struct ProtobufFinishIndicator
+    {
+        public static ProtobufFinishIndicator Instance = new ProtobufFinishIndicator();
+    }
+
     public class ProtobufMessage : ICloneable
     {
         protected internal class FieldSlot
@@ -4605,7 +4610,7 @@ namespace Capstones.Net
             return ProtobufEncoder.ApplyTemplate(this, template);
         }
     }
-
+    
     public class TemplateProtobufMessage : ProtobufMessage, System.Collections.IEnumerable
     {
         public void Add(int fieldno, string fieldname, ProtobufNativeType knownType)
@@ -4659,6 +4664,10 @@ namespace Capstones.Net
         {
             var slot = GetOrCreateSlot(fieldno);
             slot.Desc.Label = label;
+        }
+        public void Add(ProtobufFinishIndicator finishIndicator)
+        {
+            FinishBuild();
         }
 
         protected bool _BuildFinished;

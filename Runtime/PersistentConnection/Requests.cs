@@ -2199,7 +2199,7 @@ namespace Capstones.Net
             }
         }
 
-        public struct ConnectionConfig : IEnumerable
+        public struct ConnectionConfig : IEnumerable, ICloneable
         {
             public SerializationConfig SConfig;
             public IDictionary<string, object> ExConfig;
@@ -2223,8 +2223,22 @@ namespace Capstones.Net
             {
                 SConfig = other.SConfig;
                 ExConfig = other.ExConfig;
-                ClientAttachmentCreators = other.ClientAttachmentCreators == null ? null : new List<IClientAttachmentCreator>(other.ClientAttachmentCreators);
-                ServerAttachmentCreators = other.ServerAttachmentCreators == null ? null : new List<IServerAttachmentCreator>(other.ServerAttachmentCreators);
+                ClientAttachmentCreators = other.ClientAttachmentCreators;
+                ServerAttachmentCreators = other.ServerAttachmentCreators;
+            }
+            public ConnectionConfig Clone()
+            {
+                return new ConnectionConfig()
+                {
+                    SConfig = this.SConfig.Clone(),
+                    ExConfig = this.ExConfig == null ? null : new Dictionary<string, object>(this.ExConfig),
+                    ClientAttachmentCreators = this.ClientAttachmentCreators == null ? null : new List<IClientAttachmentCreator>(this.ClientAttachmentCreators),
+                    ServerAttachmentCreators = this.ServerAttachmentCreators == null ? null : new List<IServerAttachmentCreator>(this.ServerAttachmentCreators),
+                };
+            }
+            object ICloneable.Clone()
+            {
+                return Clone();
             }
 
             public void Add(SerializationConfig sconfig)

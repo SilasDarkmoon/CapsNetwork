@@ -504,12 +504,39 @@ namespace Capstones.Net
             }
         }
 
+        protected IDictionary<string, string> _Headers;
+        public IDictionary<string, string> Headers
+        {
+            get { return _Headers; }
+            set
+            {
+                if (value != _Headers)
+                {
+                    if (IsStarted)
+                    {
+                        PlatDependant.LogError("Cannot change Headers when connection started");
+                    }
+                    else
+                    {
+                        _Headers = value;
+                    }
+                }
+            }
+        }
         protected virtual void PrepareSocket()
         {
             if (_Url != null)
             {
                 Uri uri = new Uri(_Url);
                 _WebSocket = new System.Net.WebSockets.ClientWebSocket();
+                var headers = _Headers;
+                if (headers != null)
+                {
+                    foreach (var kvp in headers)
+                    {
+                        _WebSocket.Options.SetRequestHeader(kvp.Key, kvp.Value);
+                    }
+                }
                 var task = _WebSocket.ConnectAsync(uri, CancellationToken.None);
                 while (!task.Wait(500))
                 {
@@ -748,7 +775,7 @@ namespace Capstones.Net
     public static partial class ConnectionFactory
     {
         private static RegisteredCreator _Reg_WebSocket = new RegisteredCreator("ws"
-            , uri => new WSClient(uri.ToString())
+            , (uri, exconfig) => new WSClient(uri.ToString()) { Headers = exconfig.Get<IDictionary<string, string>>("headers") }
             , null);
     }
 }
