@@ -51,7 +51,10 @@ namespace Capstones.Net
 
             _ReadBuffer.Clear();
             var raw = message["raw"].Bytes;
-            _ReadBuffer.Write(raw, 0, raw.Length);
+            if (raw != null)
+            {
+                _ReadBuffer.Write(raw, 0, raw.Length);
+            }
             FireReceiveBlock(_ReadBuffer, _ReadBuffer.Count, message["type"], message["flags"], message["seq"], message["sseq"], null);
         }
 
