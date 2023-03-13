@@ -1604,6 +1604,10 @@ namespace Capstones.Net
             {
                 { "background", true },
             },
+            ClientAttachmentCreators = new ConnectionFactory.IClientAttachmentCreator[]
+            {
+                new ConnectionFactory.ClientAttachmentCreator("ControlCodeInfoHandler", client => new ControlCodeInfoHandler()),
+            },
         };
         public static bool UseCarbonInPVP;
         public static bool UseCarbonPushConnectionInPVP;
