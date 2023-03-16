@@ -53,19 +53,24 @@ function api.CloseTcpConnect()
     end
 end
 
+local showingReconnectingNotify = nil
 function api.TcpReconnect()
     print("retry tcp connect: "..reconnectCount)
     if reconnectCount >= 3 then
-        clr.coroutine(function()
-            local waithandle = req.defaultOnFailed({ failed = "tcp_retry", msg = clr.transstr("tcp_retry") })
-            if waithandle then
-                while not waithandle.done do
-                    coroutine.yield()
+        if not showingReconnectingNotify then
+            showingReconnectingNotify = true
+            clr.coroutine(function()
+                local waithandle = req.defaultOnFailed({ failed = "tcp_retry", msg = clr.transstr("tcp_retry") })
+                if waithandle then
+                    while not waithandle.done do
+                        coroutine.yield()
+                    end
                 end
-            end
-            reconnectCount = 0
-            api.TcpConnect()
-        end)
+                showingReconnectingNotify = nil
+                reconnectCount = 0
+                api.TcpConnect()
+            end)
+        end
     else
         reconnectCount = reconnectCount + 1
         api.TcpConnect()
