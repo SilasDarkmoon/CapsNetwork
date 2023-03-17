@@ -501,6 +501,7 @@ namespace Capstones.Net
             catch (Exception e)
             {
                 PlatDependant.LogError(e);
+                Dispose();
             }
         }
 

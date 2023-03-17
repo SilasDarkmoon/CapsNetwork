@@ -1814,6 +1814,16 @@ namespace Capstones.Net
                 {
                     OnDispose();
                 }
+                else
+                {
+                    if (channel != null)
+                    {
+                        if (channel.DeserializeInConnectionThread || channel.IsAutoPacked)
+                        {
+                            OnDispose();
+                        }
+                    }
+                }
             }
         }
         protected override void OnDispose()
