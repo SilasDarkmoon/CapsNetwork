@@ -21,6 +21,7 @@ namespace Capstones.Net
         public short Cate;
         public int Type;
         public long EndPointID;
+        public Guid ACKGUID;
     }
 
     public class CarbonMessage
@@ -28,6 +29,7 @@ namespace Capstones.Net
         public short Flags;
         public short Cate;
         public int Type;
+        public Guid ACKGUID;
 
         private object _Message;
         public object ObjMessage
@@ -75,7 +77,7 @@ namespace Capstones.Net
 
     /// <summary>
     /// Bytes: (4 size)
-    /// 2 flags, 2 proto-category, 4 message-type
+    /// 2 flags, 2 proto-category, 4 message-type, 16 ACK-GUID
     /// </summary>
     public class CarbonSplitter : DataSplitter<CarbonSplitter>, IBuffered
     {
@@ -282,7 +284,7 @@ namespace Capstones.Net
             ResetReadBlockContext();
             base.FireReceiveBlock(buffer, size, type, flags, seq, sseq, exFlags);
         }
-        protected void ReadHeaders(out uint size, out short flags, out short cate, out int type, out long endpoint)
+        protected void ReadHeaders(out uint size, out short flags, out short cate, out int type, out long endpoint, out Guid ackguid)
         {
             // Read size.(4 bytes)
             size = 0;
@@ -319,6 +321,10 @@ namespace Capstones.Net
                 type <<= 8;
                 type += (byte)_InputStream.ReadByte();
             }
+            // Read ACK GUID (16 byte)
+            Span<byte> guidbytes = stackalloc byte[16];
+            _InputStream.Read(guidbytes);
+            ackguid = new Guid(guidbytes);
         }
         public override void ReadBlock()
         {
@@ -331,14 +337,16 @@ namespace Capstones.Net
                     short cate;
                     int type;
                     long endpoint;
-                    ReadHeaders(out size, out flags, out cate, out type, out endpoint);
-                    int realsize = (int)(size - 16);
+                    Guid ackguid;
+                    ReadHeaders(out size, out flags, out cate, out type, out endpoint, out ackguid);
+                    int realsize = (int)(size - 32);
                     var exFlags = new CarbonExFlags()
                     {
                         Flags = flags,
                         Cate = cate,
                         Type = type,
                         EndPointID = endpoint,
+                        ACKGUID = ackguid,
                     };
                     if (realsize >= 0)
                     {
@@ -403,7 +411,7 @@ namespace Capstones.Net
                     {
                         if (_ExFlags == null)
                         {
-                            if (BufferedSize < 20)
+                            if (BufferedSize < 36)
                             {
                                 return false;
                             }
@@ -412,15 +420,17 @@ namespace Capstones.Net
                             short cate;
                             int type;
                             long endpoint;
-                            ReadHeaders(out size, out flags, out cate, out type, out endpoint);
+                            Guid ackguid;
+                            ReadHeaders(out size, out flags, out cate, out type, out endpoint, out ackguid);
                             _ExFlags = new CarbonExFlags()
                             {
                                 Flags = flags,
                                 Cate = cate,
                                 Type = type,
                                 EndPointID = endpoint,
+                                ACKGUID = ackguid,
                             };
-                            _Size = (int)(size - 16);
+                            _Size = (int)(size - 32);
                         }
                         else
                         {
@@ -492,15 +502,17 @@ namespace Capstones.Net
                 short carbonCate = 0;
                 int carbonType = 0;
                 long carbonEndpoint = 0;
+                Guid carbonackguid = Guid.Empty;
                 if (carbonflags != null)
                 {
                     carbonFlags = carbonflags.Flags;
                     carbonCate = carbonflags.Cate;
                     carbonType = carbonflags.Type;
                     carbonEndpoint = carbonflags.EndPointID;
+                    carbonackguid = carbonflags.ACKGUID;
                 }
 
-                uint full_size = (uint)(size + 16);
+                uint full_size = (uint)(size + 32);
 
                 // write size.(4 bytes) (not included in full_size)
                 data.WriteByte((byte)((full_size & (0xFF << 24)) >> 24));
@@ -528,6 +540,10 @@ namespace Capstones.Net
                 data.WriteByte((byte)((carbonType & (0xFF << 16)) >> 16));
                 data.WriteByte((byte)((carbonType & (0xFF << 8)) >> 8));
                 data.WriteByte((byte)(carbonType & 0xFF));
+                // Write ACK-GUID (16 bytes)
+                Span<byte> guidbytes = stackalloc byte[16];
+                carbonackguid.TryWriteBytes(guidbytes);
+                data.Write(guidbytes);
             }
         }
     }
@@ -556,6 +572,7 @@ namespace Capstones.Net
                     Cate = carbonmess.Cate,
                     Type = carbonmess.Type,
                     EndPointID = 0,
+                    ACKGUID = carbonmess.ACKGUID,
                 };
             }
             else if (data is byte[])
@@ -693,6 +710,7 @@ namespace Capstones.Net
                     Flags = carbonFlags.Flags,
                     Cate = carbonFlags.Cate,
                     Type = carbonFlags.Type,
+                    ACKGUID = carbonFlags.ACKGUID,
                 };
                 if (carbonFlags.Cate == 3 || carbonFlags.Cate == 1)
                 { // Json
@@ -1407,7 +1425,14 @@ namespace Capstones.Net
                     {
                         OnMessage(carbon.Cate, carbon.Type, carbon.ObjMessage);
                     }
-                    return PredefinedMessages.NoResponse;
+                    if (carbon.ACKGUID == Guid.Empty)
+                    {
+                        return PredefinedMessages.NoResponse;
+                    }
+                    else
+                    {
+                        return new CarbonMessage() { ACKGUID = carbon.ACKGUID };
+                    }
                 }
                 return null;
             }
