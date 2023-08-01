@@ -171,6 +171,7 @@ end
 function restartReq(request) -- local
     request.www:StopRequest()
     local request2 = createRequest(request.uri, request.pdata, request.seq, request.timeout)
+    request2.relativeuri = request.relativeuri
     request2.quiet = request.quiet
     request2.blockdlg = request.blockdlg
     request2.doneFuncs = request.doneFuncs
@@ -200,6 +201,7 @@ function repostReq(request) -- local
 end
 
 function api.post(uri, data, quiet, timeout)
+    local relativeuri = uri
     uri = api.normalizeUrl(uri)
     local mess_data = "Request"
     local datamt = getmetatable(data)
@@ -219,6 +221,7 @@ function api.post(uri, data, quiet, timeout)
     print(mess_data)
     local request = createRequest(uri, data, nil, timeout)
     request.quiet = quiet
+    request.relativeuri = relativeuri
 
     if not quiet then
         if api.showBlockDialog then

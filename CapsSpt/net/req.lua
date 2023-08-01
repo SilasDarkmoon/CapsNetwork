@@ -115,7 +115,11 @@ function req.post(uri, data, oncomplete, onfailed, quiet, timeout)
 
         local defaultListener = reqDefaultListeners[uri]
         if type(defaultListener) == "function" then
-            xpcall(function() defaultListener(request) end, function(err) dump(err) end)
+            xpcall(function() defaultListener(request) end, printe)
+        end
+        defaultListener = reqDefaultListeners[""]
+        if type(defaultListener) == "function" then
+            xpcall(function() defaultListener(request) end, printe)
         end
 
         local eventWait = reqHandleEventData(request.event)
